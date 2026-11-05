@@ -13,6 +13,7 @@ export interface KnowledgeItem {
   heading: string;
   body: string;
   version: number;
+  updatedAt: Date;
 }
 
 export interface LiveEvent {
@@ -24,6 +25,8 @@ export interface LiveEvent {
   endsAt: Date | null;
   venue: string | null;
   instructions: string;
+  /** Switch room for this event's question cards, if set. */
+  crewRoomId: string | null;
 }
 
 export interface LiveKnowledge {
@@ -68,6 +71,7 @@ export async function loadLiveKnowledge(db: Db, communitySlug?: string): Promise
       heading: knowledgeEntries.heading,
       body: knowledgeEntries.body,
       version: knowledgeEntries.version,
+      updatedAt: knowledgeEntries.updatedAt,
       position: knowledgeEntries.position,
     })
     .from(knowledgeEntries)
@@ -111,6 +115,7 @@ export async function loadLiveKnowledge(db: Db, communitySlug?: string): Promise
       endsAt: e.endsAt,
       venue: e.venue,
       instructions: e.instructions,
+      crewRoomId: e.crewRoomId,
     })),
     entries,
   };

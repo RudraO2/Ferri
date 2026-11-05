@@ -68,3 +68,53 @@ export interface SseFrame {
   event: string;
   data: string;
 }
+
+// ── Approval and question cards (`/agent-sessions/...`, activity_routes.py) ──
+
+export interface CardOption {
+  id: string;
+  label: string;
+  description: string | null;
+}
+
+export interface CardQuestion {
+  id: string;
+  title: string;
+  prompt: string;
+  options: CardOption[];
+  multi_select: boolean;
+  allow_custom_answer: boolean;
+}
+
+export interface OpenQuestionsCard {
+  request_id: string;
+  turn_id: string;
+  title: string;
+  detail: string | null;
+  questions: CardQuestion[];
+  room_id: string | null;
+  thread_id: string | null;
+  /** ISO time, at most 24 hours ahead. */
+  expires_at: string | null;
+}
+
+export interface CardAnswer {
+  question_id: string;
+  selected_option_ids: string[];
+  custom_text: string | null;
+}
+
+/** A request as Switch reports it back (camelCase; `answers` keeps snake_case keys). */
+export interface ApprovalView {
+  sessionId: string;
+  requestId: string;
+  kind: "approval" | "questions";
+  state: "open" | "answered" | "expired" | "closed";
+  answer: string | null;
+  answers: CardAnswer[] | null;
+  /** Platform id of the person, e.g. `@switch-mattermost-<bridge>-priya:localhost`. */
+  answeredBy: string | null;
+  answeredAt: string | null;
+  expiresAt: string | null;
+  deliveredAt: string | null;
+}

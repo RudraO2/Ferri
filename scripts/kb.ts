@@ -8,7 +8,6 @@
  *                                      not to Ferri; --search: force full text retrieval, as for a big knowledge base)
  *   pnpm kb mirror                     update the Switch library document
  */
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb, runMigrations } from "@ferri/db";
@@ -23,7 +22,7 @@ import {
   triageMessage,
   worthAnswering,
 } from "@ferri/knowledge";
-import { GatewayClient } from "@ferri/switch";
+import { gatewayFromEnv } from "@ferri/switch";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [cmd, ...rest] = process.argv.slice(2);
@@ -33,29 +32,21 @@ const args = rest.filter((a) => !a.startsWith("--"));
 await runMigrations();
 const { db, close } = createDb();
 
-/** Like `pnpm setup:switch`: fall back to the sibling Switch checkout's GATEWAY_ADMIN_PASSWORD. */
-function adminPassword(): string | undefined {
-  if (process.env.SWITCH_ADMIN_PASSWORD) return process.env.SWITCH_ADMIN_PASSWORD;
-  const file = path.join(root, "..", "switch", ".env");
-  if (!fs.existsSync(file)) return undefined;
-  return /^GATEWAY_ADMIN_PASSWORD=(.*)$/m.exec(fs.readFileSync(file, "utf8"))?.[1]?.trim() || undefined;
+/** Every room Ferri serves gets the mirror: the test room and the crew room for now (spaces in spec 04). */
+function mirrorRoomIds(env = process.env): string[] {
+  return [env.FERRI_LAB_ROOM_ID, env.FERRI_CREW_ROOM_ID].filter((x): x is string => Boolean(x));
 }
 
 async function mirror(): Promise<void> {
-  const password = adminPassword();
-  const roomId = process.env.FERRI_LAB_ROOM_ID;
-  if (!password || !roomId) {
-    console.log("mirror skipped: SWITCH_ADMIN_PASSWORD or FERRI_LAB_ROOM_ID is not set");
+  const gateway = await gatewayFromEnv(path.join(root, "..", "switch", ".env"));
+  const roomIds = mirrorRoomIds();
+  if (!gateway || !roomIds.length) {
+    console.log("mirror skipped: no Switch admin password, or no FERRI_LAB_ROOM_ID / FERRI_CREW_ROOM_ID");
     return;
   }
   const kb = await loadLiveKnowledge(db, process.env.FERRI_COMMUNITY);
   if (!kb) throw new Error("no community in the database; run `pnpm kb seed` first");
-  const gateway = new GatewayClient(
-    process.env.SWITCH_URL ?? "http://localhost:8000",
-    process.env.SWITCH_ADMIN_EMAIL ?? "admin@switch.local",
-    password,
-  );
-  const r = await mirrorToSwitch({ db, gateway, kb, roomIds: [roomId] });
+  const r = await mirrorToSwitch({ db, gateway, kb, roomIds });
   console.log(`mirror: ${r.created ? "created" : "updated"} document ${r.documentId} (${r.bytes} bytes), attached to ${r.attached.length} room(s)`);
 }
 
@@ -66,7 +57,7 @@ try {
       const r = await seedFromDirectory(db, dir);
       console.log(
         `seeded ${r.communitySlug} (events: ${r.events.join(", ") || "none"}): ` +
-          `${r.created} created, ${r.updated} updated, ${r.restored} restored, ${r.archived} archived, ${r.unchanged} unchanged`,
+          `${r.crew} crew, ${r.created} created, ${r.updated} updated, ${r.restored} restored, ${r.archived} archived, ${r.unchanged} unchanged`,
       );
       if (!flags.has("--no-mirror")) await mirror();
       break;

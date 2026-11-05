@@ -1,8 +1,9 @@
 import { createDb, runMigrations } from "@ferri/db";
-import { loadSkills } from "@ferri/knowledge";
-import { SwitchAgent } from "@ferri/switch";
+import { loadLiveKnowledge, loadSkills, mirrorToSwitch } from "@ferri/knowledge";
+import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 import { config } from "./config.js";
 import { createFlow } from "./flow.js";
+import { createLoop, type RoomInfo } from "./loop.js";
 import { RoomHistory, type RoomLine } from "./rooms.js";
 import { ConnectionStore } from "./state.js";
 
@@ -19,21 +20,21 @@ const agent = new SwitchAgent({
   connectionId: store.connectionId,
   cursor: store.cursor,
   clientName: "ferri",
-  clientVersion: "0.2.0",
+  clientVersion: "0.3.0",
   log,
 });
 
-const roomNames = new Map<string, string>();
-async function roomName(roomId: string): Promise<string> {
-  const cached = roomNames.get(roomId);
+const roomInfo = new Map<string, RoomInfo>();
+async function room(roomId: string): Promise<RoomInfo> {
+  const cached = roomInfo.get(roomId);
   if (cached) return cached;
   try {
-    const detail = await agent.op<{ name?: string }>("get_room_detail", { room_id: roomId });
-    const name = detail?.name ?? roomId;
-    roomNames.set(roomId, name);
-    return name;
+    const detail = await agent.op<{ name?: string; bridge_display_name?: string }>("get_room_detail", { room_id: roomId });
+    const info = { name: detail?.name ?? roomId, platform: detail?.bridge_display_name?.toLowerCase() ?? null };
+    roomInfo.set(roomId, info);
+    return info;
   } catch {
-    return roomId;
+    return { name: roomId, platform: null };
   }
 }
 
@@ -72,11 +73,33 @@ const rooms = new RoomHistory(async (roomId) => {
 // Read on every question, so a skill edit applies without a restart.
 const skills = () => loadSkills(config.skillsDir, ["ferri", "librarian"]);
 
-const onMessage = createFlow({ db, agent, rooms, skills, roomName, log });
+// The Switch library mirror, refreshed a few seconds after the knowledge changes.
+const gateway = await gatewayFromEnv(config.switchEnvFile);
+let mirrorTimer: NodeJS.Timeout | null = null;
+function mirrorSoon(): void {
+  if (!gateway || !config.mirrorRoomIds.length || mirrorTimer) return;
+  mirrorTimer = setTimeout(async () => {
+    mirrorTimer = null;
+    try {
+      const kb = await loadLiveKnowledge(db, config.community);
+      if (kb) {
+        const r = await mirrorToSwitch({ db, gateway, kb, roomIds: config.mirrorRoomIds });
+        log(`mirror updated (${r.bytes} bytes)`);
+      }
+    } catch (err) {
+      log(`mirror update failed: ${(err as Error).message}`);
+    }
+  }, 3000);
+}
+
+const loop = createLoop({ db, agent, skills, room, mirrorSoon, log });
+const onMessage = createFlow({ db, agent, rooms, loop, skills, room, log });
+const stopLoop = loop.start();
 
 const shutdown = async () => {
   log("shutting down");
   agent.stop();
+  stopLoop();
   await store.flush();
   await close();
   process.exit(0);

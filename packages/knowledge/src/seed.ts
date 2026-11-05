@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { and, eq } from "drizzle-orm";
-import { communities, events, knowledgeEntries, knowledgeRevisions, type Db } from "@ferri/db";
-import { parseKnowledgeMarkdown } from "./markdown.js";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { communities, crewMembers, events, knowledgeEntries, knowledgeRevisions, type Db } from "@ferri/db";
+import { parseKnowledgeMarkdown, slugify } from "./markdown.js";
+import { TOPICS } from "./triage.js";
 
 const STAGES = ["plan", "build", "launch", "live", "wrap"] as const;
 type Stage = (typeof STAGES)[number];
@@ -12,6 +13,7 @@ export interface SeedReport {
   communityId: string;
   communitySlug: string;
   events: string[];
+  crew: number;
   created: number;
   updated: number;
   restored: number;
@@ -61,6 +63,60 @@ function markdownFiles(dir: string): string[] {
 
 const posix = (p: string) => p.split(path.sep).join("/");
 
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Replace the crew of one event (or of the community when eventId is null)
+ * with the `crew:` list of a YAML file. Returns how many members it holds.
+ */
+async function syncCrew(
+  tx: Tx,
+  communityId: string,
+  eventId: string | null,
+  scope: string,
+  list: unknown,
+  file: string,
+): Promise<number> {
+  const items = Array.isArray(list) ? list : [];
+  const keys: string[] = [];
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") throw new Error(`${file}: each crew entry must be a mapping`);
+    const c = raw as Record<string, unknown>;
+    const name = str(c.name, `${file} crew name`);
+    const topics = Array.isArray(c.topics) ? c.topics.map(String) : [];
+    for (const t of topics) {
+      if (!(TOPICS as readonly string[]).includes(t)) throw new Error(`${file}: unknown topic "${t}" (use ${TOPICS.join(", ")})`);
+    }
+    const handles: Record<string, string> = {};
+    if (c.handles && typeof c.handles === "object") {
+      for (const [platform, handle] of Object.entries(c.handles as Record<string, unknown>)) {
+        handles[platform.toLowerCase()] = String(handle).replace(/^@/, "");
+      }
+    }
+    const values = {
+      communityId,
+      eventId,
+      key: `${scope}/${slugify(name)}`,
+      name,
+      handles,
+      topics,
+      lead: c.lead === true,
+      onDuty: c.on_duty === true,
+    };
+    keys.push(values.key);
+    await tx
+      .insert(crewMembers)
+      .values(values)
+      .onConflictDoUpdate({ target: [crewMembers.communityId, crewMembers.key], set: { ...values, updatedAt: new Date() } });
+  }
+  const scopeWhere = and(
+    eq(crewMembers.communityId, communityId),
+    eventId ? eq(crewMembers.eventId, eventId) : isNull(crewMembers.eventId),
+  );
+  await tx.delete(crewMembers).where(keys.length ? and(scopeWhere, notInArray(crewMembers.key, keys)) : scopeWhere);
+  return keys.length;
+}
+
 function sameTags(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((t, i) => t === b[i]);
 }
@@ -88,6 +144,7 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
       .onConflictDoUpdate({ target: communities.slug, set: { ...communityValues, updatedAt: new Date() } })
       .returning();
     const communityId = community!.id;
+    let crew = await syncCrew(tx, communityId, null, "community", c.crew, "community.yaml");
 
     const desired: DesiredEntry[] = [];
     const addFiles = (files: string[], eventId: string | null) => {
@@ -131,6 +188,7 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
         endsAt: optDate(e.ends_at),
         venue: typeof e.venue === "string" ? e.venue : null,
         instructions: typeof e.instructions === "string" ? e.instructions.trim() : "",
+        crewRoomId: typeof e.crew_room_id === "string" && e.crew_room_id ? e.crew_room_id : null,
       };
       const [event] = await tx
         .insert(events)
@@ -138,6 +196,7 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
         .onConflictDoUpdate({ target: [events.communityId, events.slug], set: { ...values, updatedAt: new Date() } })
         .returning();
       eventSlugs.push(values.slug);
+      crew += await syncCrew(tx, communityId, event!.id, values.slug, e.crew, file);
       addFiles(markdownFiles(path.join(eventsDir, name, "knowledge")), event!.id);
     }
 
@@ -151,6 +210,7 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
       communityId,
       communitySlug: slug,
       events: eventSlugs,
+      crew,
       created: 0,
       updated: 0,
       restored: 0,

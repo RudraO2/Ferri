@@ -79,6 +79,11 @@ export async function answerQuestion(input: {
   now?: Date;
   /** Override the inline threshold (0 forces full text search). */
   inlineLimit?: number;
+  /**
+   * The person asked earlier, was told Ferri is checking with the team, and
+   * the team has answered since: write the follow-up.
+   */
+  followUp?: boolean;
 }): Promise<AnswerResult> {
   const { kb } = input;
   const inline = knowledgeSize(kb) <= (input.inlineLimit ?? INLINE_LIMIT_CHARS);
@@ -108,9 +113,13 @@ export async function answerQuestion(input: {
     `Now: ${now} (${kb.community.timezone})`,
     `Room: ${input.roomName}`,
     `Recent conversation:\n${history}`,
-    input.addressed
-      ? `${input.sender} asked you directly:\n${input.question}`
-      : `${input.sender} asked the room (not you), and you may step in only with a sourced answer:\n${input.question}`,
+    input.followUp
+      ? `Earlier, ${input.sender} asked:\n${input.question}\n\nYou told them you were checking with the team. ` +
+        `The team has answered since, and the answer is now in the knowledge. Write the follow-up to ${input.sender}: ` +
+        "start straight with the answer, as a short update. No greeting, no \"hi again\", no name at the start, and do not say you are checking."
+      : input.addressed
+        ? `${input.sender} asked you directly:\n${input.question}`
+        : `${input.sender} asked the room (not you), and you may step in only with a sourced answer:\n${input.question}`,
   ].join("\n\n");
 
   const out = await structuredCall({ choice: input.choice, system, user, schema: AnswerSchema, maxTokens: 8000 });

@@ -30,8 +30,11 @@ You need Docker Desktop, Node 22 and pnpm.
    pnpm install
    pnpm db:up
    pnpm setup:switch
+   pnpm dev:mattermost
    pnpm kb seed
    ```
+
+   `pnpm setup:switch` also creates `ferri-crew`, the organizers' room where Ferri's question cards land. `pnpm dev:mattermost` adds local test people: `meera` and `arjun` (members, in `ferri-lab`) and `priya` (crew, in both rooms), sharing the password `MM_TEST_PASSWORD` in `.env`.
 
    `pnpm kb seed` reads `seed/` (a made-up community, Lantern Labs, and its event, Lantern Build Night), writes it into Postgres, and mirrors it into a Switch library document attached to `ferri-lab`. It is safe to run again: only changed sections get a new version.
 
@@ -53,6 +56,14 @@ You need Docker Desktop, Node 22 and pnpm.
 - A fast model (Claude Haiku) reads every message, so Ferri also notices questions nobody addressed to it. It waits a moment so a person can answer first, and steps in only when it has a sourced answer.
 - Every handled question is one row in `questions`, which is also how Ferri never answers the same message twice.
 
+## How Ferri learns
+
+1. A member asks something the knowledge does not cover. Ferri tells them it is checking with the team.
+2. Ferri opens a Switch question card in the crew room and pings the person who owns that topic (crew and topics live in `seed/events/<event>/event.yaml`). Someone else asking the same thing in other words joins the same card.
+3. Anyone on the crew answers, on the card (`A1 "your answer"`) or just by telling Ferri (`@ferri dogs are fine on a leash`). Crew can also teach Ferri directly: `@ferri remember: lockers are on the 2nd floor`.
+4. Everyone who was waiting gets the answer in their own room, with the source. The answer is saved as knowledge, so the next person gets it instantly.
+5. Nobody answers: Ferri nudges the owner, then the whole crew, and finally marks the question unanswered. It never sends members anything the crew has not said.
+
 ## Useful commands
 
 | Command | What it does |
@@ -60,5 +71,6 @@ You need Docker Desktop, Node 22 and pnpm.
 | `pnpm kb seed` | Load `seed/` into the database and update the Switch mirror |
 | `pnpm kb list` | Show the live knowledge entries |
 | `pnpm kb ask "<question>"` | Run the answer pipeline without Switch (`--room` as a room question, `--search` to force full text search) |
-| `pnpm eval:answers` | Check Ferri's decisions on a fixed question set |
+| `pnpm eval:answers` | Check Ferri's decisions on a fixed set: answers, room triage, card matching, crew intent |
+| `pnpm dev:mattermost` | Create the local Mattermost test people and put them in the rooms |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |

@@ -4,8 +4,9 @@
  *   2. mint a personal registration key (so the admin owns Ferri, not the bootstrap account),
  *   3. register Ferri as an always-on custom agent,
  *   4. open its addressing policy so anyone in a room can talk to it,
- *   5. create the `ferri-lab` room on the default bridge (Mattermost locally) with Ferri in it,
- *   6. write FERRI_AGENT_ID, FERRI_AGENT_KEY and FERRI_LAB_ROOM_ID into .env.
+ *   5. create the `ferri-lab` room (the community test room) and the `ferri-crew` room (where
+ *      question cards go) on the default bridge (Mattermost locally), with Ferri in both,
+ *   6. write FERRI_AGENT_ID, FERRI_AGENT_KEY, FERRI_LAB_ROOM_ID and FERRI_CREW_ROOM_ID into .env.
  *
  * Safe to re-run: an existing agent and room are reused.
  */
@@ -122,23 +123,25 @@ console.log("addressing policy open: anyone in a room can talk to Ferri");
 
 const rooms = must(await call<any>("GET", "/gateway/rooms"), "list rooms");
 const roomList: any[] = Array.isArray(rooms) ? rooms : rooms.rooms ?? [];
-let lab = roomList.find((r) => r.name === "ferri-lab");
-if (!lab) {
-  lab = must(
-    await call<any>("POST", "/gateway/rooms", {
-      name: "ferri-lab",
-      description: "Smoke-test room for Ferri.",
-      agent_ids: [agentId],
-    }),
-    "create ferri-lab room",
-  );
-  console.log(`created room ferri-lab (${lab.id})`);
-} else {
-  const ids: string[] = (lab.agents ?? []).map((a: any) => a.id ?? a.agent_id);
-  if (!ids.includes(agentId)) {
-    must(await call("POST", `/gateway/rooms/${lab.id}/agents`, { agent_ids: [agentId] }), "add ferri to ferri-lab");
+
+/** Find a room by name or create it, and make sure Ferri is in it. */
+async function ensureRoom(name: string, description: string): Promise<string> {
+  let room = roomList.find((r) => r.name === name);
+  if (!room) {
+    room = must(await call<any>("POST", "/gateway/rooms", { name, description, agent_ids: [agentId] }), `create ${name} room`);
+    console.log(`created room ${name} (${room.id})`);
+  } else {
+    const ids: string[] = (room.agents ?? []).map((a: any) => a.id ?? a.agent_id);
+    if (!ids.includes(agentId)) {
+      must(await call("POST", `/gateway/rooms/${room.id}/agents`, { agent_ids: [agentId] }), `add ferri to ${name}`);
+    }
+    console.log(`room ${name} exists (${room.id})`);
   }
-  console.log(`room ferri-lab exists (${lab.id})`);
+  return room.id;
 }
-writeEnv({ FERRI_LAB_ROOM_ID: lab.id });
+
+const labId = await ensureRoom("ferri-lab", "Smoke-test room for Ferri.");
+// The crew room: question cards, nudges and confirmations go here (spec 03).
+const crewId = await ensureRoom("ferri-crew", "Inside room for the organizing crew. Ferri's question cards land here.");
+writeEnv({ FERRI_LAB_ROOM_ID: labId, FERRI_CREW_ROOM_ID: crewId });
 console.log("done. .env updated.");

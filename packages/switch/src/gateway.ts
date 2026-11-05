@@ -54,3 +54,21 @@ export class GatewayError extends Error {
     super(`${what} failed: HTTP ${status} ${body.slice(0, 300)}`);
   }
 }
+
+/**
+ * A Gateway client from the environment: SWITCH_URL, SWITCH_ADMIN_EMAIL and
+ * SWITCH_ADMIN_PASSWORD, falling back (like `pnpm setup:switch`) to the
+ * GATEWAY_ADMIN_PASSWORD of a Switch checkout's .env next to the repo.
+ * Null when no password can be found.
+ */
+export async function gatewayFromEnv(siblingSwitchEnv?: string, env = process.env): Promise<GatewayClient | null> {
+  let password = env.SWITCH_ADMIN_PASSWORD;
+  if (!password && siblingSwitchEnv) {
+    const fs = await import("node:fs");
+    if (fs.existsSync(siblingSwitchEnv)) {
+      password = /^GATEWAY_ADMIN_PASSWORD=(.*)$/m.exec(fs.readFileSync(siblingSwitchEnv, "utf8"))?.[1]?.trim();
+    }
+  }
+  if (!password) return null;
+  return new GatewayClient(env.SWITCH_URL ?? "http://localhost:8000", env.SWITCH_ADMIN_EMAIL ?? "admin@switch.local", password);
+}

@@ -1,5 +1,5 @@
 import { SseParser } from "./sse.js";
-import type { ConnectionState, DomainEvent, GapFrame } from "./types.js";
+import type { ApprovalView, ConnectionState, DomainEvent, GapFrame, OpenQuestionsCard } from "./types.js";
 
 export interface SwitchAgentOptions {
   /** Agent bridge base URL, e.g. http://localhost:8000 */
@@ -103,6 +103,39 @@ export class SwitchAgent {
 
   async setTyping(roomId: string, isTyping: boolean): Promise<void> {
     await this.request("POST", `/agents/${this.opts.agentId}/typing`, { room_id: roomId, is_typing: isTyping });
+  }
+
+  // ── Question cards ────────────────────────────────────────────────────────
+  // The session id is ours to choose; no session needs to be started first.
+
+  /** Open a questions card in a room. Re-opening with the same content is a no-op. */
+  async openQuestionsCard(sessionId: string, card: OpenQuestionsCard): Promise<ApprovalView> {
+    return this.request<ApprovalView>("POST", `/agent-sessions/${encodeURIComponent(sessionId)}/approvals`, {
+      kind: "questions",
+      options: [],
+      ...card,
+    });
+  }
+
+  /** Withdraw an open card (it then reads "closed" on the platform). Closing a settled one changes nothing. */
+  async closeCard(sessionId: string, requestId: string): Promise<ApprovalView> {
+    return this.request<ApprovalView>(
+      "POST",
+      `/agent-sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}/close`,
+    );
+  }
+
+  /** Answered and expired cards not yet acknowledged, oldest first. */
+  async cardOutcomes(): Promise<ApprovalView[]> {
+    return this.request<ApprovalView[]>("GET", "/agent-sessions/approvals/outcomes");
+  }
+
+  /** Acknowledge an outcome so it is not reported again. */
+  async markCardDelivered(sessionId: string, requestId: string): Promise<ApprovalView> {
+    return this.request<ApprovalView>(
+      "POST",
+      `/agent-sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}/delivered`,
+    );
   }
 
   // ── Down: the event stream ────────────────────────────────────────────────

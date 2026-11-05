@@ -54,9 +54,36 @@ export const events = pgTable(
     venue: text("venue"),
     /** Event instructions, layered on top of the community's. */
     instructions: text("instructions").notNull().default(""),
+    /** Switch room where this event's question cards go (spec 04 turns it into a space marked inside). */
+    crewRoomId: text("crew_room_id"),
     ...timestamps,
   },
   (t) => [uniqueIndex("events_community_slug").on(t.communityId, t.slug)],
+);
+
+// ── Crew ──────────────────────────────────────────────────────────────────
+
+export const crewMembers = pgTable(
+  "crew_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** Null means crew for the whole community. */
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }),
+    /** Stable identity across re-seeds, e.g. `build-night/priya`. */
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    /** Username per platform, e.g. {"mattermost": "priya", "telegram": "priya_k"}. */
+    handles: jsonb("handles").$type<Record<string, string>>().notNull().default({}),
+    /** Topics this person owns (the triage topic list). Their cards go to them first. */
+    topics: text("topics").array().notNull().default(sql`'{}'::text[]`),
+    lead: boolean("lead").notNull().default(false),
+    onDuty: boolean("on_duty").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("crew_members_community_key").on(t.communityId, t.key)],
 );
 
 // ── Knowledge ─────────────────────────────────────────────────────────────
@@ -157,11 +184,80 @@ export const questions = pgTable(
     model: text("model"),
     latencyMs: integer("latency_ms"),
     error: text("error"),
+    /** The card this question waits on (spec 03). */
+    cardId: uuid("card_id").references(() => cards.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    /** "answered", "dismissed" or "expired". */
+    resolution: text("resolution"),
+    resolutionText: text("resolution_text"),
+    resolutionEventId: text("resolution_event_id"),
     askedAt: timestamp("asked_at", { withTimezone: true }).notNull(),
     ...timestamps,
   },
-  (t) => [index("questions_outcome").on(t.outcome, t.createdAt), index("questions_room").on(t.roomId)],
+  (t) => [
+    index("questions_outcome").on(t.outcome, t.createdAt),
+    index("questions_room").on(t.roomId),
+    index("questions_card").on(t.cardId),
+  ],
 );
+
+// ── Cards: one per question the crew is asked (mirrors a Switch question card) ──
+
+export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed", "expired", "closed"]);
+
+export const cards = pgTable(
+  "cards",
+  {
+    /** Also the Switch request id. */
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    crewRoomId: text("crew_room_id").notNull(),
+    switchSessionId: text("switch_session_id").notNull(),
+    topic: text("topic").notNull(),
+    /** Short canonical English form of the question, used for matching and as the saved heading. */
+    question: text("question").notNull(),
+    /** About one person's own situation: answered to them only, never saved. */
+    personal: boolean("personal").notNull().default(false),
+    ownerIds: uuid("owner_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    status: cardStatus("status").notNull().default("open"),
+    nudgeAt: timestamp("nudge_at", { withTimezone: true }).notNull(),
+    nudgedAt: timestamp("nudged_at", { withTimezone: true }),
+    escalateAt: timestamp("escalate_at", { withTimezone: true }).notNull(),
+    escalatedAt: timestamp("escalated_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    answeredBy: text("answered_by"),
+    /** "card", "chat" or "remember". */
+    answeredVia: text("answered_via"),
+    answerText: text("answer_text"),
+    entryId: uuid("entry_id").references(() => knowledgeEntries.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("cards_status").on(t.status, t.communityId)],
+);
+
+// ── Crew actions: what the crew told Ferri (answers in chat, facts to remember) ──
+
+export const crewActions = pgTable("crew_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  communityId: uuid("community_id")
+    .notNull()
+    .references(() => communities.id, { onDelete: "cascade" }),
+  /** Unique: inserting the row claims the message, so a replay never acts twice. */
+  messageId: text("message_id").notNull().unique(),
+  roomId: text("room_id").notNull(),
+  crewMemberId: uuid("crew_member_id").references(() => crewMembers.id, { onDelete: "set null" }),
+  crewName: text("crew_name").notNull(),
+  /** "answer_card" or "remember". */
+  intent: text("intent").notNull(),
+  cardId: uuid("card_id").references(() => cards.id, { onDelete: "set null" }),
+  entryId: uuid("entry_id").references(() => knowledgeEntries.id, { onDelete: "set null" }),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ── Agent state (connection id, cursor, mirror document id) ───────────────
 

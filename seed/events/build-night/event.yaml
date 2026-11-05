@@ -6,3 +6,17 @@ ends_at: 2026-11-22T10:00:00+05:30
 venue: Koramangala Makerspace, 3rd floor, 80 Feet Road, Bengaluru
 instructions: |
   This is a 24-hour hackathon. Questions about it come from participants, mentors and sponsors.
+# Where this event's question cards go. Empty: FERRI_CREW_ROOM_ID from .env.
+crew_room_id:
+# Who answers what. Topics: schedule, food, venue, registration, teams, prizes,
+# judging, rules, tech, sponsors, community, other. A card goes to the topic
+# owners first, then whoever is on duty, then the whole crew.
+crew:
+  - name: Rudra
+    handles: { mattermost: user }
+    lead: true
+    on_duty: true
+    topics: [registration, teams, prizes, judging, rules, sponsors, community]
+  - name: Priya
+    handles: { mattermost: priya }
+    topics: [food, venue, schedule, tech]

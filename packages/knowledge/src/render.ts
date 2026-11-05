@@ -15,7 +15,10 @@ export function renderKnowledge(items: KnowledgeItem[]): RenderedKnowledge {
     const id = `K${i + 1}`;
     ids.set(id, item);
     const scope = item.eventName ?? "community";
-    return `<entry id="${id}" source="${escapeAttr(item.sourceTitle)}" section="${escapeAttr(item.heading)}" scope="${escapeAttr(scope)}">\n${item.body}\n</entry>`;
+    // Crew answers carry their date, so the newer one wins when entries disagree.
+    const crew =
+      item.sourceKind === "crew_answer" ? ` kind="crew answer" updated="${item.updatedAt.toISOString().slice(0, 10)}"` : "";
+    return `<entry id="${id}" source="${escapeAttr(item.sourceTitle)}" section="${escapeAttr(item.heading)}" scope="${escapeAttr(scope)}"${crew}>\n${item.body}\n</entry>`;
   });
   return { text: `<knowledge>\n${parts.join("\n")}\n</knowledge>`, ids };
 }

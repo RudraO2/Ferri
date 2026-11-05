@@ -13,6 +13,7 @@ const item = (id: string, sourceTitle: string, heading: string, body = "b"): Kno
   heading,
   body,
   version: 1,
+  updatedAt: new Date("2026-11-05T10:00:00Z"),
 });
 
 const food = item("u1", "Build Night FAQ", "Food", "Lunch at 1:30 PM.");

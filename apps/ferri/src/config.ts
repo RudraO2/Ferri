@@ -37,4 +37,22 @@ export const config = {
    * answer first. Ferri then checks the room again before stepping in.
    */
   roomGraceMs: Number(process.env.FERRI_ROOM_GRACE_SECONDS ?? 20) * 1000,
+  /** Where question cards go when the event names no crew room (`pnpm setup:switch` writes it). */
+  crewRoomId: process.env.FERRI_CREW_ROOM_ID || undefined,
+  /** Rooms that get the knowledge mirror document. */
+  mirrorRoomIds: [process.env.FERRI_LAB_ROOM_ID, process.env.FERRI_CREW_ROOM_ID].filter((x): x is string => Boolean(x)),
+  /** Sibling Switch checkout's .env, for the admin password fallback. */
+  switchEnvFile: path.join(repoRoot, "..", "switch", ".env"),
+  /** Test override for the ladder's T (nudge at T, escalate at 2T). Unset: 10 min live, 2 h before. */
+  nudgeSeconds: optionalNumber(process.env.FERRI_NUDGE_SECONDS),
+  /** Test override for how long a card stays open. Unset: 24 h or the event's end. */
+  cardTtlSeconds: optionalNumber(process.env.FERRI_CARD_TTL_SECONDS),
+  outcomePollMs: 2000,
+  ladderTickMs: 5000,
 };
+
+function optionalNumber(v: string | undefined): number | undefined {
+  if (v === undefined || v.trim() === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
