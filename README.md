@@ -24,12 +24,16 @@ You need Docker Desktop, Node 22 and pnpm.
    docker compose -f deploy/local/standalone-docker-compose.yml --profile collab --profile gateway --project-directory . up -d
    ```
 
-2. Register Ferri and create a test room:
+2. Start Ferri's own Postgres (pgvector, port 5433) and load the demo knowledge:
 
    ```bash
    pnpm install
+   pnpm db:up
    pnpm setup:switch
+   pnpm kb seed
    ```
+
+   `pnpm kb seed` reads `seed/` (a made-up community, Lantern Labs, and its event, Lantern Build Night), writes it into Postgres, and mirrors it into a Switch library document attached to `ferri-lab`. It is safe to run again: only changed sections get a new version.
 
 3. Put your `ANTHROPIC_API_KEY` in `.env`, then start Ferri:
 
@@ -37,4 +41,24 @@ You need Docker Desktop, Node 22 and pnpm.
    pnpm dev
    ```
 
-4. Open Mattermost at http://localhost:8065, go to the `ferri-lab` channel and write `@ferri hello`.
+4. Open Mattermost at http://localhost:8065, go to the `ferri-lab` channel and try:
+   - `@ferri when does hacking start?` gets the answer with its source.
+   - `@ferri can I bring my dog?` (not in the knowledge) gets "I'm checking with the team".
+   - `does anyone know the wifi password?` (no mention) gets answered after a short pause, unless a person answers first.
+
+## How Ferri answers
+
+- The knowledge lives in Postgres (`knowledge_entries`, every edit kept in `knowledge_revisions`). Markdown in `seed/` is one way in; each `##` section is one entry.
+- Ferri answers only from that knowledge and names the source under every answer. If the knowledge does not have it, Ferri says it is checking with the team and logs the question.
+- A fast model (Claude Haiku) reads every message, so Ferri also notices questions nobody addressed to it. It waits a moment so a person can answer first, and steps in only when it has a sourced answer.
+- Every handled question is one row in `questions`, which is also how Ferri never answers the same message twice.
+
+## Useful commands
+
+| Command | What it does |
+|---|---|
+| `pnpm kb seed` | Load `seed/` into the database and update the Switch mirror |
+| `pnpm kb list` | Show the live knowledge entries |
+| `pnpm kb ask "<question>"` | Run the answer pipeline without Switch (`--room` as a room question, `--search` to force full text search) |
+| `pnpm eval:answers` | Check Ferri's decisions on a fixed question set |
+| `pnpm test`, `pnpm typecheck` | Unit tests and types |

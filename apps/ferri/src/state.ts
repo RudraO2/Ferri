@@ -1,31 +1,41 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { getState, setState, type Db } from "@ferri/db";
 
-interface ConnectionFile {
+interface ConnectionState {
   connectionId: string;
   cursor?: string;
 }
 
+const KEY = "switch_connection";
+
 /**
- * The connection id and read cursor, kept on disk so a restart resumes the
- * same Switch connection instead of replaying or skipping events.
- * Moves into Postgres with spec 02.
+ * The Switch connection id and read cursor, kept in Postgres so a restart
+ * resumes the same connection instead of replaying or skipping events.
+ * Spec 01 kept them in `.ferri-state/connection.json`; that file is imported once.
  */
 export class ConnectionStore {
-  private readonly file: string;
-  private data: ConnectionFile;
   private timer: NodeJS.Timeout | null = null;
+  private writing: Promise<void> = Promise.resolve();
 
-  constructor(dir: string) {
-    fs.mkdirSync(dir, { recursive: true });
-    this.file = path.join(dir, "connection.json");
-    try {
-      this.data = JSON.parse(fs.readFileSync(this.file, "utf8")) as ConnectionFile;
-    } catch {
-      this.data = { connectionId: randomUUID() };
-      this.flush();
+  private constructor(
+    private readonly db: Db,
+    private data: ConnectionState,
+  ) {}
+
+  static async open(db: Db, legacyDir: string): Promise<ConnectionStore> {
+    let data = await getState<ConnectionState>(db, KEY);
+    if (!data) {
+      const legacy = path.join(legacyDir, "connection.json");
+      try {
+        data = JSON.parse(fs.readFileSync(legacy, "utf8")) as ConnectionState;
+      } catch {
+        data = { connectionId: randomUUID() };
+      }
+      await setState(db, KEY, data);
     }
+    return new ConnectionStore(db, data);
   }
 
   get connectionId(): string {
@@ -38,13 +48,15 @@ export class ConnectionStore {
 
   setCursor(cursor: string): void {
     this.data.cursor = cursor;
-    // Debounced: the folder may sit under OneDrive, which dislikes rapid rewrites.
-    if (!this.timer) this.timer = setTimeout(() => this.flush(), 1000);
+    // Debounced: one write per second at most, however busy the stream is.
+    if (!this.timer) this.timer = setTimeout(() => void this.flush(), 1000);
   }
 
-  flush(): void {
+  async flush(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    fs.writeFileSync(this.file, JSON.stringify(this.data, null, 2));
+    const snapshot = { ...this.data };
+    this.writing = this.writing.then(() => setState(this.db, KEY, snapshot)).catch(() => {});
+    await this.writing;
   }
 }

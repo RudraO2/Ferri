@@ -11,13 +11,21 @@
     "dev": "pnpm --filter @ferri/agent dev",
     "start": "pnpm --filter @ferri/agent start",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d --wait",
+    "db:generate": "pnpm --filter @ferri/db generate",
+    "db:migrate": "pnpm --filter @ferri/db migrate",
+    "kb": "tsx --env-file-if-exists=.env scripts/kb.ts",
+    "eval:answers": "tsx --env-file-if-exists=.env scripts/eval-answers.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@ferri/db": "workspace:*",
+    "@ferri/knowledge": "workspace:*",
+    "@ferri/switch": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

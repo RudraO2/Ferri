@@ -1,11 +1,17 @@
-import { SwitchAgent, type MessageEvent } from "@ferri/switch";
+import { createDb, runMigrations } from "@ferri/db";
+import { loadSkills } from "@ferri/knowledge";
+import { SwitchAgent } from "@ferri/switch";
 import { config } from "./config.js";
+import { createFlow } from "./flow.js";
+import { RoomHistory, type RoomLine } from "./rooms.js";
 import { ConnectionStore } from "./state.js";
-import { reply, type TranscriptLine } from "./brain.js";
 
 const log = (msg: string) => console.log(`[ferri ${new Date().toISOString()}] ${msg}`);
 
-const store = new ConnectionStore(config.stateDir);
+await runMigrations();
+const { db, close } = createDb();
+const store = await ConnectionStore.open(db, config.legacyStateDir);
+
 const agent = new SwitchAgent({
   baseUrl: config.switchUrl,
   agentId: config.agentId,
@@ -13,12 +19,11 @@ const agent = new SwitchAgent({
   connectionId: store.connectionId,
   cursor: store.cursor,
   clientName: "ferri",
-  clientVersion: "0.1.0",
+  clientVersion: "0.2.0",
   log,
 });
 
 const roomNames = new Map<string, string>();
-
 async function roomName(roomId: string): Promise<string> {
   const cached = roomNames.get(roomId);
   if (cached) return cached;
@@ -33,6 +38,7 @@ async function roomName(roomId: string): Promise<string> {
 }
 
 interface ContextEntry {
+  id?: string;
   sender_name?: string;
   sender?: string;
   body?: string;
@@ -40,67 +46,54 @@ interface ContextEntry {
   kind?: string;
 }
 
-async function history(roomId: string, excludeId: string): Promise<TranscriptLine[]> {
-  const ctx = await agent.op<{ threads: { root: ContextEntry & { id?: string }; replies: (ContextEntry & { id?: string })[] }[] }>(
-    "read_context",
-    { room_id: roomId, limit: 30 },
-  );
-  const lines: TranscriptLine[] = [];
+const rooms = new RoomHistory(async (roomId) => {
+  const ctx = await agent.op<{ threads: { root: ContextEntry; replies: ContextEntry[] }[] }>("read_context", {
+    room_id: roomId,
+    limit: 30,
+  });
+  const lines: RoomLine[] = [];
   for (const t of ctx?.threads ?? []) {
     for (const e of [t.root, ...t.replies]) {
-      if (e.kind !== "message" || e.id === excludeId || !e.body) continue;
-      lines.push({ sender: e.sender_name ?? e.sender ?? "someone", body: e.body, timestamp: e.timestamp ?? 0 });
+      if (e.kind !== "message" || !e.body || !e.id) continue;
+      const fromFerri = e.sender === config.agentId || e.sender_name?.toLowerCase() === "ferri";
+      lines.push({
+        id: e.id,
+        senderId: e.sender ?? "",
+        sender: fromFerri ? "Ferri" : (e.sender_name ?? e.sender ?? "someone"),
+        body: e.body,
+        timestamp: e.timestamp ?? 0,
+        fromFerri,
+      });
     }
   }
-  return lines.sort((a, b) => a.timestamp - b.timestamp);
-}
+  return lines;
+});
 
-function isOwnMessage(ev: MessageEvent): boolean {
-  const name = ev.payload.sender_name?.toLowerCase();
-  return name === "ferri" || ev.payload.sender_kind === "platform";
-}
+// Read on every question, so a skill edit applies without a restart.
+const skills = () => loadSkills(config.skillsDir, ["ferri", "librarian"]);
 
-async function onMessage(ev: MessageEvent): Promise<void> {
-  const p = ev.payload;
-  if (isOwnMessage(ev)) return;
-  if (!p.addressed) return; // Spec 01: answer only when mentioned.
-  if (Date.now() - p.timestamp > config.maxReplyAgeMs) {
-    log(`skip stale message ${p.message_id} in ${ev.room_id}`);
-    return;
-  }
+const onMessage = createFlow({ db, agent, rooms, skills, roomName, log });
 
-  log(`addressed by ${p.sender_name} in ${ev.room_id}: ${p.body.slice(0, 120)}`);
-  await agent.setTyping(ev.room_id, true).catch(() => {});
-  try {
-    const [name, past] = await Promise.all([roomName(ev.room_id), history(ev.room_id, p.message_id).catch(() => [])]);
-    const text = await reply({ roomName: name, history: past, from: p.sender_name, message: p.body });
-    if (text) {
-      await agent.sendMessage(ev.room_id, text);
-      log(`replied in ${ev.room_id}`);
-    } else {
-      log(`no reply (model declined) for ${p.message_id}`);
-    }
-  } finally {
-    await agent.setTyping(ev.room_id, false).catch(() => {});
-  }
-}
-
-const shutdown = () => {
+const shutdown = async () => {
   log("shutting down");
   agent.stop();
-  store.flush();
+  await store.flush();
+  await close();
   process.exit(0);
 };
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
 
-log(`starting; agent ${config.agentId}, connection ${store.connectionId}, cursor ${store.cursor ?? "head"}`);
+log(
+  `starting; agent ${config.agentId}, connection ${store.connectionId}, cursor ${store.cursor ?? "head"}, ` +
+    `answers ${config.modelMain.model}/${config.modelMain.effort}, triage ${config.modelFast.model}/${config.modelFast.effort}`,
+);
 await agent.run({
   onConnected: (s) => log(`connected; ${s.rooms.length} room(s), cursor ${s.cursor}, beat ${s.heartbeat_interval_seconds ?? "?"}s`),
   onCursor: (c) => store.setCursor(c),
   onEvent: async (ev, gap) => {
     if (gap) log(`gap before #${ev.sequence}: ${gap.reason}`);
     // Not awaited: a slow model call must not hold up the stream.
-    if (ev.type === "message") void onMessage(ev).catch((err) => log(`reply failed: ${(err as Error).message}`));
+    if (ev.type === "message") void onMessage(ev).catch((err) => log(`message failed: ${(err as Error).message}`));
   },
 });
