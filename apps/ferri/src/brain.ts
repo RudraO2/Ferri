@@ -40,12 +40,13 @@ export async function reply(input: {
   ].join("\n\n");
 
   // `fallbacks: "default"` re-runs a declined request on Anthropic's recommended
-  // fallback model server-side. It is newer than some SDK typings, hence the cast.
+  // fallback model server-side. Haiku has no server-side fallback, so it is sent
+  // only for Sonnet and Opus. It is newer than some SDK typings, hence the cast.
+  const withFallback = /sonnet|opus/.test(config.modelMain);
   const params = {
     model: config.modelMain,
     max_tokens: 2048,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...(withFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
     output_config: { effort: "low" },
     system: [{ type: "text", text: persona, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userText }],

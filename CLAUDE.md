@@ -11,7 +11,8 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 
 ## Conventions
 - TypeScript, Node 22, ESM, pnpm workspace. Run with `tsx`. Check with `pnpm typecheck` and `pnpm test`.
-- Models: `claude-sonnet-5-5` for answers, planning and drafting; `claude-haiku-5-5` for per-message triage. Use the official `@anthropic-ai/sdk`.
+- Models: `claude-sonnet-5-5` for answers, planning and drafting in production; `claude-haiku-5-5` for per-message triage. Use the official `@anthropic-ai/sdk`.
+- Testing always uses `claude-haiku-5-5` at low effort (set `FERRI_MODEL_MAIN=claude-haiku-5-5` in `.env`). Do not spend Sonnet credits on tests.
 - Switch sequence numbers can exceed `Number.MAX_SAFE_INTEGER`. Keep cursors as strings.
 - Facts about the Switch API come from reading `../switch` (our fork, checked out next to this repo). Do not guess endpoints.
 - Every feature works end to end on the real local stack before the next one starts.
@@ -24,4 +25,4 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 3. Open Mattermost at http://localhost:8065 (user `user`, password `MATTERMOST_USER_PASSWORD` in `../switch/.env`), go to `ferri-lab`, and say `@ferri hello`.
 
 ## Status
-- Spec 01, Ferri alive in Switch: built. The model reply is pending an API key.
+- Spec 01, Ferri alive in Switch: done.
