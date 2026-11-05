@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decideAction, mayPost, type DecisionInput } from "./policy.ts";
+import { roomPlatform } from "./spaces.ts";
 
 const base: DecisionInput = {
   attached: { mode: "auto", role: "members" },
@@ -48,5 +49,18 @@ describe("decideAction", () => {
 
   it("posts only in auto", () => {
     expect(["auto", "approve", "listen", "paused"].map((p) => mayPost(p as never))).toEqual([true, false, false, false]);
+  });
+});
+
+
+describe("roomPlatform", () => {
+  it("prefers the bridge type, then a platform named in the connection, then the name", async () => {
+    const lookup = async (id: string) => (id === "b1" ? "slack" : null);
+    expect(await roomPlatform({ bridge_id: "b1", bridge_display_name: "Pulse" }, lookup)).toBe("slack");
+    expect(await roomPlatform({ bridge_id: "b2", bridge_display_name: "Pulse Slack" }, lookup)).toBe("slack");
+    expect(await roomPlatform({ bridge_display_name: "Lantern Labs Discord" })).toBe("discord");
+    expect(await roomPlatform({ bridge_display_name: "Telegram" })).toBe("telegram");
+    expect(await roomPlatform({ bridge_display_name: "Acme Chat" })).toBe("acme chat");
+    expect(await roomPlatform({})).toBeNull();
   });
 });

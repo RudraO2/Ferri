@@ -19,7 +19,8 @@
     "eval:answers": "tsx --env-file-if-exists=.env scripts/eval-answers.ts",
     "dev:mattermost": "tsx scripts/dev-mattermost.ts",
     "desk": "pnpm --filter @ferri/desk dev",
-    "desk:build": "pnpm --filter @ferri/desk build"
+    "desk:build": "pnpm --filter @ferri/desk build",
+    "card:preview": "tsx --env-file-if-exists=.env scripts/card-preview.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

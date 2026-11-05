@@ -67,6 +67,27 @@ Desk is where organizers run Ferri: `pnpm desk`, then http://localhost:3100, sig
 - **Knowledge**: every entry, searchable; editing one makes a new version that Ferri uses at once. Seeding again never overwrites an edit made in Desk.
 - **Community**: the central instructions, and the mute list.
 
+## Telegram, Slack and Discord
+
+Every group on every platform is a Switch room, so one event can have spaces on Telegram, Slack and Discord next to Mattermost. A question asked on Telegram becomes a card in the crew room; the crew answers once; everyone who asked the same thing on Slack or Discord gets the answer in their own app, with a real mention.
+
+Connect each platform to Switch once (admin; the Gateway also does it from its Messaging apps page):
+
+```
+POST /gateway/collaborations
+{ "bridge_type": "telegram", "display_name": "Telegram", "connection_config": { "bot_token": "...", "bot_username": "..." } }
+{ "bridge_type": "slack",    "display_name": "Acme Slack", "connection_config": { "bot_token": "xoxb-...", "app_token": "xapp-...", "workspace_id": "T...", "agent_usergroups": false } }
+{ "bridge_type": "discord",  "display_name": "Acme Discord", "connection_config": { "bot_token": "...", "guild_id": "..." } }
+```
+
+- **Telegram**: make a bot with BotFather, turn Group Privacy off before adding it anywhere, add it to the group.
+- **Slack**: create the app from Switch's manifest (Socket Mode, no public URL), generate an `xapp-` token with `connections:write`, install it, `/invite` it to a channel.
+- **Discord**: create an application, turn on the Server Members and Message Content intents, invite the bot with `bot` and `applications.commands`, then post once in the channel (that creates the room).
+- Then type `!invite-agent @ferri` in the chat. The space shows up in Desk under Discovered, switched off, until you attach it to an event.
+- Name the platform bot or app after Switch, not after Ferri. Slack and Discord turn a typed `@ferri` into a mention of a bot user whose name starts with "ferri", and then the message never reaches Ferri.
+- Set `agent_greetings_enabled: false` on a connection (`PATCH /gateway/collaborations/{id}`) if Ferri should stay silent when it joins a space that is still off.
+- `pnpm card:preview <room id>` opens a sample question card in any room, to see how that platform draws it (`--close` closes it).
+
 ## How Ferri learns
 
 1. A member asks something the knowledge does not cover. Ferri tells them it is checking with the team.
@@ -85,4 +106,5 @@ Desk is where organizers run Ferri: `pnpm desk`, then http://localhost:3100, sig
 | `pnpm eval:answers` | Check Ferri's decisions on a fixed set: answers, room triage, card matching, crew intent |
 | `pnpm dev:mattermost` | Create the local Mattermost test people and put them in the rooms |
 | `pnpm desk` | Run Desk at http://localhost:3100 |
+| `pnpm card:preview <room id>` | Open a sample question card in a room on any platform (`--close` to close it) |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |

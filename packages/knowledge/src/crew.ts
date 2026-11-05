@@ -14,17 +14,47 @@ export interface CrewMember {
 export interface SenderIdentity {
   /** "mattermost", "slack", "telegram", ... or null when the id has another shape. */
   platform: string | null;
+  /**
+   * The person's own platform username ("rudra.pratap.12233", "Priya_K"), as
+   * the bridge saw it. Switch's bridges turn `@<this>` into a native mention
+   * (Slack `<@U…>`, Discord `<@id>`, Telegram `tg://user`), so mentions use it.
+   */
   username: string;
 }
 
 // `@switch-<platform>-<bridge uuid>-<username>:<server>`, how Switch names a platform person.
+// The username segment is folded (lowercase, anything outside [a-z0-9_-] becomes "-",
+// collaboration_core.py), so it is only good for matching, not for writing a mention.
 const PLATFORM_ID =
   /^@switch-([a-z0-9_]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(.+):[^:]+$/i;
 
+/** Switch's folding of a platform username into its id: `Jo.Ann` and `jo-ann` are the same person. */
+export function foldHandle(name: string): string {
+  return name
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function parseSender(sender: string, senderName?: string): SenderIdentity {
   const m = PLATFORM_ID.exec(sender);
-  if (m) return { platform: m[1]!.toLowerCase(), username: m[2]! };
+  if (m) {
+    const folded = m[2]!;
+    // Prefer the real username when it is the one the id was folded from (it
+    // can carry dots and capitals); anything else falls back to the id. Switch
+    // appends an 8-hex digest when two names fold alike.
+    const fromName = senderName ? foldHandle(senderName) : null;
+    const matches = fromName !== null && (fromName === folded || fromName === folded.replace(/-[0-9a-f]{8}$/, ""));
+    return { platform: m[1]!.toLowerCase(), username: matches ? senderName! : folded };
+  }
   return { platform: null, username: senderName ?? sender };
+}
+
+/** Whether a stored handle names this sender (same folding as Switch, `@` optional). */
+export function sameHandle(handle: string, username: string): boolean {
+  return foldHandle(handle) === foldHandle(username);
 }
 
 /** The event's crew plus the community-wide crew, event crew first. */
@@ -54,11 +84,10 @@ export async function loadCrew(db: Db, communityId: string, eventId: string | nu
 /** The crew member a message came from, or null for everyone else. */
 export function findCrewMember(crew: CrewMember[], sender: string, senderName?: string): CrewMember | null {
   const who = parseSender(sender, senderName);
-  const name = who.username.toLowerCase();
   return (
     crew.find((c) =>
       Object.entries(c.handles).some(
-        ([platform, handle]) => handle.toLowerCase() === name && (who.platform === null || platform === who.platform),
+        ([platform, handle]) => sameHandle(handle, who.username) && (who.platform === null || platform === who.platform),
       ),
     ) ?? null
   );
@@ -78,6 +107,6 @@ export function routeCard(crew: CrewMember[], topic: string): { owners: CrewMemb
 
 /** `@handle` for the platform, or the plain name when the person has no handle there. */
 export function mention(member: CrewMember, platform: string | null): string {
-  const handle = platform ? member.handles[platform] : undefined;
+  const handle = platform ? member.handles[platform]?.trim().replace(/^@/, "") : undefined;
   return handle ? `@${handle}` : member.name;
 }

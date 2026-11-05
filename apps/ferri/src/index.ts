@@ -2,11 +2,14 @@ import { eq, sql } from "drizzle-orm";
 import { createDb, knowledgeEntries, runMigrations } from "@ferri/db";
 import {
   attachedRoomIds,
+  bridgeTypesFrom,
   discoverSpaces,
   findCommunity,
   loadLiveKnowledge,
   loadSkills,
   mirrorToSwitch,
+  roomPlatform,
+  type RoomDetail,
 } from "@ferri/knowledge";
 import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 import { config } from "./config.ts";
@@ -32,13 +35,17 @@ const agent = new SwitchAgent({
   log,
 });
 
+// Admin Gateway session (from ../switch/.env): the knowledge mirror, and which bridge is which platform.
+const gateway = await gatewayFromEnv(config.switchEnvFile);
+const bridgeType = gateway ? bridgeTypesFrom(() => gateway.bridges()) : undefined;
+
 const roomInfo = new Map<string, RoomInfo>();
 async function room(roomId: string): Promise<RoomInfo> {
   const cached = roomInfo.get(roomId);
   if (cached) return cached;
   try {
-    const detail = await agent.op<{ name?: string; bridge_display_name?: string }>("get_room_detail", { room_id: roomId });
-    const info = { name: detail?.name ?? roomId, platform: detail?.bridge_display_name?.toLowerCase() ?? null };
+    const detail = await agent.op<RoomDetail>("get_room_detail", { room_id: roomId });
+    const info = { name: detail?.name ?? roomId, platform: await roomPlatform(detail, bridgeType) };
     roomInfo.set(roomId, info);
     return info;
   } catch {
@@ -87,7 +94,7 @@ async function discover(): Promise<void> {
   try {
     const community = await findCommunity(db, config.community);
     if (!community) return;
-    const r = await discoverSpaces(db, agent, community.id, roomCache);
+    const r = await discoverSpaces(db, agent, community.id, roomCache, bridgeType);
     if (r.added.length || r.archived) log(`spaces: ${r.rooms} room(s); new: ${r.added.join(", ") || "none"}; archived: ${r.archived}`);
   } catch (err) {
     log(`space discovery failed: ${(err as Error).message}`);
@@ -95,7 +102,6 @@ async function discover(): Promise<void> {
 }
 
 // The Switch library mirror follows the knowledge, whether Ferri or Desk changed it.
-const gateway = await gatewayFromEnv(config.switchEnvFile);
 let mirrorSignature = "";
 async function watchMirror(): Promise<void> {
   if (!gateway) return;

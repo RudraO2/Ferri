@@ -15,6 +15,7 @@ import {
   answerQuestion,
   applySeedSpaces,
   attachedRoomIds,
+  bridgeTypesFrom,
   discoverSpaces,
   loadLiveKnowledge,
   loadSkills,
@@ -70,7 +71,8 @@ try {
       // Spaces: find the rooms Ferri is in, then attach the ones event.yaml names.
       const agent = switchAgent();
       if (agent) {
-        const d = await discoverSpaces(db, agent, r.communityId);
+        const gw = await gatewayFromEnv(path.join(root, "..", "switch", ".env"));
+        const d = await discoverSpaces(db, agent, r.communityId, new Map(), gw ? bridgeTypesFrom(() => gw.bridges()) : undefined);
         console.log(`spaces: ${d.rooms} room(s) Ferri is in${d.added.length ? `; new (Off): ${d.added.join(", ")}` : ""}`);
         for (const line of await applySeedSpaces(db, r.spaceRequests)) console.log(`  ${line}`);
       } else if (r.spaceRequests.length) {

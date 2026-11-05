@@ -12,6 +12,11 @@ instructions: |
 spaces:
   - { room: ferri-lab, mode: auto }
   - { room: ferri-crew, role: crew }
+  # Outside platforms (spec 05). Names are "<connection name>: <chat name>", as
+  # Desk shows them; a room that does not exist on this install is reported and skipped.
+  - { room: "Telegram: Lantern Build Night", mode: auto }
+  - { room: "Pulse Slack: build-night", mode: auto }
+  - { room: "Lantern Labs Discord: build-night", mode: auto }
 # Who answers what. Topics: schedule, food, venue, registration, teams, prizes,
 # judging, rules, tech, sponsors, community, other. A card goes to the topic
 # owners first, then whoever is on duty, then the whole crew.

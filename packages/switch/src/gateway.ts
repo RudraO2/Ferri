@@ -52,6 +52,11 @@ export class GatewayClient {
     );
   }
 
+  /** The messaging-app connections (admin): which bridge is Slack, Discord, Telegram, ... */
+  async bridges(): Promise<{ bridge_id: string; bridge_type: string; display_name: string }[]> {
+    return this.call("GET", "/gateway/collaborations");
+  }
+
   async login(): Promise<void> {
     const res = await this.raw("POST", "/gateway/auth/login", { email: this.email, password: this.password });
     if (res.status >= 300) throw new Error(`gateway sign-in failed: HTTP ${res.status} ${await res.text()}`);

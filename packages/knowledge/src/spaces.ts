@@ -1,5 +1,6 @@
 import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { communities, eventSpaces, events, mutedPeople, spaces, type Db } from "@ferri/db";
+import { sameHandle } from "./crew.ts";
 import type { SpaceMode, SpaceRole, SpaceSetting } from "./policy.ts";
 
 export interface RoomSeen {
@@ -158,11 +159,14 @@ export async function detachSpace(db: Db, spaceId: string): Promise<void> {
 }
 
 export async function isMuted(db: Db, communityId: string, platform: string | null, username: string): Promise<boolean> {
+  // Handles are compared the way Switch folds them, so "@Jo.Ann" on the list mutes jo.ann and jo-ann.
   const rows = await db
-    .select({ id: mutedPeople.id, platform: mutedPeople.platform })
+    .select({ username: mutedPeople.username, platform: mutedPeople.platform })
     .from(mutedPeople)
-    .where(and(eq(mutedPeople.communityId, communityId), eq(mutedPeople.username, username.toLowerCase())));
-  return rows.some((r) => r.platform === "*" || platform === null || r.platform === platform);
+    .where(eq(mutedPeople.communityId, communityId));
+  return rows.some(
+    (r) => sameHandle(r.username, username) && (r.platform === "*" || platform === null || r.platform === platform),
+  );
 }
 
 export async function isPaused(db: Db, communityId: string): Promise<boolean> {
@@ -212,6 +216,42 @@ export interface RoomOps {
   op<T = unknown>(name: string, args?: Record<string, unknown>): Promise<T>;
 }
 
+/** What `get_room_detail` tells an agent about a room's platform. */
+export interface RoomDetail {
+  name?: string;
+  bridge_id?: string | null;
+  bridge_display_name?: string | null;
+}
+
+/** Looks up a bridge's type ("slack", "discord", ...) by id, or null when it cannot tell. */
+export type BridgeTypeLookup = (bridgeId: string) => Promise<string | null>;
+
+const PLATFORMS = ["mattermost", "slack", "discord", "telegram", "teams", "whatsapp"] as const;
+
+/**
+ * The platform of a room: the bridge's type when the Gateway can say, else a
+ * platform named in the connection's display name ("Pulse Slack" is slack), else
+ * the display name itself. Crew handles and the mute list are keyed by it.
+ */
+export async function roomPlatform(detail: RoomDetail | null | undefined, lookup?: BridgeTypeLookup): Promise<string | null> {
+  if (detail?.bridge_id && lookup) {
+    const t = await lookup(detail.bridge_id).catch(() => null);
+    if (t) return t.toLowerCase();
+  }
+  const shown = detail?.bridge_display_name?.toLowerCase().trim();
+  if (!shown) return null;
+  return PLATFORMS.find((p) => new RegExp(`\\b${p}\\b`).test(shown)) ?? shown;
+}
+
+/** A cached `BridgeTypeLookup` over the Gateway's connection list (refreshed on a miss). */
+export function bridgeTypesFrom(list: () => Promise<{ bridge_id: string; bridge_type: string }[]>): BridgeTypeLookup {
+  let cache = new Map<string, string>();
+  return async (id) => {
+    if (!cache.has(id)) cache = new Map((await list()).map((b) => [b.bridge_id, b.bridge_type]));
+    return cache.get(id) ?? null;
+  };
+}
+
 /**
  * Ask Switch which rooms Ferri is in (`list_rooms`, then `get_room_detail`
  * for the platform) and record them as spaces. New rooms land in Discovered,
@@ -222,6 +262,7 @@ export async function discoverSpaces(
   ops: RoomOps,
   communityId: string,
   known: Map<string, RoomSeen> = new Map(),
+  bridgeType?: BridgeTypeLookup,
 ): Promise<{ added: string[]; archived: number; rooms: number }> {
   const rooms = await ops.op<{ room_id: string; name: string; archived?: boolean }[]>("list_rooms", {});
   const seen: RoomSeen[] = [];
@@ -230,8 +271,8 @@ export async function discoverSpaces(
     let info = known.get(r.room_id);
     if (!info) {
       try {
-        const d = await ops.op<{ name?: string; bridge_display_name?: string }>("get_room_detail", { room_id: r.room_id });
-        info = { roomId: r.room_id, name: d?.name ?? r.name, platform: d?.bridge_display_name?.toLowerCase() ?? null };
+        const d = await ops.op<RoomDetail>("get_room_detail", { room_id: r.room_id });
+        info = { roomId: r.room_id, name: d?.name ?? r.name, platform: await roomPlatform(d, bridgeType) };
       } catch {
         info = { roomId: r.room_id, name: r.name, platform: null };
       }
