@@ -37,6 +37,11 @@ export const config = {
    * answer first. Ferri then checks the room again before stepping in.
    */
   roomGraceMs: Number(process.env.FERRI_ROOM_GRACE_SECONDS ?? 20) * 1000,
+  /**
+   * Crew chatter: how long Ferri waits after a possible decision before it
+   * checks it, so a correction in the next messages is part of what it offers.
+   */
+  decisionGraceMs: Number(process.env.FERRI_DECISION_GRACE_SECONDS ?? 20) * 1000,
   /** Sibling Switch checkout's .env, for the admin password fallback. */
   switchEnvFile: path.join(repoRoot, "..", "switch", ".env"),
   /** Test override for the ladder's T (nudge at T, escalate at 2T). Unset: 10 min live, 2 h before. */

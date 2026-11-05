@@ -65,6 +65,12 @@ export interface ResolveResult {
   saved: boolean;
 }
 
+/** Announce cards (spec 09) are settled by the launch module; the loop hands their outcomes over. */
+export interface AnnounceHooks {
+  outcome(card: CardRow, answer: { written: string | null; selected: string[] }, by: string): Promise<void>;
+  expired(card: CardRow): Promise<void>;
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const minutesSince = (d: Date) => Math.max(1, Math.round((Date.now() - d.getTime()) / 60000));
 
@@ -81,6 +87,7 @@ export function askerMention(askerId: string, askerName: string): string {
  */
 export function createLoop(deps: LoopDeps) {
   const { db, agent, log } = deps;
+  let announceHooks: AnnounceHooks | null = null;
 
   /**
    * Every post goes through here. While the master pause is on, nothing is
@@ -104,7 +111,7 @@ export function createLoop(deps: LoopDeps) {
   // ── Ferri Pocket pushes (spec 06): next to the crew-room post, never instead of it ──
 
   function pocketNotify(
-    kind: Exclude<PushKind, "settled" | "test">,
+    kind: Exclude<PushKind, "settled" | "test" | "reminder">,
     card: CardRow,
     crewIds: string[],
     extra: { waiting?: number; askerName?: string; roomName?: string } = {},
@@ -607,6 +614,10 @@ export function createLoop(deps: LoopDeps) {
     if (!card) return false;
     pocketNotify("expire", card, card.ownerIds, { waiting: card.kind === "question" ? await waitingCount(db, card.id) : 1 });
     if (!fromSwitch) await agent.closeCard(card.switchSessionId, card.id).catch(() => {});
+    if (card.kind === "announce") {
+      await announceHooks?.expired(card);
+      return true;
+    }
     if (card.kind === "reply") {
       if (card.targetQuestionId) {
         await db
@@ -675,7 +686,10 @@ export function createLoop(deps: LoopDeps) {
       const by = await nameForAnswerer(o.answeredBy, card.communityId, card.eventId);
       const a = o.answers?.find((x) => x.question_id === CARD_QUESTION_ID) ?? o.answers?.[0];
       const written = a?.custom_text?.trim();
-      if (card.kind === "reply") {
+      if (card.kind === "announce") {
+        if (!announceHooks) throw new Error("announcements are not running yet");
+        await announceHooks.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
+      } else if (card.kind === "reply") {
         if (written) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card", answerText: written });
           // Keep the asker's mention when the organizer's version does not name anyone.
@@ -755,7 +769,9 @@ export function createLoop(deps: LoopDeps) {
         const { platform } = await deps.room(card.crewRoomId);
         const owners = (await crewByIds(card.ownerIds)).map((o) => mention(o, platform));
         const what =
-          card.kind === "reply"
+          card.kind === "announce"
+            ? `the announcement “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
+            : card.kind === "reply"
             ? `the reply to “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min.`
             : `still open after ${minutesSince(card.createdAt)} min: “${card.question}”. ${plural(n, "person is", "people are")} waiting. ` +
               `Answer on the card, or tell me with @${config.agentName} and the answer.`;
@@ -781,7 +797,9 @@ export function createLoop(deps: LoopDeps) {
         const crew = await loadCrew(db, card.communityId, card.eventId);
         const everyone = crew.map((c) => mention(c, platform));
         const what =
-          card.kind === "reply"
+          card.kind === "announce"
+            ? `nobody has approved the announcement “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please post it or say don't post.`
+            : card.kind === "reply"
             ? `nobody has approved the reply to “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : `nobody has answered “${card.question}” for ${minutesSince(card.createdAt)} min, and ${plural(n, "person is", "people are")} waiting. Whoever knows, please answer.`;
         await post(card.communityId, card.crewRoomId, `${everyone.join(" ") || "Everyone"}: ${what}`);
@@ -839,6 +857,14 @@ export function createLoop(deps: LoopDeps) {
   return {
     post,
     crewRoomFor,
+    ladder,
+    claim,
+    crewByIds,
+    pocketNotify,
+    pocketSettled,
+    setAnnounceHooks: (h: AnnounceHooks) => {
+      announceHooks = h;
+    },
     openOrJoin,
     openReplyCard,
     resolveCard,

@@ -43,8 +43,9 @@ describe("decideAction", () => {
     const crewRoom = { mode: "listen" as const, role: "crew" as const };
     expect(d({ attached: crewRoom, fromCrew: true, addressed: true })).toEqual({ act: "crew", posting: "auto", crewRoom: true });
     expect(d({ attached: crewRoom, addressed: true, mentioned: true })).toEqual({ act: "direct", posting: "auto", crewRoom: true });
-    expect(d({ attached: crewRoom })).toEqual({ act: "ignore", reason: "crew chatter" });
-    expect(d({ attached: crewRoom, fromCrew: true })).toEqual({ act: "ignore", reason: "crew chatter" });
+    expect(d({ attached: crewRoom })).toEqual({ act: "ignore", reason: "not crew" });
+    expect(d({ attached: crewRoom, fromCrew: true })).toEqual({ act: "crew_chatter", posting: "auto", crewRoom: true });
+    expect(d({ attached: crewRoom, fromCrew: true, paused: true })).toEqual({ act: "crew_chatter", posting: "paused", crewRoom: true });
   });
 
   it("posts only in auto", () => {

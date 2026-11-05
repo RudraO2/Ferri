@@ -102,6 +102,20 @@ export class SwitchAgent {
     return out.event_id;
   }
 
+  /**
+   * Edit a message this agent posted, where the room's bridge relayed it.
+   * Needs Ferri's Switch fork (`POST /agents/{id}/messages/{event_id}/edit`).
+   * False: the message never reached a platform, so nothing was redrawn.
+   */
+  async editMessage(roomId: string, eventId: string, content: string): Promise<boolean> {
+    const out = await this.request<{ ok: boolean; edited: boolean }>(
+      "POST",
+      `/agents/${this.opts.agentId}/messages/${encodeURIComponent(eventId)}/edit`,
+      { room_id: roomId, content },
+    );
+    return out.edited;
+  }
+
   async setTyping(roomId: string, isTyping: boolean): Promise<void> {
     await this.request("POST", `/agents/${this.opts.agentId}/typing`, { room_id: roomId, is_typing: isTyping });
   }

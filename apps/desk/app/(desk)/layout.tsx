@@ -28,6 +28,7 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
         <Nav
           counts={{
             "/cards": o.openQuestions + o.repliesWaiting,
+            "/announcements": o.announcementsWaiting,
             "/spaces": o.discovered,
           }}
         />

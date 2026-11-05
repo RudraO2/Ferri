@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { myCrew, openCards, waitedFor, type PocketCard } from "@/lib/pocket";
+import { PLATFORM_LABEL, myCrew, openCards, waitedFor, type PocketCard } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { Empty, Header, Toast, Where } from "./bits";
 import { PushNudge } from "./push";
@@ -10,14 +10,14 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
   const [cards, me] = await Promise.all([openCards(user), myCrew(user)]);
   const mine = cards.filter((c) => c.forMe);
   const others = cards.filter((c) => !c.forMe);
-  const waitingPeople = mine.reduce((n, c) => n + (c.kind === "reply" ? 1 : c.waiting.length), 0);
+  const waitingPeople = mine.reduce((n, c) => n + (c.kind === "question" ? c.waiting.length : c.kind === "reply" ? 1 : 0), 0);
   return (
     <>
       <Header
         title="Needs you"
         sub={
           mine.length
-            ? `${mine.length} card${mine.length === 1 ? "" : "s"} · ${waitingPeople} ${waitingPeople === 1 ? "person" : "people"} waiting`
+            ? `${mine.length} card${mine.length === 1 ? "" : "s"}${waitingPeople ? ` · ${waitingPeople} ${waitingPeople === 1 ? "person" : "people"} waiting` : ""}`
             : `Hi ${me[0]?.name ?? user.name}`
         }
       />
@@ -28,6 +28,11 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
         </Link>
       ) : null}
       <PushNudge />
+      <div className="mx-4 mt-3 flex justify-end">
+        <Link href="/m/new" className="btn-lg h-9 px-3 text-[14px]">
+          + Announce
+        </Link>
+      </div>
       {mine.length ? (
         <div className="mt-3 space-y-3 px-4">
           {mine.map((c) => (
@@ -57,7 +62,9 @@ function CardRow({ card }: { card: PocketCard }) {
   return (
     <Link href={`/m/c/${card.id}`} className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-xs active:bg-zinc-50">
       <div className="flex items-center gap-2">
-        <span className="pill">{card.kind === "reply" ? "reply to approve" : card.topic}</span>
+        <span className={card.kind === "announce" ? "pill bg-violet-100 text-violet-800" : "pill"}>
+          {card.kind === "announce" ? ((card.announcementVersion ?? 1) > 1 ? "announcement edit" : "announcement") : card.kind === "reply" ? "reply to approve" : card.topic}
+        </span>
         {card.escalatedAt ? (
           <span className="pill bg-amber-100 text-amber-800">escalated</span>
         ) : card.nudgedAt ? (
@@ -67,7 +74,11 @@ function CardRow({ card }: { card: PocketCard }) {
       </div>
       <div className="mt-2 text-[16px] leading-snug font-medium">{card.question}</div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        {card.kind === "reply" ? (
+        {card.kind === "announce" ? (
+          <span className="text-[12.5px] text-zinc-500">
+            to {card.announcement?.targets.length ?? 0} spaces · {[...new Set((card.announcement?.targets ?? []).map((t) => PLATFORM_LABEL[t.platform ?? ""] ?? t.platform ?? "Switch"))].join(", ")}
+          </span>
+        ) : card.kind === "reply" ? (
           <Where platform={card.target?.platform} space={card.target?.name} />
         ) : first ? (
           <>

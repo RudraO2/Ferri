@@ -27,4 +27,14 @@ describe("push notices", () => {
   it("keeps the Topic header within 32 URL-safe characters", () => {
     expect(topicFor(`card-${card.id}`)).toMatch(/^[A-Za-z0-9_-]{1,32}$/);
   });
+
+  it("asks for an OK on an announcement and settles it with the spaces reached", () => {
+    const a = { ...card, kind: "announce" as const, question: "Lunch moves to 1:30 PM", roomName: "5 spaces" };
+    expect(cardNotice("open", a)).toMatchObject({ title: "Announcement needs your OK", url: `/m/c/${card.id}` });
+    expect(cardNotice("open", a).body).toContain("to 5 spaces");
+    expect(cardNotice("expire", a).title).toBe("Announcement not posted");
+    expect(settledNotice(a, "answered", "Rudra", 5)).toMatchObject({ title: "Announcement approved by Rudra", renotify: false });
+    expect(settledNotice(a, "answered", "Rudra", 5).body).toContain("5 spaces");
+    expect(settledNotice(a, "dismissed", "Priya").title).toBe("Not posted · Priya");
+  });
 });

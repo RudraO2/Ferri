@@ -43,6 +43,13 @@
       "when": 1793910058609,
       "tag": "0005_pocket_push",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793913261963,
+      "tag": "0006_launch",
+      "breakpoints": true
     }
   ]
 }

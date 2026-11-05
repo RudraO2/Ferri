@@ -6,10 +6,16 @@ import type { ChatLine } from "./triage.ts";
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
+  /** announce: what members should be told, when (ISO 8601 with offset, or null for now), and which recent announcement it changes. */
+  announce: z.strictObject({ what: z.string(), when: z.string().nullable(), revises: z.string().nullable() }).nullable(),
+  /** remind: a reminder for the crew themselves. */
+  remind: z.strictObject({ text: z.string(), when: z.string(), who: z.enum(["me", "crew"]) }).nullable(),
+  /** team_rooms: the teams to make rooms for, with member usernames as written. */
+  teams: z.array(z.strictObject({ name: z.string(), members: z.array(z.string()) })),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
 
@@ -23,7 +29,13 @@ Decide what the crew member wants:
 
 facts: every fact in the message that is not part of the card answer, each as a standalone statement in their words (text) with a 2 to 6 word title (heading, for example "Quiet room closing time"). For remember, facts holds everything to keep. For answer_card, it holds only the extra facts beside the answer, often none. Never drop a fact the crew member stated.
 
-A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
+- announce: they want the members (participants, the community outside the crew) told something on the event's spaces ("tell everyone lunch moves to 1:30", "announce at 6 PM that submissions close at 7", "let people know the wifi is back", "post that judging starts at 4"), or they want an earlier announcement changed ("change the lunch announcement, it's 1:45 now", "fix the announcement: room 3, not room 2"). announce.what is what the members should be told, as a standalone statement in their words, with the instructions to Ferri removed. announce.when is the time they want it posted, as ISO 8601 with the offset (use "Now" below to resolve "at 6", "tomorrow 9 AM", "in 30 minutes"); null to post as soon as it is approved. announce.revises is the id (A1, A2, ...) of the recent announcement they want changed, else null. A time inside the news itself ("lunch moves to 1:30") is not announce.when.
+- remind: they want a reminder for the crew themselves, not the members ("remind me at 5 to order pizza", "remind the crew at 9 PM to stack the chairs"). remind.text is the reminder as a short standalone line ("Order the pizza"), remind.when is ISO 8601 with the offset, remind.who is "me" or "crew".
+- team_rooms: they want rooms or channels made for teams ("make team rooms for Team Alpha with meera and arjun, and Team Beta with priya"). teams lists each team with its name and its members' usernames as written, without the @.
+
+For every intent, announce and remind are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind and team_rooms.
+
+"remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
 export async function crewIntent(input: {
   choice: ModelChoice;
@@ -31,22 +43,58 @@ export async function crewIntent(input: {
   message: string;
   open: OpenCard[];
   history: ChatLine[];
-}): Promise<{ intent: CrewIntent | null; card: OpenCard | null; usage: Usage; latencyMs: number }> {
+  /** Recent announcements (newest first), for "change the lunch announcement". */
+  announcements?: RecentAnnouncement[];
+  /** "Friday 6 November 2026, 3:10 pm (Asia/Kolkata, UTC+05:30)": resolves "at 6 PM". */
+  now?: string;
+}): Promise<{
+  intent: CrewIntent | null;
+  card: OpenCard | null;
+  /** The announcement `announce.revises` names, when it names a real one. */
+  revises: RecentAnnouncement | null;
+  usage: Usage;
+  latencyMs: number;
+}> {
   const { text, byShort } = shortCardIds(input.open);
+  const recent = shortAnnouncementIds(input.announcements ?? []);
   const history = input.history.slice(-6).map((l) => `${l.sender}: ${l.body}`).join("\n") || "(none)";
   const out = await structuredCall({
     choice: input.choice,
     system: [{ type: "text", text: INTENT_SYSTEM, cache_control: { type: "ephemeral" } }],
-    user: `Open cards:\n${text}\n\nRecent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`,
+    user:
+      `Now: ${input.now ?? new Date().toISOString()}\n\nOpen cards:\n${text}\n\nRecent announcements:\n${recent.text}\n\n` +
+      `Recent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`,
     schema: CrewIntentSchema,
-    maxTokens: 2000,
+    maxTokens: 2500,
   });
   const intent = out.data;
   let card =
     intent?.intent === "answer_card" && intent.card ? (byShort.get(intent.card.trim().toUpperCase()) ?? null) : null;
   // "answer_card" with no usable id but exactly one card open: that one.
   if (intent?.intent === "answer_card" && !card && input.open.length === 1) card = input.open[0]!;
-  return { intent, card, usage: out.usage, latencyMs: out.latencyMs };
+  const ref = intent?.intent === "announce" ? intent.announce?.revises?.trim().toUpperCase() : undefined;
+  const revises = ref ? (recent.byShort.get(ref) ?? null) : null;
+  return { intent, card, revises, usage: out.usage, latencyMs: out.latencyMs };
+}
+
+// ── Announcements a crew member may refer to ─────────────────────────────
+
+export interface RecentAnnouncement {
+  id: string;
+  title: string;
+  text: string;
+  status: string;
+}
+
+/** Short ids (A1, A2, ...) for recent announcements, newest first, and the way back. */
+export function shortAnnouncementIds(list: RecentAnnouncement[]): { text: string; byShort: Map<string, RecentAnnouncement> } {
+  const byShort = new Map<string, RecentAnnouncement>();
+  const lines = list.map((a, i) => {
+    const id = `A${i + 1}`;
+    byShort.set(id, a);
+    return `${id} [${a.status}] ${a.title}: ${a.text.replace(/\s+/g, " ").slice(0, 300)}`;
+  });
+  return { text: lines.join("\n") || "(none)", byShort };
 }
 
 // ── Which open cards a newly taught fact answers ─────────────────────────

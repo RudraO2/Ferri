@@ -25,9 +25,11 @@ export type Posting = "auto" | "approve" | "listen" | "paused";
  * - crew: a crew member talking to Ferri (answer a card, teach a fact, ask);
  * - direct: someone mentioned Ferri, or wrote in a direct chat;
  * - follow_up: Switch marked it addressed without a mention (a follow-up);
- * - room: said to the room; triage decides whether it is a question.
+ * - room: said to the room; triage decides whether it is a question;
+ * - crew_chatter: the crew talking among themselves in the crew room; Ferri
+ *   only watches for decisions the members should hear about (spec 09).
  */
-export type Route = "crew" | "direct" | "follow_up" | "room";
+export type Route = "crew" | "direct" | "follow_up" | "room" | "crew_chatter";
 
 export type Decision =
   | { act: "ignore"; reason: string }
@@ -57,7 +59,7 @@ export function decideAction(i: DecisionInput): Decision {
 
   if (i.fromCrew && i.addressed && (i.mentioned || crewRoom)) return { act: "crew", posting, crewRoom };
   if (i.addressed && i.mentioned) return { act: "direct", posting, crewRoom };
-  if (crewRoom) return { act: "ignore", reason: "crew chatter" };
+  if (crewRoom) return i.fromCrew ? { act: "crew_chatter", posting, crewRoom } : { act: "ignore", reason: "not crew" };
   if (i.addressed) return { act: "follow_up", posting, crewRoom };
   return { act: "room", posting, crewRoom };
 }

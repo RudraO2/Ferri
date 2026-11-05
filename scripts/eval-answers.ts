@@ -12,7 +12,12 @@ import { createDb } from "@ferri/db";
 import {
   answerQuestion,
   cardsAnsweredBy,
+  checkDecision,
   crewIntent,
+  draftAnnouncement,
+  localNow,
+  parseWhen,
+  worthAnnouncing,
   loadLiveKnowledge,
   loadSkills,
   modelsFromEnv,
@@ -243,7 +248,92 @@ try {
     console.log(`${ok ? "ok  " : "FAIL"} ${c.fact}  -> [${got.join(", ")}]${ok ? "" : ` expected [${c.answers.join(", ")}]`}`);
   }
 
-  const total = answers.length + room.length + prepCases.length + intentCases.length + coverCases.length;
+  // ── Spec 09: announcements, reminders, team rooms, decisions ──────────
+  const tz = kb.community.timezone;
+  const now = new Date();
+  const recent = [
+    { id: "lunch", title: "Lunch moves to 1:30 PM", text: "Lunch is now at 1:30 PM on Saturday.", status: "sent" },
+    { id: "wifi", title: "Wifi is back", text: "The wifi is back on all floors.", status: "sent" },
+  ];
+  const launchCases: {
+    msg: string;
+    intent: string;
+    when?: boolean;
+    revises?: string;
+    who?: "me" | "crew";
+    teams?: number;
+  }[] = [
+    { msg: "@ferri tell everyone the doors open at 9:30 AM, not 10", intent: "announce", when: false },
+    { msg: "@ferri announce at 6 PM today that submissions close at 7 PM", intent: "announce", when: true },
+    { msg: "@ferri change the lunch announcement, it's 1:45 PM now", intent: "announce", revises: "lunch" },
+    { msg: "@ferri let people know lunch moves to 2 PM", intent: "announce", when: false },
+    { msg: "@ferri remind me at 5 PM to order the pizza", intent: "remind", who: "me" },
+    { msg: "@ferri remind the crew in 2 hours to stack the chairs", intent: "remind", who: "crew" },
+    { msg: "@ferri make team rooms for Team Alpha with meera and arjun, and Team Beta with priya", intent: "team_rooms", teams: 2 },
+    { msg: "@ferri remember: the quiet room closes at 7 AM on Sunday", intent: "remember" },
+  ];
+  const lc = await pool(launchCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: recent, now: localNow(tz, now) });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    const i = r.intent;
+    if (i?.intent !== c.intent) problems.push(`intent ${i?.intent}, expected ${c.intent}`);
+    if (c.when !== undefined && !!parseWhen(i?.announce?.when, now) !== c.when) problems.push(`when ${i?.announce?.when}, expected ${c.when ? "a time" : "none"}`);
+    if (c.revises !== undefined && r.revises?.id !== c.revises) problems.push(`revises ${r.revises?.id ?? "nothing"}, expected ${c.revises}`);
+    if (c.intent === "announce" && c.revises === undefined && r.revises) problems.push(`revises ${r.revises.id}, expected a new announcement`);
+    if (c.who && (i?.remind?.who !== c.who || !parseWhen(i?.remind?.when, now))) problems.push(`remind ${JSON.stringify(i?.remind)}, expected ${c.who} with a time`);
+    if (c.teams !== undefined && i?.teams.length !== c.teams) problems.push(`teams ${i?.teams.length}, expected ${c.teams}`);
+    return { c, r, problems };
+  });
+  console.log("\nlaunch intents");
+  for (const { c, r, problems } of lc) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, announce: r.intent?.announce, remind: r.intent?.remind, teams: r.intent?.teams })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  const decisionCases: { before: ChatLine[]; msg: string; after: ChatLine[]; offer: boolean; changes?: string }[] = [
+    { before: [{ sender: "Priya", body: "judges are stuck in traffic, should we push judging?" }], msg: "ok let's push judging to 4pm on Sunday", after: [], offer: true },
+    { before: [], msg: "should we push judging to 4pm?", after: [{ sender: "Rudra", body: "yes, 4pm it is" }], offer: false },
+    { before: [], msg: "who is buying the tape for the banners?", after: [], offer: false },
+    { before: [], msg: "final call: volunteers meet at 8 AM for the crew briefing", after: [], offer: false },
+    { before: [], msg: "caterer called, lunch has to move to 1:45 instead of 1:30", after: [], offer: true, changes: "lunch" },
+    { before: [], msg: "we're moving the demos to hall B", after: [{ sender: "Priya", body: "wait, let's check with the venue first" }], offer: false },
+  ];
+  const dc = await pool(decisionCases, 4, async (c) => {
+    const r = await checkDecision({ choice: models.fast, sender: "Rudra", message: c.msg, before: c.before, after: c.after, announcements: recent });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    if (worthAnnouncing(r.decision) !== c.offer) problems.push(`offer ${worthAnnouncing(r.decision)}, expected ${c.offer}`);
+    if (c.changes && r.changes?.id !== c.changes) problems.push(`changes ${r.changes?.id ?? "nothing"}, expected ${c.changes}`);
+    return { c, r, problems };
+  });
+  console.log("\ncrew decisions");
+  for (const { c, r, problems } of dc) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify(r.decision)}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  console.log("\nannouncement draft");
+  const draft = await draftAnnouncement({ choice: models.main, kb, what: "Lunch moves to 1:30 PM on Saturday because the caterer is late", sender: "Rudra" });
+  const text = draft.draft?.text ?? "";
+  const draftProblems = [
+    !text.includes("1:30") ? "lost the time" : null,
+    /@(everyone|channel|here)/i.test(text) ? "pages the channel" : null,
+    /koramangala|80 feet/i.test(text) ? "added the venue, which the request did not give" : null,
+  ].filter(Boolean);
+  if (draftProblems.length) failed++;
+  console.log(`${draftProblems.length ? "FAIL" : "ok  "} ${JSON.stringify(draft.draft)}`);
+  for (const x of draftProblems) console.log(`      -> ${x}`);
+
+  const total = answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

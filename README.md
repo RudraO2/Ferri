@@ -10,10 +10,11 @@ Built on [Switch](https://github.com/sandbox-quantum/switch), which puts agents 
 
 You need Docker Desktop, Node 22 and pnpm.
 
-1. Start Switch (our fork, checked out next to this repo as `switch/`):
+1. Start Switch (our fork, `RudraO2/switch` on branch `ferri/agent-message-edit`, checked out next to this repo as `switch/`):
 
    ```bash
    cd ../switch
+   git checkout ferri/agent-message-edit
    cp .env.example .env
    bash deploy/local/generate-env-secrets.sh .env local
    # In .env set:
@@ -22,7 +23,12 @@ You need Docker Desktop, Node 22 and pnpm.
    #   FEATURE_FLAGS_ENABLED=agent_management,service_connections,follow_the_conversation
    #   CONTROLLER_TOKEN_SECRET=<32+ random characters>
    docker compose -f deploy/local/standalone-docker-compose.yml --profile collab --profile gateway --project-directory . up -d
+   # Ferri's core image: the same release plus the fork's agent message edits (for announcements)
+   docker build -f deploy/local/ferri/Dockerfile --build-arg BASE=ghcr.io/sandbox-quantum/dev/switch-core:0.31.1-dev.339.g86d5928 -t ferri/switch-core:local .
+   docker compose -f deploy/local/standalone-docker-compose.yml -f deploy/local/ferri/compose.override.yml --profile collab --profile gateway --project-directory . up -d switch
    ```
+
+   Switch has no way for an agent to edit a message it posted. The fork adds `POST /agents/{agent_id}/messages/{event_id}/edit`: Switch checks the message is the agent's own, runs the new text through Switch Trust, and the room's bridge redraws the post in place (Mattermost, Slack, Discord, Telegram). Without the image, announcements still post; edits are posted again as "Update:".
 
 2. Start Ferri's own Postgres (pgvector, port 5433) and load the demo knowledge:
 
@@ -107,6 +113,19 @@ POST /gateway/collaborations
 3. Anyone on the crew answers, on the card (`A1 "your answer"`) or just by telling Ferri (`@ferri dogs are fine on a leash`). Crew can also teach Ferri directly: `@ferri remember: lockers are on the 2nd floor`.
 4. Everyone who was waiting gets the answer in their own room, with the source. The answer is saved as knowledge, so the next person gets it instantly.
 5. Nobody answers: Ferri nudges the owner, then the whole crew, and finally marks the question unanswered. It never sends members anything the crew has not said.
+
+## Announcements: inside to outside
+
+What the crew decides becomes an update on every platform after one approval.
+
+- In the crew room: `@ferri tell everyone lunch moves to 1:30`, `@ferri announce at 6 PM that submissions close at 7`. Ferri drafts the post and opens an approval card with the draft and every space it will go to. The event's leads get pinged and a push in Pocket.
+- Ferri also watches the crew's own chat. When the crew settles something members need to know ("ok let's push judging to 4pm"), it offers an announcement on a card. It never posts without the OK.
+- One OK (the card's button, `A1 "your own version"`, Desk, or Pocket) posts it to every Auto and Approve space of the event, on every platform, and saves it as knowledge, so answers use it from then on.
+- `@ferri change the lunch announcement, it's 1:45 now` drafts a new version. Its OK edits the post in place everywhere it went.
+- A scheduled announcement goes out at its time once approved. Not approved by then: it is not sent, and the crew is told.
+- `@ferri remind me at 5 to order the pizza`: a reminder for the crew, in the crew room and as a push.
+- `@ferri make team rooms for Team Alpha with meera and arjun, and Team Beta with priya`: Ferri runs a Switch template that makes a private channel per team on the crew room's platform, with the members, Ferri and a welcome message, attached to the event.
+- Desk has an Announcements page (write, schedule, pick spaces, approve, edit everywhere, see each space's status); Pocket shows announcement cards in Needs you and has `+ Announce`.
 
 ## Useful commands
 

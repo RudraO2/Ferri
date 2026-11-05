@@ -2,7 +2,13 @@ import { eq } from "drizzle-orm";
 import { communities, crewActions, questions, spaces, type Db } from "@ferri/db";
 import {
   answerQuestion,
+  checkDecision,
   crewIntent,
+  formatWhen,
+  localNow,
+  parseWhen,
+  recentAnnouncements,
+  worthAnnouncing,
   decideAction,
   findCommunity,
   findCrewMember,
@@ -18,7 +24,9 @@ import {
   triageMessage,
   worthAnswering,
   type AnswerResult,
+  type CrewIntent,
   type CrewMember,
+  type RecentAnnouncement,
   type LiveKnowledge,
   type Posting,
   type ResolvedSpace,
@@ -26,6 +34,7 @@ import {
 } from "@ferri/knowledge";
 import type { MessageEvent, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
+import type { Launch } from "./launch.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -37,6 +46,7 @@ export interface FlowDeps {
   agent: SwitchAgent;
   rooms: RoomHistory;
   loop: Loop;
+  launch: Launch;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -80,7 +90,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, log } = deps;
+  const { db, agent, rooms, loop, launch, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
 
@@ -261,15 +271,35 @@ export function createFlow(deps: FlowDeps) {
   ): Promise<void> {
     const p = ev.payload;
     const open = (await listOpenCards(db, ctx.kb.community.id)).filter((c) => c.eventId === ctx.eventId);
-    const { intent, card } = await crewIntent({
+    const { intent, card, revises } = await crewIntent({
       choice: config.modelFast,
       sender: member.name,
       message: p.body,
       open,
       history: chat(rooms.before(ev.room_id, p.message_id, 6)),
+      announcements: await recentAnnouncements(db, ctx.kb.community.id, ctx.eventId),
+      now: localNow(ctx.kb.community.timezone),
     });
     // Replies to the crew member in this room obey this room's posting rule.
     const say = async (text: string) => (mayPost(posting) ? loop.post(ctx.kb.community.id, ev.room_id, text) : null);
+
+    // Launch (spec 09): announcements, crew reminders, team rooms.
+    if (intent && (intent.intent === "announce" || intent.intent === "remind" || intent.intent === "team_rooms")) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: intent.intent,
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      const reply = await launchIntent(ev, ctx, member, intent, revises, crewRoom);
+      if (reply) await say(reply);
+      return;
+    }
 
     const facts = (intent?.facts ?? []).filter((f) => f.text.trim());
     const acts = intent?.intent === "answer_card" && card && intent.answer.trim();
@@ -312,6 +342,116 @@ export function createFlow(deps: FlowDeps) {
     }
     // A question or anything else: the normal answer path (no cards from the crew room).
     await handleQuestion(ev, ctx, null, true, posting, crewRoom);
+  }
+
+  /** What a crew member asked for: an announcement (or a change to one), a reminder, team rooms. */
+  async function launchIntent(
+    ev: MessageEvent,
+    ctx: Context,
+    member: CrewMember,
+    intent: CrewIntent,
+    revises: RecentAnnouncement | null,
+    crewRoom: boolean,
+  ): Promise<string | null> {
+    const p = ev.payload;
+    const communityId = ctx.kb.community.id;
+    const tz = ctx.kb.community.timezone;
+    if (intent.intent === "announce") {
+      const what = intent.announce?.what.trim() || stripMention(p.body);
+      if (revises) {
+        log(`crew ${member.name} wants announcement ${revises.id} changed`);
+        return launch.revise({ announcementId: revises.id, what, by: member.name, origin: "chat" });
+      }
+      const when = parseWhen(intent.announce?.when);
+      const unclear = intent.announce?.when && !when;
+      log(`crew ${member.name} asked for an announcement${when ? ` at ${when.toISOString()}` : ""}`);
+      const r = await launch.request({ communityId, eventId: ctx.eventId, what, when, by: member.name, origin: "chat", sourceMessageId: p.message_id });
+      return r ?? (unclear ? "I could not tell when to post it, so the card says it goes out as soon as it is approved." : null);
+    }
+    if (intent.intent === "remind") {
+      const r = intent.remind;
+      const dueAt = parseWhen(r?.when);
+      if (!r || !dueAt) return `I could not tell when, ${member.name}. Say a time, like “remind me at 5 PM to order the pizza”.`;
+      const crewRoomId = crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId);
+      if (!crewRoomId) return "This event has no crew room, so I have nowhere to remind you.";
+      await launch.remind({
+        communityId,
+        eventId: ctx.eventId,
+        crewRoomId,
+        memberIds: r.who === "me" ? [member.id] : [],
+        text: r.text.trim(),
+        dueAt,
+        by: member.name,
+        sourceMessageId: p.message_id,
+      });
+      return `Okay ${member.name}, I will remind ${r.who === "me" ? "you" : "the crew"} at ${formatWhen(dueAt, tz)}: ${r.text.trim()}`;
+    }
+    const teams = intent.teams.filter((t) => t.name.trim());
+    if (!teams.length) return "Tell me the team names (and who is in each), like “make team rooms for Team Alpha with meera and arjun”.";
+    const crewRoomId = crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId);
+    if (!crewRoomId) return "This event has no crew room, so I do not know which app to make the rooms on.";
+    log(`crew ${member.name} asked for team rooms: ${teams.map((t) => t.name).join(", ")}`);
+    return launch.makeTeamRooms({ communityId, eventId: ctx.eventId, crewRoomId, teams, by: member.name });
+  }
+
+  /** Decision checks run one at a time per room, so a decision said twice is offered once. */
+  const decisionQueue = new Map<string, Promise<void>>();
+
+  /**
+   * The crew talking among themselves in the crew room. Ferri never answers
+   * here; it watches for a decision the members should hear about and offers
+   * an announcement on a card. After a short grace, so a correction in the
+   * next message ("actually 1:45") is part of what it offers.
+   */
+  async function onCrewChatter(ev: MessageEvent, ctx: Context, member: CrewMember, posting: Posting): Promise<void> {
+    const p = ev.payload;
+    if (posting === "paused" || !ctx.eventId || p.body.trim().length < 6) return;
+    await sleep(config.decisionGraceMs);
+    const prev = decisionQueue.get(ev.room_id) ?? Promise.resolve();
+    const run = prev.then(async () => {
+      const after = rooms.after(ev.room_id, p.message_id).filter((l) => !l.fromFerri);
+      const recent = await recentAnnouncements(db, ctx.kb.community.id, ctx.eventId);
+      const r = await checkDecision({
+        choice: config.modelFast,
+        sender: member.name,
+        message: p.body,
+        before: chat(rooms.before(ev.room_id, p.message_id, 8)),
+        after: chat(after),
+        announcements: recent,
+      });
+      if (!worthAnnouncing(r.decision)) return;
+      if (r.duplicate) {
+        log(`crew decision from ${member.name} is already announcement ${r.duplicate.id}; nothing new to offer`);
+        return;
+      }
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "decision",
+        cardId: null,
+        text: r.decision.what,
+      });
+      if (!actionId) return;
+      log(`crew decision spotted (${member.name}): ${r.decision.what}${r.changes ? ` (changes ${r.changes.id})` : ""}`);
+      const reply = r.changes
+        ? await launch.revise({ announcementId: r.changes.id, what: r.decision.what, by: member.name, origin: "decision" })
+        : await launch.request({
+            communityId: ctx.kb.community.id,
+            eventId: ctx.eventId,
+            what: r.decision.what,
+            when: null,
+            by: member.name,
+            origin: "decision",
+            sourceMessageId: p.message_id,
+          });
+      if (reply) log(`decision not offered: ${reply}`);
+    });
+    const settled = run.catch((err) => log(`decision check failed: ${(err as Error).message}`));
+    decisionQueue.set(ev.room_id, settled);
+    await settled;
   }
 
   async function onRoomMessage(ev: MessageEvent, ctx: Context, posting: Posting, crewRoom: boolean): Promise<void> {
@@ -435,7 +575,9 @@ export function createFlow(deps: FlowDeps) {
       if (p.addressed && mentioned) log(`ignored a mention from ${p.sender_name} in ${ctx.space.name}: ${decision.reason}`);
       return;
     }
-    if (decision.act === "crew") {
+    if (decision.act === "crew_chatter") {
+      await onCrewChatter(ev, ctx, member!, decision.posting);
+    } else if (decision.act === "crew") {
       log(`crew ${member!.name} in ${ctx.space.name}: ${p.body.slice(0, 120)}`);
       await onCrewMessage(ev, ctx, member!, mentioned, decision.posting, decision.crewRoom);
     } else if (decision.act === "direct") {

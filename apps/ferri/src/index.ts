@@ -14,6 +14,7 @@ import {
 import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 import { config } from "./config.ts";
 import { createFlow } from "./flow.ts";
+import { createLaunch } from "./launch.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
 import { ConnectionStore } from "./state.ts";
@@ -31,7 +32,7 @@ const agent = new SwitchAgent({
   connectionId: store.connectionId,
   cursor: store.cursor,
   clientName: "ferri",
-  clientVersion: "0.4.0",
+  clientVersion: "0.9.0",
   log,
 });
 
@@ -126,10 +127,18 @@ async function watchMirror(): Promise<void> {
 }
 
 const loop = createLoop({ db, agent, skills, room, log });
-const onMessage = createFlow({ db, agent, rooms, loop, skills, room, log });
+const launch = createLaunch({ db, agent, loop, room, log });
+loop.setAnnounceHooks(launch.hooks);
+const onMessage = createFlow({ db, agent, rooms, loop, launch, skills, room, log });
 const stopLoop = loop.start();
 await discover();
-const timers = [setInterval(() => void discover(), config.discoveryMs), setInterval(() => void watchMirror(), config.mirrorWatchMs)];
+const timers = [
+  setInterval(() => void discover(), config.discoveryMs),
+  setInterval(() => void watchMirror(), config.mirrorWatchMs),
+  // Announcements written in Desk or Pocket, scheduled posts, held edits, crew reminders.
+  setInterval(() => void launch.tick(), config.ladderTickMs),
+];
+void launch.tick();
 void watchMirror();
 
 const shutdown = async () => {

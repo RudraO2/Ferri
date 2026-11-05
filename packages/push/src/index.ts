@@ -9,7 +9,7 @@ import { crewMembers, deskUsers, pushLog, pushSubscriptions, type Db } from "@fe
  * that gets settled can replace the notifications it caused.
  */
 
-export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test";
+export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test" | "reminder";
 
 export interface PushPayload {
   kind: PushKind;
@@ -157,7 +157,8 @@ export function topicFor(tag: string): string {
 
 export interface CardFacts {
   id: string;
-  kind: "question" | "reply";
+  /** "announce": `question` is the announcement's title and `roomName` where it goes. */
+  kind: "question" | "reply" | "announce";
   question: string;
   topic: string;
   /** People waiting on the answer. */
@@ -170,10 +171,23 @@ export interface CardFacts {
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const people = (n: number) => `${n} ${n === 1 ? "person is" : "people are"} waiting`;
 
-export function cardNotice(kind: Exclude<PushKind, "settled" | "test">, card: CardFacts): PushPayload {
+export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminder">, card: CardFacts): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
   const from = card.askerName && card.roomName ? `${card.askerName} in ${card.roomName}` : null;
   const base = { kind, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: true, cardId: card.id };
+  if (card.kind === "announce") {
+    const where = card.roomName ? ` · to ${card.roomName}` : "";
+    switch (kind) {
+      case "open":
+        return { ...base, title: "Announcement needs your OK", body: `${q}${where}. Post, edit or drop it.` };
+      case "nudge":
+        return { ...base, title: "Announcement still waiting for your OK", body: `${q} · ${card.minutesOpen ?? "?"} min` };
+      case "escalate":
+        return { ...base, title: "Anyone: an announcement needs an OK", body: `${q} has waited ${card.minutesOpen ?? "?"} min.` };
+      case "expire":
+        return { ...base, renotify: false, title: "Announcement not posted", body: `Nobody approved ${q} in time.` };
+    }
+  }
   if (card.kind === "reply") {
     switch (kind) {
       case "open":
@@ -198,8 +212,14 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test">, card: Ca
   }
 }
 
-export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
+export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
+  if (card.kind === "announce") {
+    const title =
+      how === "answered" ? `Announcement approved${by ? ` by ${by}` : ""}` : how === "dismissed" ? `Not posted${by ? ` · ${by}` : ""}` : "Announcement not posted";
+    const body = how === "answered" && reached !== undefined ? `${q} · ${reached} ${reached === 1 ? "space" : "spaces"}` : q;
+    return { kind: "settled", title, body, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };
+  }
   const title =
     how === "answered"
       ? `${card.kind === "reply" ? "Reply sent" : "Answered"}${by ? ` by ${by}` : ""}`
@@ -210,4 +230,9 @@ export function settledNotice(card: { id: string; question: string; kind: "quest
           : "Question went unanswered";
   const body = how === "answered" && card.kind === "question" && reached !== undefined ? `${q} · reached ${reached} ${reached === 1 ? "person" : "people"}` : q;
   return { kind: "settled", title, body, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };
+}
+
+/** A crew reminder (spec 09): "Reminder: order the pizza". */
+export function reminderNotice(r: { id: string; text: string; by: string }): PushPayload {
+  return { kind: "reminder", title: "Reminder", body: `${clip(r.text, 180)}${r.by ? ` · set by ${r.by}` : ""}`, url: "/m", tag: `reminder-${r.id}`, renotify: true, cardId: null };
 }

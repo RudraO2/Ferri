@@ -8,17 +8,21 @@ import {
   TOPICS,
   attachSpace,
   communities,
+  createAnnouncementRequest,
   createEntry,
+  crewForSwitchEmail,
   crewMembers,
   detachSpace,
   editEntry,
   events,
   mutedPeople,
+  proposeAnnouncementEdit,
   recordSpace,
   setEntryArchived,
   slugify,
   spaces,
 } from "@/lib/ferri";
+import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { gatewayAs, requireUser } from "@/lib/session";
 
@@ -268,4 +272,59 @@ export async function sendReply(form: FormData) {
 
 export async function skipReply(form: FormData) {
   await answer(str(form, "cardId"), skip, "/cards");
+}
+
+// ── Announcements (spec 09) ──────────────────────────────────────────────
+
+/** A new announcement in the organizer's own words. Ferri opens its card; one OK posts it. */
+/** The crew member linked to this Switch account, else the account's name. */
+async function crewName(user: { email: string; name: string }, communityId: string): Promise<string> {
+  return (await crewForSwitchEmail(db(), communityId, user.email))[0]?.name ?? user.name;
+}
+
+export async function newAnnouncement(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const eventId = str(form, "eventId");
+  const text = str(form, "text");
+  const when = str(form, "when");
+  if (!eventId) back("/announcements", "Pick the event first.");
+  if (!text) back("/announcements", "Write the announcement first.");
+  const scheduledAt = when ? zonedTime(when, c.timezone) : null;
+  if (when && (!scheduledAt || scheduledAt.getTime() < Date.now() + 60_000)) back("/announcements", "Pick a time at least a minute from now, or leave it empty to post once approved.");
+  const targets = form.getAll("target").map(String).filter(Boolean);
+  await createAnnouncementRequest(db(), {
+    communityId: c.id,
+    eventId,
+    text,
+    title: str(form, "title") || null,
+    scheduledAt,
+    targetSpaceIds: targets,
+    by: await crewName(user, c.id),
+    origin: "desk",
+  });
+  revalidatePath("/announcements");
+  back("/announcements", "Sent for approval. The card opens in the crew room and in Pocket in a few seconds.");
+}
+
+/** A new version: once approved, Ferri edits the post everywhere it went. */
+export async function editAnnouncement(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  try {
+    await proposeAnnouncementEdit(db(), { announcementId: str(form, "announcementId"), text: str(form, "text"), by: await crewName(user, c.id) });
+  } catch (err) {
+    back("/announcements", (err as Error).message);
+  }
+  revalidatePath("/announcements");
+  back("/announcements", "New version sent for approval. Once approved, Ferri edits it everywhere.");
+}
+
+export async function approveAnnouncement(form: FormData) {
+  const cardId = str(form, "cardId");
+  await answer(cardId, await announceAnswer(cardId, str(form, "text")), "/announcements");
+}
+
+export async function dropAnnouncement(form: FormData) {
+  await answer(str(form, "cardId"), skip, "/announcements");
 }

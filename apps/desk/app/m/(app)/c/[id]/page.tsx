@@ -4,6 +4,9 @@ import { pocketCard, waitedFor } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { pocketAnswer, pocketSkip } from "../../../actions";
 import { Toast, Where } from "../../bits";
+import { community } from "@/lib/db";
+import { formatWhen } from "@/lib/ferri";
+import { AnnounceActions } from "./announce-actions";
 import { ReplyActions } from "./reply-actions";
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
@@ -15,7 +18,17 @@ export default async function CardPage({ params, searchParams }: { params: Promi
   const card = await pocketCard(user, id);
   if (!card) notFound();
   const open = card.status === "open";
-  const title = card.kind === "reply" ? "Reply waiting for your OK" : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
+  const a = card.announcement;
+  const edit = card.kind === "announce" && (card.announcementVersion ?? 1) > 1;
+  const tz = (await community()).timezone;
+  const title =
+    card.kind === "announce"
+      ? edit
+        ? "Announcement edit"
+        : "Announcement"
+      : card.kind === "reply"
+        ? "Reply waiting for your OK"
+        : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   return (
     <>
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
@@ -76,6 +89,35 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         </>
       ) : null}
 
+      {open && card.kind === "announce" ? (
+        <section className="mt-4 px-4">
+          <h2 className="px-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">
+            Goes to · {a?.targets.length ?? 0} {a?.targets.length === 1 ? "space" : "spaces"}
+          </h2>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 px-1">
+            {(a?.targets ?? []).map((t) => (
+              <li key={t.spaceId}>
+                <Where platform={t.platform} space={t.name} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 px-1 text-[13px] text-zinc-500">
+            {edit
+              ? "Approving it edits the post in place everywhere it went."
+              : a?.scheduledAt
+                ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.`
+                : "Goes out as soon as it is approved."}
+            {a?.origin === "decision" ? " Ferri spotted this decision in the crew chat." : ""}
+          </p>
+          {edit && a?.text ? (
+            <div className="mt-3 px-1 text-[13px] text-zinc-400">
+              Now it says: <span className="line-through decoration-zinc-300">{a.text}</span>
+            </div>
+          ) : null}
+          <AnnounceActions cardId={card.id} draft={card.draftText ?? ""} edit={edit} scheduled={!!a?.scheduledAt && !edit} />
+        </section>
+      ) : null}
+
       {open && card.kind === "reply" ? (
         <section className="mt-4 px-4">
           <div className="px-1">
@@ -89,7 +131,15 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         <section className="mt-4 px-4">
           <div className="rounded-xl border border-zinc-200 bg-white p-4 text-[14px]">
             <div className="font-medium">
-              {card.status === "answered"
+              {card.kind === "announce"
+                ? card.status === "answered"
+                  ? `Approved${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Not posted${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Not approved in time"
+                      : "Replaced by a newer version"
+                : card.status === "answered"
                 ? `${card.kind === "reply" ? "Reply sent" : "Answered"}${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
                 : card.status === "dismissed"
                   ? `${card.kind === "reply" ? "Not sent" : "Not answered"}${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
@@ -97,7 +147,23 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                     ? "Expired without an answer"
                     : "Closed"}
             </div>
-            {card.kind === "reply" ? (
+            {card.kind === "announce" ? (
+              <>
+                <div className="mt-1 whitespace-pre-wrap text-zinc-700">{card.answerText ?? card.draftText}</div>
+                {a?.posts.length ? (
+                  <ul className="mt-3 space-y-1">
+                    {a.posts.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between gap-2">
+                        <Where platform={p.platform} space={p.spaceName} />
+                        <span className="text-[12px] text-zinc-400">
+                          {p.status === "edited" ? "edited in place" : p.status === "reposted" ? "posted as an update" : p.status} · v{p.version}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : card.kind === "reply" ? (
               card.sentText ? <div className="mt-1 text-zinc-700">{card.sentText}</div> : null
             ) : card.answerText ? (
               <div className="mt-1 text-zinc-700">{card.answerText}</div>

@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { community, db } from "@/lib/db";
-import { linkCrewAccount, pushToUsers, removePushSubscription, savePushSubscription, vapidFromEnv } from "@/lib/ferri";
+import { createAnnouncementRequest, linkCrewAccount, pushToUsers, removePushSubscription, savePushSubscription, vapidFromEnv } from "@/lib/ferri";
+import { myCrew } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 
 const str = (f: FormData, k: string) =>
@@ -44,6 +46,42 @@ export async function pocketSendReply(form: FormData) {
 
 export async function pocketDontSend(form: FormData) {
   await answer(str(form, "cardId"), skip, "Okay. That reply is not sent.");
+}
+
+// ── Announcements (spec 09) ──────────────────────────────────────────────
+
+export async function pocketPostAnnouncement(form: FormData) {
+  const cardId = str(form, "cardId");
+  const a = await announceAnswer(cardId, str(form, "text"));
+  await answer(cardId, a, a.text ? "Approved your version. Ferri posts it now." : "Approved. Ferri posts it now.");
+}
+
+export async function pocketDontPost(form: FormData) {
+  await answer(str(form, "cardId"), skip, "Okay. Nothing is posted.");
+}
+
+/** Write an announcement on the phone: it still needs one OK (yours counts). */
+export async function pocketNewAnnouncement(form: FormData) {
+  const user = await requirePocketUser();
+  const c = await community();
+  const eventId = str(form, "eventId");
+  const text = str(form, "text");
+  const when = str(form, "when");
+  if (!eventId || !text) go("/m/new", "Write the announcement first.");
+  const scheduledAt = when ? zonedTime(when, c.timezone) : null;
+  if (when && (!scheduledAt || scheduledAt.getTime() < Date.now() + 60_000)) go("/m/new", "Pick a time at least a minute from now, or leave it empty.");
+  const me = await myCrew(user);
+  await createAnnouncementRequest(db(), {
+    communityId: c.id,
+    eventId,
+    text,
+    scheduledAt,
+    targetSpaceIds: null,
+    by: me[0]?.name ?? user.name,
+    origin: "pocket",
+  });
+  revalidatePath("/m", "layout");
+  go("/m", "Sent for approval. Its card shows up here in a few seconds.");
 }
 
 // ── Who I am on the crew ─────────────────────────────────────────────────

@@ -16,6 +16,12 @@ export {
   crewForSwitchEmail,
   linkCrewAccount,
   recordSpace,
+  announcementTargets,
+  createAnnouncementRequest,
+  describeTargets,
+  formatWhen,
+  proposeAnnouncementEdit,
+  type TargetSpace,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

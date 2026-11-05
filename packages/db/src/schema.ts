@@ -290,8 +290,11 @@ export const questions = pgTable(
 // ── Cards: one per question the crew is asked (mirrors a Switch question card) ──
 
 export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed", "expired", "closed"]);
-/** "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent. */
-export const cardKind = pgEnum("card_kind", ["question", "reply"]);
+/**
+ * "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent.
+ * "announce": a version of an announcement waits for its one approval (spec 09).
+ */
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce"]);
 
 export const cards = pgTable(
   "cards",
@@ -311,6 +314,9 @@ export const cards = pgTable(
     targetQuestionId: uuid("target_question_id"),
     sentText: text("sent_text"),
     sentEventId: text("sent_event_id"),
+    /** Announce cards: the announcement and the version this card approves. */
+    announcementId: uuid("announcement_id"),
+    announcementVersion: integer("announcement_version"),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),
@@ -353,6 +359,155 @@ export const crewActions = pgTable("crew_actions", {
   text: text("text").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ── Announcements: inside to outside (spec 09) ────────────────────────────
+
+/**
+ * - requested: written (in Desk, Pocket or chat), the approval card is not open yet;
+ * - waiting: a version waits on its card;
+ * - scheduled: approved, goes out at `scheduledAt`;
+ * - sent: posted (later versions edit it in place);
+ * - dismissed: someone said don't post; expired: nobody approved in time;
+ * - missed: its time came and it was not approved (or the pause held it too long).
+ */
+export const announcementStatus = pgEnum("announcement_status", [
+  "requested",
+  "waiting",
+  "scheduled",
+  "sent",
+  "dismissed",
+  "expired",
+  "missed",
+]);
+
+export const announcements = pgTable(
+  "announcements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** Short title for lists and the saved knowledge heading ("Lunch moves to 1:30 PM"). */
+    title: text("title").notNull(),
+    status: announcementStatus("status").notNull().default("requested"),
+    /** The approved text everyone sees (null until version 1 is approved). */
+    text: text("text"),
+    /** The version that is live on the platforms. 0 until something is approved. */
+    liveVersion: integer("live_version").notNull().default(0),
+    /** Null: post now once approved. */
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** Null: every Auto or Approve space of the event at posting time. */
+    targetSpaceIds: uuid("target_space_ids").array(),
+    /** "chat", "decision", "desk" or "pocket". */
+    origin: text("origin").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    /** The crew-room message it came from, so a replay never asks twice. */
+    sourceMessageId: text("source_message_id").unique(),
+    entryId: uuid("entry_id").references(() => knowledgeEntries.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("announcements_status").on(t.communityId, t.status)],
+);
+
+/** Every version of an announcement: the first is posted, later ones edit the posts. */
+export const announcementVersions = pgTable(
+  "announcement_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    announcementId: uuid("announcement_id")
+      .notNull()
+      .references(() => announcements.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    /** The title this version gives the announcement. */
+    title: text("title").notNull(),
+    /** What was proposed. */
+    draft: text("draft").notNull(),
+    /** What was approved (the draft, or the approver's own version). */
+    text: text("text"),
+    /** "pending" (needs a card), "waiting", "approved", "rejected", "expired". */
+    status: text("status").notNull().default("pending"),
+    /** Why this version exists ("lunch moves to 1:45"), for the card. */
+    reason: text("reason"),
+    proposedBy: text("proposed_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    cardId: uuid("card_id").references(() => cards.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("announcement_versions_version").on(t.announcementId, t.version)],
+);
+
+/** One announcement in one space: the Switch event id, so later versions can edit it. */
+export const announcementPosts = pgTable(
+  "announcement_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    announcementId: uuid("announcement_id")
+      .notNull()
+      .references(() => announcements.id, { onDelete: "cascade" }),
+    spaceId: uuid("space_id").references(() => spaces.id, { onDelete: "set null" }),
+    roomId: text("room_id").notNull(),
+    spaceName: text("space_name").notNull(),
+    platform: text("platform"),
+    /** The Switch event id of the post (null when it failed). */
+    eventId: text("event_id"),
+    /** The version showing in this space. */
+    version: integer("version").notNull(),
+    /** "posted", "edited", "reposted" (edit not possible, sent as a new "Update:"), "failed", "skipped". */
+    status: text("status").notNull(),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("announcement_posts_space").on(t.announcementId, t.roomId)],
+);
+
+/** A reminder for the crew: posted in the crew room at its time, with a push. No approval (inside only). */
+export const crewReminders = pgTable(
+  "crew_reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    crewRoomId: text("crew_room_id").notNull(),
+    /** Who it is for (empty: the whole crew). */
+    crewMemberIds: uuid("crew_member_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    text: text("text").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    /** "pending", "sent", "missed" (more than 30 minutes late after a pause), "cancelled". */
+    status: text("status").notNull().default("pending"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    requestedBy: text("requested_by").notNull(),
+    sourceMessageId: text("source_message_id").unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("crew_reminders_due").on(t.status, t.dueAt)],
+);
+
+/** Team rooms Ferri made from a Switch template, so it never makes the same one twice. */
+export const teamRooms = pgTable(
+  "team_rooms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    team: text("team").notNull(),
+    members: text("members").array().notNull().default(sql`'{}'::text[]`),
+    roomName: text("room_name").notNull(),
+    switchRoomId: text("switch_room_id"),
+    /** "created" or "failed". */
+    status: text("status").notNull(),
+    error: text("error"),
+    requestedBy: text("requested_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("team_rooms_event_team").on(t.communityId, t.eventId, t.team)],
+);
 
 // ── Agent state (connection id, cursor, mirror document id) ───────────────
 

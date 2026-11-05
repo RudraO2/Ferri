@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { announcementList, type AnnouncementView } from "./announce";
 import { community, db } from "./db";
 import { cards, crewForSwitchEmail, crewMembers, events, questions, spaces } from "./ferri";
 import type { DeskUser } from "./session";
@@ -83,20 +84,35 @@ export async function openCards(user: DeskUser) {
     ? await db().select({ roomId: spaces.switchRoomId, name: spaces.name, platform: spaces.platform }).from(spaces).where(inArray(spaces.switchRoomId, targetIds))
     : [];
   const targetBy = new Map(targets.map((t) => [t.roomId, t]));
+  const announceBy = await announcementsFor(rows);
   return rows.map((r) => {
     const owners = r.ownerIds.map((id) => ownerName.get(id) ?? "?");
     const forMe = !myIds.size || r.ownerIds.some((id) => myIds.has(id)) || !!r.escalatedAt || !r.ownerIds.length;
     const why = !myIds.size
       ? "open"
       : r.ownerIds.some((id) => myIds.has(id))
-        ? r.kind === "reply"
+        ? r.kind === "reply" || r.kind === "announce"
           ? "your OK"
           : `you own ${r.topic}`
         : r.escalatedAt
           ? "escalated to everyone"
           : "for the crew";
-    return { ...r, owners, forMe, why, waiting: waiting.get(r.id) ?? [], target: r.targetRoomId ? (targetBy.get(r.targetRoomId) ?? null) : null };
+    return {
+      ...r,
+      owners,
+      forMe,
+      why,
+      waiting: waiting.get(r.id) ?? [],
+      target: r.targetRoomId ? (targetBy.get(r.targetRoomId) ?? null) : null,
+      announcement: r.announcementId ? (announceBy.get(r.announcementId) ?? null) : null,
+    };
   });
+}
+
+/** The announcements behind announce cards (spec 09). */
+async function announcementsFor(rows: { kind: string; announcementId: string | null }[]): Promise<Map<string, AnnouncementView>> {
+  if (!rows.some((r) => r.kind === "announce" && r.announcementId)) return new Map();
+  return new Map((await announcementList(200)).map((a) => [a.id, a]));
 }
 
 export async function pocketCard(user: DeskUser, id: string) {
@@ -109,7 +125,8 @@ export async function pocketCard(user: DeskUser, id: string) {
     .from(questions)
     .leftJoin(spaces, eq(spaces.id, questions.spaceId))
     .where(eq(questions.cardId, id));
-  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null };
+  const announcement = row.announcementId ? ((await announcementsFor([row])).get(row.announcementId) ?? null) : null;
+  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null, announcement };
 }
 
 /** Members waiting on the crew right now (longest first), and who never got an answer in the last day. */
