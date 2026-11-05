@@ -50,6 +50,13 @@
       "when": 1793913261963,
       "tag": "0006_launch",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793915520792,
+      "tag": "0007_shield",
+      "breakpoints": true
     }
   ]
 }

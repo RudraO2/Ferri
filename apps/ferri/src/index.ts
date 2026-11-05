@@ -15,6 +15,7 @@ import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 import { config } from "./config.ts";
 import { createFlow } from "./flow.ts";
 import { createLaunch } from "./launch.ts";
+import { createShield } from "./shield.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
 import { ConnectionStore } from "./state.ts";
@@ -131,6 +132,7 @@ const launch = createLaunch({ db, agent, loop, room, log });
 loop.setAnnounceHooks(launch.hooks);
 const onMessage = createFlow({ db, agent, rooms, loop, launch, skills, room, log });
 const stopLoop = loop.start();
+const shield = await createShield({ db, loop, log }).start();
 await discover();
 const timers = [
   setInterval(() => void discover(), config.discoveryMs),
@@ -145,6 +147,7 @@ const shutdown = async () => {
   log("shutting down");
   agent.stop();
   stopLoop();
+  shield?.close();
   for (const t of timers) clearInterval(t);
   await store.flush();
   await close();

@@ -554,3 +554,45 @@ export const pushLog = pgTable(
   },
   (t) => [index("push_log_card").on(t.cardId)],
 );
+
+// ── Shield: Switch Trust checks (spec 07) ─────────────────────────────────
+
+/** One check Switch Trust asked Shield for. Never holds the message or the detected text. */
+export const shieldEvents = pgTable(
+  "shield_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The Switch room (Switch sends it as x-agent-session-id). */
+    roomId: text("room_id").notNull(),
+    spaceId: uuid("space_id").references(() => spaces.id, { onDelete: "set null" }),
+    /** "user" (a person's message) or "assistant" (an agent's post). */
+    role: text("role").notNull(),
+    /** "ok", "alerted", "redacted" or "blocked". */
+    outcome: text("outcome").notNull(),
+    /** [{category, detector_name, severity, reason}] — reasons are defanged, never the secret. */
+    findings: jsonb("findings").$type<{ category: string; detector_name: string; severity: string; reason: string }[]>().notNull().default([]),
+    latencyMs: integer("latency_ms").notNull(),
+    /** Set when the crew was told about it. */
+    alertedCrewAt: timestamp("alerted_crew_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("shield_events_created").on(t.createdAt), index("shield_events_outcome").on(t.outcome, t.createdAt)],
+);
+
+/** Domains the community allows (never flagged) or blocks (always blocked). */
+export const shieldRules = pgTable(
+  "shield_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** "allow" or "block". */
+    kind: text("kind").notNull(),
+    domain: text("domain").notNull(),
+    note: text("note"),
+    addedBy: text("added_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("shield_rules_domain").on(t.communityId, t.domain)],
+);

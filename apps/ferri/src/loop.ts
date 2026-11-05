@@ -111,7 +111,7 @@ export function createLoop(deps: LoopDeps) {
   // ── Ferri Pocket pushes (spec 06): next to the crew-room post, never instead of it ──
 
   function pocketNotify(
-    kind: Exclude<PushKind, "settled" | "test" | "reminder">,
+    kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield">,
     card: CardRow,
     crewIds: string[],
     extra: { waiting?: number; askerName?: string; roomName?: string } = {},

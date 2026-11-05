@@ -48,6 +48,12 @@ export const config = {
   nudgeSeconds: optionalNumber(process.env.FERRI_NUDGE_SECONDS),
   /** Test override for how long a card stays open. Unset: 24 h or the event's end. */
   cardTtlSeconds: optionalNumber(process.env.FERRI_CARD_TTL_SECONDS),
+  /** Shield (spec 07): the Switch Trust endpoint inside this service. Off without a key. */
+  shieldApiKey: process.env.SHIELD_API_KEY?.trim() || undefined,
+  shieldPort: Number(process.env.SHIELD_PORT ?? 3200),
+  /** Docker Desktop's host.docker.internal reaches the host's loopback, so 127.0.0.1 is enough. */
+  shieldHost: process.env.SHIELD_HOST ?? "127.0.0.1",
+  shieldPolicyId: process.env.SHIELD_POLICY_ID ?? "ferri-shield",
   outcomePollMs: 2000,
   ladderTickMs: 5000,
   /** How often Ferri asks Switch which rooms it is in (new ones land in Discovered, Off). */

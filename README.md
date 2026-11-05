@@ -127,6 +127,18 @@ What the crew decides becomes an update on every platform after one approval.
 - `@ferri make team rooms for Team Alpha with meera and arjun, and Team Beta with priya`: Ferri runs a Switch template that makes a private channel per team on the crew room's platform, with the members, Ferri and a welcome message, attached to the event.
 - Desk has an Announcements page (write, schedule, pick spaces, approve, edit everywhere, see each space's status); Pocket shows announcement cards in Needs you and has `+ Announce`.
 
+## Shield: safety on every message
+
+Shield is Ferri's Switch Trust endpoint. Switch sends every message, from people and from agents, to `POST /guardrails/check` before anyone sees it, and Shield answers in a few milliseconds (Switch's limit is 2 seconds; no model call in the path):
+
+- Scam and lookalike links are blocked: `dlscord-gift.com`, `steamcommunlty.com`, punycode lookalikes, a brand name inside a strange domain with scam words, "free nitro" or "seed phrase" with a link, and anything on the community's block list. The message never reaches the room or Ferri, and Switch tells the sender.
+- The same link posted three times in two minutes is blocked as a flood.
+- API keys, tokens, private keys and database passwords are replaced with `[redacted]`, in members' messages and in Ferri's own posts.
+- The crew hears about it in the crew room (the domain defanged, never the secret), and the leads get a push.
+- Desk's Shield page shows the connection, the numbers and latency, what was stopped, and lets organizers allow or block domains.
+
+Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and stores the endpoint in Switch; restart Ferri once), or with the button on Desk's Shield page. `pnpm shield:connect --off` turns it off. Set `GOOGLE_SAFE_BROWSING_KEY` to add a reputation lookup.
+
 ## Useful commands
 
 | Command | What it does |
@@ -140,4 +152,5 @@ What the crew decides becomes an update on every platform after one approval.
 | `pnpm card:preview <room id>` | Open a sample question card in a room on any platform (`--close` to close it) |
 | `pnpm crew:account <crew name> <email>` | Create a Switch login for a crew member and link it, for Pocket |
 | `pnpm push:keys` | Write Web Push (VAPID) keys to `.env` once |
+| `pnpm shield:connect` | Point Switch Trust at Shield (`--off`, `--status`) |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |

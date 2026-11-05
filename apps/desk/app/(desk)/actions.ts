@@ -24,6 +24,7 @@ import {
 } from "@/lib/ferri";
 import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
+import { removeRule, setRule } from "@/lib/shield";
 import { gatewayAs, requireUser } from "@/lib/session";
 
 // Browsers send textarea text with CRLF line ends; keep plain newlines.
@@ -327,4 +328,54 @@ export async function approveAnnouncement(form: FormData) {
 
 export async function dropAnnouncement(form: FormData) {
   await answer(str(form, "cardId"), skip, "/announcements");
+}
+
+// ── Shield (spec 07) ─────────────────────────────────────────────────────
+
+/** Point Switch Trust at Shield (as the signed-in admin). */
+export async function connectShield() {
+  const user = await requireUser();
+  const key = process.env.SHIELD_API_KEY;
+  if (!key) back("/shield", "SHIELD_API_KEY is not set. Run `pnpm shield:connect` once.");
+  const endpoint = process.env.SHIELD_ENDPOINT ?? `http://host.docker.internal:${process.env.SHIELD_PORT ?? "3200"}`;
+  try {
+    await gatewayAs(user).call("PUT", "/gateway/trust-settings", { endpoint, policy_id: process.env.SHIELD_POLICY_ID ?? "ferri-shield", api_key: key });
+  } catch (err) {
+    back("/shield", `Switch refused it: ${(err as Error).message.slice(0, 200)}`);
+  }
+  revalidatePath("/shield");
+  back("/shield", "Shield is on. Switch checks the next message with it.");
+}
+
+export async function disconnectShield() {
+  const user = await requireUser();
+  try {
+    await gatewayAs(user).call("DELETE", "/gateway/trust-settings");
+  } catch (err) {
+    back("/shield", `Switch refused it: ${(err as Error).message.slice(0, 200)}`);
+  }
+  revalidatePath("/shield");
+  back("/shield", "Shield is off. Switch no longer checks messages.");
+}
+
+export async function addShieldRule(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const kind = str(form, "kind") === "block" ? "block" : "allow";
+  let domain = "";
+  try {
+    domain = await setRule(db(), { communityId: c.id, kind, domain: str(form, "domain"), note: str(form, "note") || null, by: await crewName(user, c.id) });
+  } catch (err) {
+    back("/shield", (err as Error).message);
+  }
+  revalidatePath("/shield");
+  back("/shield", kind === "allow" ? `${domain} is allowed: Shield never flags it.` : `${domain} is blocked everywhere.`);
+}
+
+export async function removeShieldRule(form: FormData) {
+  await requireUser();
+  const c = await community();
+  await removeRule(db(), c.id, str(form, "id"));
+  revalidatePath("/shield");
+  back("/shield", "Rule removed.");
 }

@@ -22,7 +22,8 @@
     "desk:build": "pnpm --filter @ferri/desk build",
     "card:preview": "tsx --env-file-if-exists=.env scripts/card-preview.ts",
     "push:keys": "tsx scripts/push-keys.ts",
-    "crew:account": "tsx --env-file-if-exists=.env scripts/crew-account.ts"
+    "crew:account": "tsx --env-file-if-exists=.env scripts/crew-account.ts",
+    "shield:connect": "tsx --env-file-if-exists=.env scripts/shield-connect.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
