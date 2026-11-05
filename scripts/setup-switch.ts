@@ -144,4 +144,10 @@ const labId = await ensureRoom("ferri-lab", "Smoke-test room for Ferri.");
 // The crew room: question cards, nudges and confirmations go here (spec 03).
 const crewId = await ensureRoom("ferri-crew", "Inside room for the organizing crew. Ferri's question cards land here.");
 writeEnv({ FERRI_LAB_ROOM_ID: labId, FERRI_CREW_ROOM_ID: crewId });
+// Desk encrypts its session cookie with this; made once.
+if (!readEnv(envPath).get("DESK_SESSION_SECRET")) {
+  const { randomBytes } = await import("node:crypto");
+  writeEnv({ DESK_SESSION_SECRET: randomBytes(32).toString("hex") });
+  console.log("generated DESK_SESSION_SECRET for Desk");
+}
 console.log("done. .env updated.");

@@ -37,10 +37,6 @@ export const config = {
    * answer first. Ferri then checks the room again before stepping in.
    */
   roomGraceMs: Number(process.env.FERRI_ROOM_GRACE_SECONDS ?? 20) * 1000,
-  /** Where question cards go when the event names no crew room (`pnpm setup:switch` writes it). */
-  crewRoomId: process.env.FERRI_CREW_ROOM_ID || undefined,
-  /** Rooms that get the knowledge mirror document. */
-  mirrorRoomIds: [process.env.FERRI_LAB_ROOM_ID, process.env.FERRI_CREW_ROOM_ID].filter((x): x is string => Boolean(x)),
   /** Sibling Switch checkout's .env, for the admin password fallback. */
   switchEnvFile: path.join(repoRoot, "..", "switch", ".env"),
   /** Test override for the ladder's T (nudge at T, escalate at 2T). Unset: 10 min live, 2 h before. */
@@ -49,6 +45,10 @@ export const config = {
   cardTtlSeconds: optionalNumber(process.env.FERRI_CARD_TTL_SECONDS),
   outcomePollMs: 2000,
   ladderTickMs: 5000,
+  /** How often Ferri asks Switch which rooms it is in (new ones land in Discovered, Off). */
+  discoveryMs: 60_000,
+  /** How often Ferri checks whether the knowledge changed (in Ferri or in Desk) to refresh the mirror. */
+  mirrorWatchMs: 5_000,
 };
 
 function optionalNumber(v: string | undefined): number | undefined {

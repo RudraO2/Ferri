@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { communities, createDb, knowledgeEntries, knowledgeRevisions, runMigrations } from "@ferri/db";
-import { seedFromDirectory } from "./seed.js";
-import { loadLiveKnowledge, searchKnowledge } from "./store.js";
+import { communities, createDb, events, knowledgeEntries, knowledgeRevisions, runMigrations } from "@ferri/db";
+import { editEntry } from "./edit.ts";
+import { seedFromDirectory } from "./seed.ts";
+import { loadLiveKnowledge, searchKnowledge } from "./store.ts";
 
 // Runs against the local Ferri Postgres (`pnpm db:up`); skipped when it is not running.
 const url = process.env.DATABASE_URL ?? "postgres://ferri:ferri@localhost:5433/ferri";
@@ -81,5 +82,22 @@ describe.skipIf(!reachable)("seedFromDirectory (Postgres)", () => {
 
     write("knowledge/about.md", "# About\n\n## Contact\nmail us\n## Hours\n9 to 5\n");
     expect(await seedFromDirectory(db, dir)).toMatchObject({ restored: 1, archived: 0 });
+  });
+
+  it("never overwrites what an organizer changed in Desk", async () => {
+    const [hours] = await db.select().from(knowledgeEntries).where(eq(knowledgeEntries.key, "knowledge/about.md#hours"));
+    const edit = await editEntry(db, { entryId: hours!.id, heading: "Hours", body: "10 to 6 on weekdays", by: "Priya" });
+    expect(edit).toEqual({ changed: true, version: hours!.version + 1 });
+
+    const [ev] = await db.update(events).set({ name: "Renamed in Desk", deskEditedAt: new Date() }).where(eq(events.slug, "night")).returning();
+    const r = await seedFromDirectory(db, dir);
+    expect(r.kept).toBe(1);
+    expect(r.keptFromDesk).toContain("night settings");
+
+    const [after] = await db.select().from(knowledgeEntries).where(eq(knowledgeEntries.id, hours!.id));
+    expect(after).toMatchObject({ body: "10 to 6 on weekdays", sourceKind: "desk" });
+    const [evAfter] = await db.select().from(events).where(eq(events.id, ev!.id));
+    expect(evAfter!.name).toBe("Renamed in Desk");
+    expect(r.spaceRequests).toEqual([]);
   });
 });

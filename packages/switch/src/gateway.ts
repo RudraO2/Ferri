@@ -3,6 +3,13 @@
  * core port). Signs in with an email and password and keeps the session cookie.
  * Used for things agents cannot do through ops, such as library documents.
  */
+export interface GatewayMe {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export class GatewayClient {
   private cookie = "";
 
@@ -11,6 +18,39 @@ export class GatewayClient {
     private readonly email: string,
     private readonly password: string,
   ) {}
+
+  /** A client for an existing session (Desk keeps the person's Gateway cookie). It cannot sign in again. */
+  static withSession(baseUrl: string, cookie: string): GatewayClient {
+    const c = new GatewayClient(baseUrl, "", "");
+    c.cookie = cookie;
+    return c;
+  }
+
+  /** The session cookie, so a caller can keep it (encrypted) and act as this person later. */
+  get session(): string {
+    return this.cookie;
+  }
+
+  async me(): Promise<GatewayMe> {
+    return this.call<GatewayMe>("GET", "/gateway/auth/me");
+  }
+
+  /**
+   * Answer a question card as the signed-in person. Switch records them as
+   * `user:<id>`, edits the card, and reports the outcome to the agent.
+   */
+  async answerCard(
+    agentId: string,
+    sessionId: string,
+    requestId: string,
+    answers: { question_id: string; selected_option_ids: string[]; custom_text: string | null }[],
+  ): Promise<unknown> {
+    return this.call(
+      "POST",
+      `/gateway/agent-sessions/${encodeURIComponent(agentId)}/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}/answer`,
+      { answers },
+    );
+  }
 
   async login(): Promise<void> {
     const res = await this.raw("POST", "/gateway/auth/login", { email: this.email, password: this.password });
@@ -21,7 +61,7 @@ export class GatewayClient {
   async call<T>(method: string, path: string, body?: unknown): Promise<T> {
     if (!this.cookie) await this.login();
     let res = await this.raw(method, path, body);
-    if (res.status === 401) {
+    if (res.status === 401 && this.password) {
       await this.login();
       res = await this.raw(method, path, body);
     }

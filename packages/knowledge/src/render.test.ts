@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildTsQuery, formatSourceLine, renderKnowledge } from "./render.js";
-import { finalizeAnswer, HOLDING_REPLY } from "./answer.js";
-import type { KnowledgeItem } from "./store.js";
+import { buildTsQuery, formatSourceLine, renderKnowledge } from "./render.ts";
+import { finalizeAnswer, HOLDING_REPLY } from "./answer.ts";
+import type { KnowledgeItem } from "./store.ts";
 
 const item = (id: string, sourceTitle: string, heading: string, body = "b"): KnowledgeItem => ({
   id,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseKnowledgeMarkdown, slugify } from "./markdown.js";
+import { parseKnowledgeMarkdown, slugify } from "./markdown.ts";
 
 describe("parseKnowledgeMarkdown", () => {
   it("uses frontmatter title and tags, and splits on ## headings", () => {

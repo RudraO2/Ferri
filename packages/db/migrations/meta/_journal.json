@@ -22,6 +22,20 @@
       "when": 1793903881955,
       "tag": "0002_learning_loop",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793905648582,
+      "tag": "0003_spaces_and_desk",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793905650577,
+      "tag": "0004_drop_event_crew_room",
+      "breakpoints": true
     }
   ]
 }

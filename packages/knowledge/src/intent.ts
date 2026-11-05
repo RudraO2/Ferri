@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { shortCardIds, type OpenCard } from "./cards.js";
-import { structuredCall, type ModelChoice, type Usage } from "./model.js";
-import type { ChatLine } from "./triage.js";
+import { shortCardIds, type OpenCard } from "./cards.ts";
+import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import type { ChatLine } from "./triage.ts";
 
 // ── What a crew member means when they talk to Ferri ─────────────────────
 

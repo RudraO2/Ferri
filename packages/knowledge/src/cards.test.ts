@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { cardTitle, ladderTimes, resolveShortCard, shortCardIds, switchExpiry, type OpenCard } from "./cards.js";
-import { findCrewMember, mention, parseSender, routeCard, type CrewMember } from "./crew.js";
-import { looksLikeCardAnswer } from "./intent.js";
+import { cardTitle, ladderTimes, resolveShortCard, shortCardIds, switchExpiry, type OpenCard } from "./cards.ts";
+import { findCrewMember, mention, parseSender, routeCard, type CrewMember } from "./crew.ts";
+import { looksLikeCardAnswer } from "./intent.ts";
 
 const crew: CrewMember[] = [
   { id: "r", eventId: "e", name: "Rudra", handles: { mattermost: "user" }, topics: ["prizes", "rules"], lead: true, onDuty: true },

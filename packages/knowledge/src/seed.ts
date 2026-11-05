@@ -3,8 +3,10 @@ import path from "node:path";
 import YAML from "yaml";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { communities, crewMembers, events, knowledgeEntries, knowledgeRevisions, type Db } from "@ferri/db";
-import { parseKnowledgeMarkdown, slugify } from "./markdown.js";
-import { TOPICS } from "./triage.js";
+import { parseKnowledgeMarkdown, slugify } from "./markdown.ts";
+import { TOPICS } from "./triage.ts";
+import type { SeedSpaceRequest } from "./spaces.ts";
+import type { SpaceMode, SpaceRole } from "./policy.ts";
 
 const STAGES = ["plan", "build", "launch", "live", "wrap"] as const;
 type Stage = (typeof STAGES)[number];
@@ -14,6 +16,12 @@ export interface SeedReport {
   communitySlug: string;
   events: string[];
   crew: number;
+  /** What the seed left alone because an organizer changed it in Desk. */
+  keptFromDesk: string[];
+  /** Spaces event.yaml asks for, applied after discovery (applySeedSpaces). */
+  spaceRequests: SeedSpaceRequest[];
+  /** Entries edited in Desk, left as they are. */
+  kept: number;
   created: number;
   updated: number;
   restored: number;
@@ -64,6 +72,23 @@ function markdownFiles(dir: string): string[] {
 const posix = (p: string) => p.split(path.sep).join("/");
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+const MODES = ["listen", "approve", "auto"] as const;
+
+/** `spaces:` in event.yaml: `{room: ferri-lab, mode: auto}` or `{room: ferri-crew, role: crew}`. */
+function parseSpaces(list: unknown, file: string): { room: string; mode: SpaceMode; role: SpaceRole }[] {
+  if (list == null) return [];
+  if (!Array.isArray(list)) throw new Error(`${file}: spaces must be a list`);
+  return list.map((raw) => {
+    if (!raw || typeof raw !== "object") throw new Error(`${file}: each space must be a mapping`);
+    const r = raw as Record<string, unknown>;
+    const room = str(r.room, `${file} space room`);
+    const role: SpaceRole = r.role === "crew" ? "crew" : "members";
+    const mode = (typeof r.mode === "string" ? r.mode : role === "crew" ? "auto" : "listen") as SpaceMode;
+    if (!(MODES as readonly string[]).includes(mode)) throw new Error(`${file}: space mode must be listen, approve or auto`);
+    return { room, mode, role };
+  });
+}
 
 /**
  * Replace the crew of one event (or of the community when eventId is null)
@@ -138,13 +163,24 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
       timezone: typeof c.timezone === "string" ? c.timezone : "Asia/Kolkata",
       instructions: typeof c.instructions === "string" ? c.instructions.trim() : "",
     };
-    const [community] = await tx
-      .insert(communities)
-      .values(communityValues)
-      .onConflictDoUpdate({ target: communities.slug, set: { ...communityValues, updatedAt: new Date() } })
-      .returning();
+    const [existingCommunity] = await tx.select().from(communities).where(eq(communities.slug, slug)).limit(1);
+    const keptFromDesk: string[] = [];
+    let community = existingCommunity;
+    if (!community) {
+      [community] = await tx.insert(communities).values(communityValues).returning();
+    } else if (community.deskEditedAt) {
+      keptFromDesk.push("community settings");
+    } else {
+      [community] = await tx
+        .update(communities)
+        .set({ ...communityValues, updatedAt: new Date() })
+        .where(eq(communities.id, community.id))
+        .returning();
+    }
     const communityId = community!.id;
-    let crew = await syncCrew(tx, communityId, null, "community", c.crew, "community.yaml");
+    let crew = 0;
+    if (community!.crewFromDesk) keptFromDesk.push("community crew");
+    else crew += await syncCrew(tx, communityId, null, "community", c.crew, "community.yaml");
 
     const desired: DesiredEntry[] = [];
     const addFiles = (files: string[], eventId: string | null) => {
@@ -169,6 +205,7 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
     addFiles(markdownFiles(path.join(root, "knowledge")), null);
 
     const eventSlugs: string[] = [];
+    const spaceRequests: SeedSpaceRequest[] = [];
     const eventsDir = path.join(root, "events");
     const eventDirs = fs.existsSync(eventsDir)
       ? fs.readdirSync(eventsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
@@ -188,29 +225,42 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
         endsAt: optDate(e.ends_at),
         venue: typeof e.venue === "string" ? e.venue : null,
         instructions: typeof e.instructions === "string" ? e.instructions.trim() : "",
-        crewRoomId: typeof e.crew_room_id === "string" && e.crew_room_id ? e.crew_room_id : null,
       };
-      const [event] = await tx
-        .insert(events)
-        .values(values)
-        .onConflictDoUpdate({ target: [events.communityId, events.slug], set: { ...values, updatedAt: new Date() } })
-        .returning();
+      const [existingEvent] = await tx
+        .select()
+        .from(events)
+        .where(and(eq(events.communityId, communityId), eq(events.slug, values.slug)))
+        .limit(1);
+      let event = existingEvent;
+      if (!event) {
+        [event] = await tx.insert(events).values(values).returning();
+      } else if (event.deskEditedAt) {
+        keptFromDesk.push(`${values.slug} settings`);
+      } else {
+        [event] = await tx.update(events).set({ ...values, updatedAt: new Date() }).where(eq(events.id, event.id)).returning();
+      }
       eventSlugs.push(values.slug);
-      crew += await syncCrew(tx, communityId, event!.id, values.slug, e.crew, file);
+      if (event!.crewFromDesk) keptFromDesk.push(`${values.slug} crew`);
+      else crew += await syncCrew(tx, communityId, event!.id, values.slug, e.crew, file);
+      for (const sp of parseSpaces(e.spaces, file)) {
+        spaceRequests.push({ eventId: event!.id, eventSlug: values.slug, ...sp });
+      }
       addFiles(markdownFiles(path.join(eventsDir, name, "knowledge")), event!.id);
     }
 
-    const existing = await tx
-      .select()
-      .from(knowledgeEntries)
-      .where(and(eq(knowledgeEntries.communityId, communityId), eq(knowledgeEntries.sourceKind, "markdown")));
-    const byKey = new Map(existing.map((e) => [e.key, e]));
+    // Every entry by key: one that is no longer "markdown" was edited in Desk (or is a crew answer) and is kept as is.
+    const all = await tx.select().from(knowledgeEntries).where(eq(knowledgeEntries.communityId, communityId));
+    const byKey = new Map(all.map((e) => [e.key, e]));
+    const existing = all.filter((e) => e.sourceKind === "markdown");
 
     const report: SeedReport = {
       communityId,
       communitySlug: slug,
       events: eventSlugs,
       crew,
+      keptFromDesk,
+      spaceRequests,
+      kept: 0,
       created: 0,
       updated: 0,
       restored: 0,
@@ -223,6 +273,10 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
     for (const d of desired) {
       seen.add(d.key);
       const old = byKey.get(d.key);
+      if (old && old.sourceKind !== "markdown") {
+        report.kept++;
+        continue;
+      }
       if (!old) {
         const [row] = await tx
           .insert(knowledgeEntries)

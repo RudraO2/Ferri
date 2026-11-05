@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mentionRegex } from "./mentions.js";
-import { RoomHistory, type RoomLine } from "./rooms.js";
+import { mentionRegex } from "./mentions.ts";
+import { RoomHistory, type RoomLine } from "./rooms.ts";
 
 describe("mentionRegex", () => {
   const re = mentionRegex("ferri");

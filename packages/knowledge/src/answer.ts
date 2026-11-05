@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { Db } from "@ferri/db";
-import { structuredCall, type ModelChoice, type Usage } from "./model.js";
-import { formatSourceLine, renderInstructions, renderKnowledge } from "./render.js";
-import { searchKnowledge, type KnowledgeItem, type LiveKnowledge } from "./store.js";
-import type { ChatLine } from "./triage.js";
+import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import { formatSourceLine, renderInstructions, renderKnowledge } from "./render.ts";
+import { searchKnowledge, type KnowledgeItem, type LiveKnowledge } from "./store.ts";
+import type { ChatLine } from "./triage.ts";
 
 export const AnswerSchema = z.strictObject({
   kind: z.enum(["answer", "unknown", "chat"]),

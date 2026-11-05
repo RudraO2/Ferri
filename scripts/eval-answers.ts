@@ -88,8 +88,8 @@ const { db, close } = createDb();
 try {
   const live = await loadLiveKnowledge(db, process.env.FERRI_COMMUNITY);
   if (!live) throw new Error("no community; run `pnpm kb seed` first");
-  // Judge against the seeded knowledge only: what the crew taught Ferri in live tests would change the expected answers.
-  const kb = { ...live, entries: live.entries.filter((e) => e.sourceKind === "markdown") };
+  // Judge without crew answers: what the crew taught Ferri in live tests would change the expected answers.
+  const kb = { ...live, entries: live.entries.filter((e) => e.sourceKind !== "crew_answer") };
   const models = modelsFromEnv();
   const skills = loadSkills(path.join(root, "skills"), ["ferri", "librarian"]);
   console.log(`answers: ${models.main.model}/${models.main.effort}, triage: ${models.fast.model}/${models.fast.effort}`);

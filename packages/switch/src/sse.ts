@@ -1,4 +1,4 @@
-import type { SseFrame } from "./types.js";
+import type { SseFrame } from "./types.ts";
 
 /**
  * Incremental parser for a text/event-stream body.

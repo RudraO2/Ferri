@@ -56,6 +56,17 @@ You need Docker Desktop, Node 22 and pnpm.
 - A fast model (Claude Haiku) reads every message, so Ferri also notices questions nobody addressed to it. It waits a moment so a person can answer first, and steps in only when it has a sourced answer.
 - Every handled question is one row in `questions`, which is also how Ferri never answers the same message twice.
 
+## Desk
+
+Desk is where organizers run Ferri: `pnpm desk`, then http://localhost:3100, signing in with a Switch account.
+
+- **Spaces**: every group or channel Ferri is in, on any platform. New ones arrive in a Discovered list, switched off. Attach a space to an event as Listen (reads, never posts), Approve (every reply waits for an organizer), or Auto (answers with sources), or make it the event's crew room, where cards land.
+- **Pause**: one switch stops every post everywhere. Questions are still logged, and answers the crew gives during the pause go out when it is lifted.
+- **Cards**: questions waiting for the crew, replies waiting for approval (Send, edit and send, Don't send), answered, unanswered and dismissed. Answers from Desk go through Switch under your name.
+- **Events**: stage, dates, venue, instructions, attached spaces, and the crew with the topics each person owns.
+- **Knowledge**: every entry, searchable; editing one makes a new version that Ferri uses at once. Seeding again never overwrites an edit made in Desk.
+- **Community**: the central instructions, and the mute list.
+
 ## How Ferri learns
 
 1. A member asks something the knowledge does not cover. Ferri tells them it is checking with the team.
@@ -73,4 +84,5 @@ You need Docker Desktop, Node 22 and pnpm.
 | `pnpm kb ask "<question>"` | Run the answer pipeline without Switch (`--room` as a room question, `--search` to force full text search) |
 | `pnpm eval:answers` | Check Ferri's decisions on a fixed set: answers, room triage, card matching, crew intent |
 | `pnpm dev:mattermost` | Create the local Mattermost test people and put them in the rooms |
+| `pnpm desk` | Run Desk at http://localhost:3100 |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |

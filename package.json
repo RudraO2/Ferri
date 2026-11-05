@@ -17,7 +17,9 @@
     "db:migrate": "pnpm --filter @ferri/db migrate",
     "kb": "tsx --env-file-if-exists=.env scripts/kb.ts",
     "eval:answers": "tsx --env-file-if-exists=.env scripts/eval-answers.ts",
-    "dev:mattermost": "tsx scripts/dev-mattermost.ts"
+    "dev:mattermost": "tsx scripts/dev-mattermost.ts",
+    "desk": "pnpm --filter @ferri/desk dev",
+    "desk:build": "pnpm --filter @ferri/desk build"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

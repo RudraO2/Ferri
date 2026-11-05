@@ -1,11 +1,19 @@
-import { createDb, runMigrations } from "@ferri/db";
-import { loadLiveKnowledge, loadSkills, mirrorToSwitch } from "@ferri/knowledge";
+import { eq, sql } from "drizzle-orm";
+import { createDb, knowledgeEntries, runMigrations } from "@ferri/db";
+import {
+  attachedRoomIds,
+  discoverSpaces,
+  findCommunity,
+  loadLiveKnowledge,
+  loadSkills,
+  mirrorToSwitch,
+} from "@ferri/knowledge";
 import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
-import { config } from "./config.js";
-import { createFlow } from "./flow.js";
-import { createLoop, type RoomInfo } from "./loop.js";
-import { RoomHistory, type RoomLine } from "./rooms.js";
-import { ConnectionStore } from "./state.js";
+import { config } from "./config.ts";
+import { createFlow } from "./flow.ts";
+import { createLoop, type RoomInfo } from "./loop.ts";
+import { RoomHistory, type RoomLine } from "./rooms.ts";
+import { ConnectionStore } from "./state.ts";
 
 const log = (msg: string) => console.log(`[ferri ${new Date().toISOString()}] ${msg}`);
 
@@ -20,7 +28,7 @@ const agent = new SwitchAgent({
   connectionId: store.connectionId,
   cursor: store.cursor,
   clientName: "ferri",
-  clientVersion: "0.3.0",
+  clientVersion: "0.4.0",
   log,
 });
 
@@ -73,33 +81,56 @@ const rooms = new RoomHistory(async (roomId) => {
 // Read on every question, so a skill edit applies without a restart.
 const skills = () => loadSkills(config.skillsDir, ["ferri", "librarian"]);
 
-// The Switch library mirror, refreshed a few seconds after the knowledge changes.
-const gateway = await gatewayFromEnv(config.switchEnvFile);
-let mirrorTimer: NodeJS.Timeout | null = null;
-function mirrorSoon(): void {
-  if (!gateway || !config.mirrorRoomIds.length || mirrorTimer) return;
-  mirrorTimer = setTimeout(async () => {
-    mirrorTimer = null;
-    try {
-      const kb = await loadLiveKnowledge(db, config.community);
-      if (kb) {
-        const r = await mirrorToSwitch({ db, gateway, kb, roomIds: config.mirrorRoomIds });
-        log(`mirror updated (${r.bytes} bytes)`);
-      }
-    } catch (err) {
-      log(`mirror update failed: ${(err as Error).message}`);
-    }
-  }, 3000);
+// Spaces: ask Switch which rooms Ferri is in, now and every minute. New rooms land in Discovered, Off.
+const roomCache = new Map<string, { roomId: string; name: string; platform: string | null }>();
+async function discover(): Promise<void> {
+  try {
+    const community = await findCommunity(db, config.community);
+    if (!community) return;
+    const r = await discoverSpaces(db, agent, community.id, roomCache);
+    if (r.added.length || r.archived) log(`spaces: ${r.rooms} room(s); new: ${r.added.join(", ") || "none"}; archived: ${r.archived}`);
+  } catch (err) {
+    log(`space discovery failed: ${(err as Error).message}`);
+  }
 }
 
-const loop = createLoop({ db, agent, skills, room, mirrorSoon, log });
+// The Switch library mirror follows the knowledge, whether Ferri or Desk changed it.
+const gateway = await gatewayFromEnv(config.switchEnvFile);
+let mirrorSignature = "";
+async function watchMirror(): Promise<void> {
+  if (!gateway) return;
+  try {
+    const community = await findCommunity(db, config.community);
+    if (!community) return;
+    const [sig] = await db
+      .select({ last: sql<string>`coalesce(max(${knowledgeEntries.updatedAt})::text, '')`, n: sql<number>`count(*)::int` })
+      .from(knowledgeEntries)
+      .where(eq(knowledgeEntries.communityId, community.id));
+    const roomIds = await attachedRoomIds(db, community.id);
+    const signature = `${sig?.last}|${sig?.n}|${roomIds.sort().join(",")}`;
+    if (signature === mirrorSignature) return;
+    const kb = await loadLiveKnowledge(db, config.community);
+    if (!kb) return;
+    const r = await mirrorToSwitch({ db, gateway, kb, roomIds });
+    if (mirrorSignature) log(`mirror updated (${r.bytes} bytes, ${roomIds.length} room(s))`);
+    mirrorSignature = signature;
+  } catch (err) {
+    log(`mirror update failed: ${(err as Error).message}`);
+  }
+}
+
+const loop = createLoop({ db, agent, skills, room, log });
 const onMessage = createFlow({ db, agent, rooms, loop, skills, room, log });
 const stopLoop = loop.start();
+await discover();
+const timers = [setInterval(() => void discover(), config.discoveryMs), setInterval(() => void watchMirror(), config.mirrorWatchMs)];
+void watchMirror();
 
 const shutdown = async () => {
   log("shutting down");
   agent.stop();
   stopLoop();
+  for (const t of timers) clearInterval(t);
   await store.flush();
   await close();
   process.exit(0);

@@ -1,7 +1,7 @@
 import { getState, setState, type Db } from "@ferri/db";
 import { GatewayClient, GatewayError } from "@ferri/switch";
-import { renderMirrorDocument } from "./render.js";
-import type { LiveKnowledge } from "./store.js";
+import { renderMirrorDocument } from "./render.ts";
+import type { LiveKnowledge } from "./store.ts";
 
 /** Switch caps a library document at 1 MiB (ROOM_DOCUMENT_MAX_CONTENT_BYTES). */
 const MAX_BYTES = 1_048_576;

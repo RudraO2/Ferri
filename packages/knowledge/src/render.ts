@@ -1,4 +1,4 @@
-import type { KnowledgeItem, LiveKnowledge } from "./store.js";
+import type { KnowledgeItem, LiveKnowledge } from "./store.ts";
 
 const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 

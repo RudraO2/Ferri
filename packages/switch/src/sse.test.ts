@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SseParser } from "./sse.js";
-import { isAfter } from "./client.js";
+import { SseParser } from "./sse.ts";
+import { isAfter } from "./client.ts";
 
 describe("SseParser", () => {
   it("parses id, event and data, and drops keepalive comments", () => {

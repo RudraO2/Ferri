@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { communities, events, knowledgeEntries, type Db } from "@ferri/db";
-import { buildTsQuery } from "./render.js";
+import { buildTsQuery } from "./render.ts";
 
 export interface KnowledgeItem {
   id: string;
@@ -25,8 +25,6 @@ export interface LiveEvent {
   endsAt: Date | null;
   venue: string | null;
   instructions: string;
-  /** Switch room for this event's question cards, if set. */
-  crewRoomId: string | null;
 }
 
 export interface LiveKnowledge {
@@ -48,15 +46,25 @@ export async function findCommunity(db: Db, slug?: string) {
   return rows[0] ?? null;
 }
 
-export async function loadLiveKnowledge(db: Db, communitySlug?: string): Promise<LiveKnowledge | null> {
+/**
+ * The knowledge Ferri answers from. With `eventId`, only the community's
+ * knowledge plus that event's (a question belongs to its space's event);
+ * `eventId: null` means community knowledge only. Without it, every live event.
+ */
+export async function loadLiveKnowledge(
+  db: Db,
+  communitySlug?: string,
+  scope?: { eventId: string | null },
+): Promise<LiveKnowledge | null> {
   const community = await findCommunity(db, communitySlug);
   if (!community) return null;
 
-  const liveEvents = await db
+  const allLive = await db
     .select()
     .from(events)
     .where(and(eq(events.communityId, community.id), ne(events.stage, "wrap")))
     .orderBy(asc(events.startsAt), asc(events.name));
+  const liveEvents = scope ? allLive.filter((e) => e.id === scope.eventId) : allLive;
   const eventIds = liveEvents.map((e) => e.id);
   const eventName = new Map(liveEvents.map((e) => [e.id, e.name]));
   const eventOrder = new Map(liveEvents.map((e, i) => [e.id, i]));
@@ -115,7 +123,6 @@ export async function loadLiveKnowledge(db: Db, communitySlug?: string): Promise
       endsAt: e.endsAt,
       venue: e.venue,
       instructions: e.instructions,
-      crewRoomId: e.crewRoomId,
     })),
     entries,
   };

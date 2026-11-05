@@ -25,7 +25,7 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
-// ── Community and events (first slice of the model; spec 04 adds spaces and crew) ──
+// ── Community and events ──────────────────────────────────────────────────
 
 export const communities = pgTable("communities", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -34,6 +34,14 @@ export const communities = pgTable("communities", {
   timezone: text("timezone").notNull().default("Asia/Kolkata"),
   /** Central instructions: tone and rules that apply in every space. */
   instructions: text("instructions").notNull().default(""),
+  /** The master pause: while true, Ferri posts nothing anywhere. */
+  paused: boolean("paused").notNull().default(false),
+  pausedAt: timestamp("paused_at", { withTimezone: true }),
+  pausedBy: text("paused_by"),
+  /** Set when an organizer edits the community in Desk; the seed then leaves it alone. */
+  deskEditedAt: timestamp("desk_edited_at", { withTimezone: true }),
+  /** The community-wide crew is managed in Desk; the seed leaves it alone. */
+  crewFromDesk: boolean("crew_from_desk").notNull().default(false),
   ...timestamps,
 });
 
@@ -54,12 +62,85 @@ export const events = pgTable(
     venue: text("venue"),
     /** Event instructions, layered on top of the community's. */
     instructions: text("instructions").notNull().default(""),
-    /** Switch room where this event's question cards go (spec 04 turns it into a space marked inside). */
-    crewRoomId: text("crew_room_id"),
+    /** Set when an organizer edits the event in Desk; the seed then leaves it alone. */
+    deskEditedAt: timestamp("desk_edited_at", { withTimezone: true }),
+    /** This event's crew is managed in Desk; the seed leaves it alone. */
+    crewFromDesk: boolean("crew_from_desk").notNull().default(false),
     ...timestamps,
   },
   (t) => [uniqueIndex("events_community_slug").on(t.communityId, t.slug)],
 );
+
+// ── Spaces: every group or channel Ferri is in, on any platform ───────────
+
+export const spaceState = pgEnum("space_state", ["new", "known"]);
+
+export const spaces = pgTable("spaces", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  communityId: uuid("community_id")
+    .notNull()
+    .references(() => communities.id, { onDelete: "cascade" }),
+  switchRoomId: text("switch_room_id").notNull().unique(),
+  name: text("name").notNull(),
+  /** "mattermost", "telegram", "slack", ... (Switch's bridge name, lowercase). */
+  platform: text("platform"),
+  /** New spaces wait in the Discovered list; nothing is attached, so Ferri is Off there. */
+  state: spaceState("state").notNull().default("new"),
+  /** Ferri is no longer in the room. */
+  archived: boolean("archived").notNull().default(false),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+export const spaceMode = pgEnum("space_mode", ["listen", "approve", "auto"]);
+export const spaceRole = pgEnum("space_role", ["members", "crew"]);
+
+/** A space attached to an event. Not attached means Off. */
+export const eventSpaces = pgTable(
+  "event_spaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    mode: spaceMode("mode").notNull().default("listen"),
+    /** "crew": the event's inside room, where cards go. */
+    role: spaceRole("role").notNull().default("members"),
+    attachedBy: text("attached_by").notNull().default("seed"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("event_spaces_event_space").on(t.eventId, t.spaceId), index("event_spaces_space").on(t.spaceId)],
+);
+
+/** People Ferri ignores everywhere in the community. */
+export const mutedPeople = pgTable(
+  "muted_people",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    username: text("username").notNull(),
+    note: text("note"),
+    mutedBy: text("muted_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("muted_people_who").on(t.communityId, t.platform, t.username)],
+);
+
+/** Switch accounts that signed in to Desk, so their card answers carry a name. */
+export const deskUsers = pgTable("desk_users", {
+  switchUserId: text("switch_user_id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ── Crew ──────────────────────────────────────────────────────────────────
 
@@ -158,6 +239,10 @@ export const questionOutcome = pgEnum("question_outcome", [
   "skipped",
   "declined",
   "error",
+  /** Heard in a Listen space: logged, never answered there. */
+  "listened",
+  /** A reply drafted in an Approve space, waiting for an organizer. */
+  "held",
 ]);
 
 export const questions = pgTable(
@@ -167,6 +252,7 @@ export const questions = pgTable(
     communityId: uuid("community_id").references(() => communities.id, { onDelete: "set null" }),
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     roomId: text("room_id").notNull(),
+    spaceId: uuid("space_id").references(() => spaces.id, { onDelete: "set null" }),
     /** Unique: inserting the row is how Ferri claims a message, so it never answers twice. */
     messageId: text("message_id").notNull().unique(),
     threadId: text("thread_id"),
@@ -204,6 +290,8 @@ export const questions = pgTable(
 // ── Cards: one per question the crew is asked (mirrors a Switch question card) ──
 
 export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed", "expired", "closed"]);
+/** "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent. */
+export const cardKind = pgEnum("card_kind", ["question", "reply"]);
 
 export const cards = pgTable(
   "cards",
@@ -216,6 +304,13 @@ export const cards = pgTable(
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     crewRoomId: text("crew_room_id").notNull(),
     switchSessionId: text("switch_session_id").notNull(),
+    kind: cardKind("kind").notNull().default("question"),
+    /** Reply cards: the drafted reply, where it goes, and for which question. */
+    draftText: text("draft_text"),
+    targetRoomId: text("target_room_id"),
+    targetQuestionId: uuid("target_question_id"),
+    sentText: text("sent_text"),
+    sentEventId: text("sent_event_id"),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),

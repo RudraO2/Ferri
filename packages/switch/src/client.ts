@@ -1,5 +1,5 @@
-import { SseParser } from "./sse.js";
-import type { ApprovalView, ConnectionState, DomainEvent, GapFrame, OpenQuestionsCard } from "./types.js";
+import { SseParser } from "./sse.ts";
+import type { ApprovalView, ConnectionState, DomainEvent, GapFrame, OpenQuestionsCard } from "./types.ts";
 
 export interface SwitchAgentOptions {
   /** Agent bridge base URL, e.g. http://localhost:8000 */
@@ -86,7 +86,8 @@ export class SwitchAgent {
       "POST",
       `/agents/${this.opts.agentId}/ops/${name}`,
       args,
-      { "x-switch-connection-id": this.opts.connectionId },
+      // Optional: it binds the call to a room. A one-off caller (the kb CLI) has no live connection.
+      this.opts.connectionId ? { "x-switch-connection-id": this.opts.connectionId } : {},
     );
     return out.result;
   }

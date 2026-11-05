@@ -1,27 +1,36 @@
 import { eq } from "drizzle-orm";
-import { crewActions, questions, type Db } from "@ferri/db";
+import { communities, crewActions, questions, spaces, type Db } from "@ferri/db";
 import {
   answerQuestion,
   crewIntent,
+  decideAction,
+  findCommunity,
   findCrewMember,
+  isMuted,
   listOpenCards,
   loadCrew,
   loadLiveKnowledge,
   looksLikeCardAnswer,
+  mayPost,
+  parseSender,
+  recordSpace,
+  resolveSpace,
   triageMessage,
   worthAnswering,
   type AnswerResult,
   type CrewMember,
   type LiveKnowledge,
+  type Posting,
+  type ResolvedSpace,
   type Triage,
 } from "@ferri/knowledge";
 import type { MessageEvent, SwitchAgent } from "@ferri/switch";
-import { config } from "./config.js";
-import { askerMention, type Loop, type RoomInfo } from "./loop.js";
-import { mentionRegex } from "./mentions.js";
-import type { RoomHistory, RoomLine } from "./rooms.js";
+import { config } from "./config.ts";
+import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
+import { mentionRegex } from "./mentions.ts";
+import type { RoomHistory, RoomLine } from "./rooms.ts";
 
-type Outcome = "answered" | "chat" | "unknown" | "skipped" | "declined" | "error";
+type Outcome = "answered" | "chat" | "unknown" | "skipped" | "declined" | "error" | "listened" | "held";
 
 export interface FlowDeps {
   db: Db;
@@ -50,19 +59,22 @@ const CREW_UNKNOWN = (agentName: string) =>
 
 interface Context {
   kb: LiveKnowledge;
-  /** The event a question belongs to: the only live one, for now (spaces map rooms to events in spec 04). */
+  space: ResolvedSpace;
+  /** The live event the space is attached to (null: Off, or community-level). */
   eventId: string | null;
   crew: CrewMember[];
+  paused: boolean;
 }
 
 /**
- * The message flow:
- * - a crew member talking to Ferri: answering a card, teaching a fact, or asking;
- * - anyone else addressing Ferri: answer from the knowledge base; when it does
- *   not know, a holding reply and a question card for the crew (spec 03);
- * - a question to the room: Haiku triage, a grace period so a person can
- *   answer first, then a sourced answer, or the holding reply and a card;
- * - the crew room: no unprompted answers and no cards for the crew's own questions.
+ * The message flow, per space (spec 04):
+ * - Off (not attached), muted people, archived spaces: ignored;
+ * - the master pause: nothing is posted anywhere, questions are only logged;
+ * - Listen: never posts, logs the questions it hears;
+ * - Approve: replies wait on a reply card in the crew room;
+ * - Auto: answers with a source; unknown gets a holding reply and a question card;
+ * - the crew room: crew members answer cards, teach facts and ask; no
+ *   unprompted answers, no cards for the crew's own questions.
  * Every handled question is one row in `questions` and every crew action one
  * row in `crew_actions`; inserting the row claims the message, so a replay
  * never acts twice.
@@ -77,26 +89,36 @@ export function createFlow(deps: FlowDeps) {
     return p.sender === agent.agentId || p.sender_name?.toLowerCase() === "ferri" || p.sender_kind === "platform";
   }
 
-  async function context(): Promise<Context | null> {
-    const kb = await loadLiveKnowledge(db, config.community);
+  /** The space a room is (recorded as Discovered and Off the first time), its event and settings. */
+  async function context(roomId: string, at: Date): Promise<Context | null> {
+    const community = await findCommunity(db, config.community);
+    if (!community) return null;
+    let space = await resolveSpace(db, roomId);
+    if (!space) {
+      const info = await deps.room(roomId);
+      await recordSpace(db, community.id, { roomId, name: info.name, platform: info.platform }, at);
+      log(`new space discovered: ${info.name} (Off until an organizer attaches it)`);
+      space = await resolveSpace(db, roomId);
+      if (!space) return null;
+    } else {
+      await db.update(spaces).set({ lastMessageAt: at, lastSeenAt: new Date() }).where(eq(spaces.id, space.spaceId));
+    }
+    const kb = await loadLiveKnowledge(db, config.community, { eventId: space.eventId });
     if (!kb) return null;
-    const eventId = kb.events.length === 1 ? kb.events[0]!.id : null;
-    return { kb, eventId, crew: await loadCrew(db, kb.community.id, eventId) };
-  }
-
-  function isCrewRoom(ctx: Context, roomId: string): boolean {
-    return roomId === loop.crewRoomFor(ctx.kb, ctx.eventId) || ctx.kb.events.some((e) => e.crewRoomId === roomId);
+    const [c] = await db.select({ paused: communities.paused }).from(communities).where(eq(communities.id, community.id));
+    return { kb, space, eventId: space.eventId, crew: await loadCrew(db, community.id, space.eventId), paused: c?.paused ?? false };
   }
 
   /** Claim the message. Null when another run already handled it. */
-  async function claim(ev: MessageEvent, ctx: Context | null, triage: Triage | null, direct: boolean) {
+  async function claim(ev: MessageEvent, ctx: Context, triage: Triage | null, direct: boolean) {
     const p = ev.payload;
     const rows = await db
       .insert(questions)
       .values({
-        communityId: ctx?.kb.community.id ?? null,
-        eventId: ctx?.eventId ?? null,
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
         roomId: ev.room_id,
+        spaceId: ctx.space.spaceId,
         messageId: p.message_id,
         threadId: p.thread_id,
         askerId: p.sender,
@@ -115,29 +137,44 @@ export function createFlow(deps: FlowDeps) {
     await db.update(questions).set({ ...set, updatedAt: new Date() }).where(eq(questions.id, id));
   }
 
+  /** The question text without the @mention, for cards. */
+  function stripMention(body: string): string {
+    return body.replace(new RegExp(mentionRe.source, "gi"), "").replace(/^[\s,:;-]+/, "").trim() || body;
+  }
+
   /**
-   * `direct`: the person is talking to Ferri (an @mention, a direct chat, or a
-   * Switch follow-up to Ferri's last answer). Ferri then always replies, with
-   * a holding reply when it does not know. Otherwise it steps in only with a
-   * sourced answer, or, when it does not know and a crew room exists, with the
-   * holding reply and a card.
+   * Answer one question under the space's posting rule.
+   * `direct`: the person is talking to Ferri (a mention, a direct chat, or a
+   * Switch follow-up). Otherwise it was said to the room.
    */
-  async function handleQuestion(ev: MessageEvent, ctx: Context | null, triage: Triage | null, direct: boolean): Promise<void> {
+  async function handleQuestion(
+    ev: MessageEvent,
+    ctx: Context,
+    triage: Triage | null,
+    direct: boolean,
+    posting: Posting,
+    crewRoom: boolean,
+  ): Promise<void> {
     const p = ev.payload;
     const id = await claim(ev, ctx, triage, direct);
     if (!id) {
       log(`already handled ${p.message_id}; skipping`);
       return;
     }
-    if (!ctx) {
-      log("no community in the database; run `pnpm kb seed`");
-      await finish(id, { outcome: "error", error: "no community" });
+    if (posting === "paused") {
+      await finish(id, { outcome: "skipped", error: "master pause" });
+      log(`paused: question ${p.message_id} logged, not answered`);
       return;
     }
-    const inCrewRoom = isCrewRoom(ctx, ev.room_id);
+    if (posting === "listen") {
+      await finish(id, { outcome: "listened" });
+      log(`listen: question ${p.message_id} in ${ctx.space.name} logged`);
+      return;
+    }
     const room = await deps.room(ev.room_id);
+    const approve = posting === "approve";
 
-    if (direct) await agent.setTyping(ev.room_id, true).catch(() => {});
+    if (direct && !approve) await agent.setTyping(ev.room_id, true).catch(() => {});
     try {
       const r = await answerQuestion({
         db,
@@ -152,20 +189,43 @@ export function createFlow(deps: FlowDeps) {
         searchTerms: triage?.search_terms,
       });
 
-      const cards = !inCrewRoom && loop.canOpenCards(ctx.kb, ctx.eventId);
+      const crewRoomId = crewRoom ? null : await loop.crewRoomFor(ctx.eventId);
+      const asked = stripMention(p.body);
       // What the crew is asked: the whole question, or the part the answer could not cover.
-      const asked = p.body.replace(new RegExp(mentionRe.source, "gi"), "").replace(/^[\s,:;-]+/, "").trim() || p.body;
       const ask = r.kind === "unknown" ? asked : r.kind === "answer" && r.missing && direct ? r.missing : null;
+      const mentionPrefix = direct ? "" : `${askerMention(p.sender, p.sender_name)} `;
 
       let text: string | null = null;
-      if (r.kind === "unknown" && inCrewRoom) text = direct ? CREW_UNKNOWN(config.agentName) : null;
-      else if (r.kind === "unknown") text = direct ? r.text : cards ? `${askerMention(p.sender, p.sender_name)} ${r.text}` : null;
-      else if (r.kind === "answer") text = r.text;
-      else if (r.kind === "chat") text = direct ? r.text : null;
+      let outcome: Outcome = OUTCOME[r.kind];
+      if (approve) {
+        // Nothing is posted in an Approve space; a sourced answer waits on a reply card.
+        if (r.kind === "answer") {
+          const card = await loop.openReplyCard({
+            questionId: id,
+            kb: ctx.kb,
+            eventId: ctx.eventId,
+            targetRoomId: ev.room_id,
+            roomName: room.name,
+            askerName: p.sender_name,
+            asked,
+            draft: `${mentionPrefix}${r.text}`,
+          });
+          outcome = card ? "held" : "skipped";
+        }
+      } else if (r.kind === "unknown" && crewRoom) {
+        text = direct ? CREW_UNKNOWN(config.agentName) : null;
+      } else if (r.kind === "unknown") {
+        // A holding reply only when a card can actually follow (or the person asked Ferri directly).
+        text = direct ? r.text : crewRoomId ? `${mentionPrefix}${r.text}` : null;
+      } else if (r.kind === "answer") {
+        text = `${mentionPrefix}${r.text}`;
+      } else if (r.kind === "chat") {
+        text = direct ? r.text : null;
+      }
 
-      const replyEventId = text ? await agent.sendMessage(ev.room_id, text) : null;
+      const replyEventId = text ? await loop.post(ctx.kb.community.id, ev.room_id, text) : null;
       await finish(id, {
-        outcome: OUTCOME[r.kind],
+        outcome,
         entryIds: r.sources.map((s) => s.id),
         missing: r.missing,
         replyText: text,
@@ -175,25 +235,32 @@ export function createFlow(deps: FlowDeps) {
         error: r.downgraded ? "answer without a valid citation; held back" : null,
       });
       log(
-        `${direct ? "direct" : "room"} question ${p.message_id}: ${r.kind}${r.downgraded ? " (downgraded)" : ""}` +
-          `, ${r.sources.length} source(s), ${r.latencyMs} ms, cache_read ${r.usage.cacheRead}${text ? ", replied" : ", no post"}`,
+        `${direct ? "direct" : "room"} question ${p.message_id} (${posting}): ${r.kind}${r.downgraded ? " (downgraded)" : ""}` +
+          `, ${r.sources.length} source(s), ${r.latencyMs} ms, cache_read ${r.usage.cacheRead}${text ? ", replied" : approve && outcome === "held" ? ", held for approval" : ", no post"}`,
       );
 
-      if (ask && cards) {
+      if (ask && crewRoomId) {
         await loop.openOrJoin({ questionId: id, kb: ctx.kb, eventId: ctx.eventId, roomName: room.name, askerName: p.sender_name, asked: ask });
       }
     } catch (err) {
       await finish(id, { outcome: "error", error: (err as Error).message.slice(0, 1000) });
       throw err;
     } finally {
-      if (direct) await agent.setTyping(ev.room_id, false).catch(() => {});
+      if (direct && !approve) await agent.setTyping(ev.room_id, false).catch(() => {});
     }
   }
 
   /** A crew member talking to Ferri: answer a card, teach a fact, or ask something. */
-  async function onCrewMessage(ev: MessageEvent, ctx: Context, member: CrewMember, mentioned: boolean): Promise<void> {
+  async function onCrewMessage(
+    ev: MessageEvent,
+    ctx: Context,
+    member: CrewMember,
+    mentioned: boolean,
+    posting: Posting,
+    crewRoom: boolean,
+  ): Promise<void> {
     const p = ev.payload;
-    const open = await listOpenCards(db, ctx.kb.community.id);
+    const open = (await listOpenCards(db, ctx.kb.community.id)).filter((c) => c.eventId === ctx.eventId);
     const { intent, card } = await crewIntent({
       choice: config.modelFast,
       sender: member.name,
@@ -201,7 +268,8 @@ export function createFlow(deps: FlowDeps) {
       open,
       history: chat(rooms.before(ev.room_id, p.message_id, 6)),
     });
-    const inCrewRoom = isCrewRoom(ctx, ev.room_id);
+    // Replies to the crew member in this room obey this room's posting rule.
+    const say = async (text: string) => (mayPost(posting) ? loop.post(ctx.kb.community.id, ev.room_id, text) : null);
 
     const facts = (intent?.facts ?? []).filter((f) => f.text.trim());
     const acts = intent?.intent === "answer_card" && card && intent.answer.trim();
@@ -223,24 +291,17 @@ export function createFlow(deps: FlowDeps) {
         log(`crew answer from ${member.name} for card ${card!.id}`);
         const r = await loop.resolveCard(card!.id, { text: intent!.answer, by: member.name, via: "chat" });
         if (!r.resolved) replies.push(`Someone already answered “${card!.question}”, so I kept that answer.`);
-        else if (!inCrewRoom) replies.push(`Got it, ${member.name}. I sent it to ${r.delivered.length} ${r.delivered.length === 1 ? "person" : "people"}.`);
+        else if (r.held) replies.push(`Saved, ${member.name}. The pause is on, so I'll send it once it is lifted.`);
+        else if (!crewRoom) replies.push(`Got it, ${member.name}. I sent it to ${r.delivered.length} ${r.delivered.length === 1 ? "person" : "people"}.`);
       }
       for (const fact of facts) {
-        const r = await loop.remember({
-          communityId: ctx.kb.community.id,
-          eventId: ctx.eventId,
-          heading: fact.heading,
-          fact: fact.text,
-          by: member.name,
-        });
+        const r = await loop.remember({ communityId: ctx.kb.community.id, eventId: ctx.eventId, heading: fact.heading, fact: fact.text, by: member.name });
         await loop.updateCrewAction(actionId, { entryId: r.entryId });
-        const also = r.answered.length
-          ? ` It also answered ${r.answered.map((a) => `“${a.question}” (sent to ${a.delivered})`).join(", ")}.`
-          : "";
+        const also = r.answered.length ? ` It also answered ${r.answered.map((a) => `“${a.question}” (sent to ${a.delivered})`).join(", ")}.` : "";
         replies.push(`Saved, ${member.name}: “${fact.heading || fact.text}”. I'll use it from now on.${also}`);
         log(`crew note from ${member.name} saved; ${r.answered.length} card(s) answered by it`);
       }
-      if (replies.length) await agent.sendMessage(ev.room_id, replies.join("\n"));
+      if (replies.length) await say(replies.join("\n"));
       return;
     }
 
@@ -250,12 +311,12 @@ export function createFlow(deps: FlowDeps) {
       return;
     }
     // A question or anything else: the normal answer path (no cards from the crew room).
-    await handleQuestion(ev, ctx, null, true);
+    await handleQuestion(ev, ctx, null, true, posting, crewRoom);
   }
 
-  async function onRoomMessage(ev: MessageEvent, ctx: Context | null): Promise<void> {
+  async function onRoomMessage(ev: MessageEvent, ctx: Context, posting: Posting, crewRoom: boolean): Promise<void> {
     const p = ev.payload;
-    if (p.body.trim().length < 4) return;
+    if (p.body.trim().length < 4 || posting === "paused") return;
     const roomName = (await deps.room(ev.room_id)).name;
     const first = await triageMessage({
       choice: config.modelFast,
@@ -265,6 +326,8 @@ export function createFlow(deps: FlowDeps) {
       before: chat(rooms.before(ev.room_id, p.message_id, 8)),
     });
     if (!first.triage || !worthAnswering(first.triage)) return;
+    // Listen: log it now; there is nobody to wait for, since Ferri never answers there.
+    if (posting === "listen") return handleQuestion(ev, ctx, first.triage, false, posting, crewRoom);
     log(`room question ${p.message_id} (${first.triage.topic}); waiting ${config.roomGraceMs / 1000}s for a person to answer`);
 
     await sleep(config.roomGraceMs);
@@ -287,19 +350,31 @@ export function createFlow(deps: FlowDeps) {
       log(`room question ${p.message_id}: a person answered; Ferri stays quiet`);
       return;
     }
-    await handleQuestion(ev, ctx, triage, false);
+    // The posting rule is read again: the space or the pause may have changed during the wait.
+    const now = await context(ev.room_id, new Date(p.timestamp));
+    if (!now) return;
+    const again = decideAction({
+      attached: now.space.setting,
+      archived: now.space.archived,
+      muted: false,
+      paused: now.paused,
+      fromCrew: false,
+      addressed: false,
+      mentioned: false,
+    });
+    if (again.act === "ignore") return;
+    await handleQuestion(ev, now, triage, false, again.posting, again.crewRoom);
   }
 
   /**
    * Switch marks a message `addressed` without an @mention when it continues
-   * an exchange: the sender's next top-level message within 5 minutes of
-   * Ferri answering them ("channel follow-up"), or a reply in Ferri's thread.
-   * Ferri answers it like a direct question only when triage says it is a
-   * question for the organizers; "anyone want chai?" right after an answer
-   * gets no reply.
+   * an exchange (a follow-up within 5 minutes of Ferri answering the sender,
+   * or a reply in Ferri's thread). Ferri answers it like a direct question
+   * only when triage says it is a question for the organizers.
    */
-  async function onFollowUp(ev: MessageEvent, ctx: Context | null): Promise<void> {
+  async function onFollowUp(ev: MessageEvent, ctx: Context, posting: Posting, crewRoom: boolean): Promise<void> {
     const p = ev.payload;
+    if (posting === "paused") return;
     const t = await triageMessage({
       choice: config.modelFast,
       roomName: (await deps.room(ev.room_id)).name,
@@ -311,7 +386,7 @@ export function createFlow(deps: FlowDeps) {
       log(`follow-up ${p.message_id} is not a question for Ferri; staying quiet`);
       return;
     }
-    await handleQuestion(ev, ctx, t.triage, true);
+    await handleQuestion(ev, ctx, t.triage, true, posting, crewRoom);
   }
 
   return async function onMessage(ev: MessageEvent): Promise<void> {
@@ -338,24 +413,38 @@ export function createFlow(deps: FlowDeps) {
     const [seenAction] = await db.select({ id: crewActions.id }).from(crewActions).where(eq(crewActions.messageId, p.message_id)).limit(1);
     if (seenQuestion || seenAction) return;
 
-    const ctx = await context();
-    const mentioned = mentionRe.test(p.body) || ev.channel_type === "direct";
-    const member = ctx ? findCrewMember(ctx.crew, p.sender, p.sender_name) : null;
-    const crewRoom = ctx ? isCrewRoom(ctx, ev.room_id) : false;
-
-    if (ctx && member && p.addressed && (mentioned || crewRoom)) {
-      log(`crew ${member.name} in ${ev.room_id}: ${p.body.slice(0, 120)}`);
-      await onCrewMessage(ev, ctx, member, mentioned);
-    } else if (p.addressed && mentioned) {
-      log(`addressed by ${p.sender_name} in ${ev.room_id}: ${p.body.slice(0, 120)}`);
-      await handleQuestion(ev, ctx, null, true);
-    } else if (crewRoom) {
-      // The crew talking among themselves: Ferri listens (spec 08 plans from it) but does not step in.
+    const ctx = await context(ev.room_id, new Date(p.timestamp));
+    if (!ctx) {
+      log("no community in the database; run `pnpm kb seed`");
       return;
-    } else if (p.addressed) {
-      await onFollowUp(ev, ctx);
+    }
+    const mentioned = mentionRe.test(p.body) || ev.channel_type === "direct";
+    const who = parseSender(p.sender, p.sender_name);
+    const member = findCrewMember(ctx.crew, p.sender, p.sender_name);
+    const decision = decideAction({
+      attached: ctx.space.setting,
+      archived: ctx.space.archived,
+      muted: await isMuted(db, ctx.kb.community.id, who.platform, who.username),
+      paused: ctx.paused,
+      fromCrew: member !== null,
+      addressed: p.addressed,
+      mentioned,
+    });
+
+    if (decision.act === "ignore") {
+      if (p.addressed && mentioned) log(`ignored a mention from ${p.sender_name} in ${ctx.space.name}: ${decision.reason}`);
+      return;
+    }
+    if (decision.act === "crew") {
+      log(`crew ${member!.name} in ${ctx.space.name}: ${p.body.slice(0, 120)}`);
+      await onCrewMessage(ev, ctx, member!, mentioned, decision.posting, decision.crewRoom);
+    } else if (decision.act === "direct") {
+      log(`addressed by ${p.sender_name} in ${ctx.space.name} (${decision.posting}): ${p.body.slice(0, 120)}`);
+      await handleQuestion(ev, ctx, null, true, decision.posting, decision.crewRoom);
+    } else if (decision.act === "follow_up") {
+      await onFollowUp(ev, ctx, decision.posting, decision.crewRoom);
     } else {
-      await onRoomMessage(ev, ctx);
+      await onRoomMessage(ev, ctx, decision.posting, decision.crewRoom);
     }
   };
 }

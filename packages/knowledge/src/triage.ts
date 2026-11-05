@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { structuredCall, type ModelChoice, type Usage } from "./model.js";
+import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
 
 export interface ChatLine {
   sender: string;

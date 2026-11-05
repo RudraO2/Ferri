@@ -13,6 +13,9 @@ import { fileURLToPath } from "node:url";
 import { createDb, runMigrations } from "@ferri/db";
 import {
   answerQuestion,
+  applySeedSpaces,
+  attachedRoomIds,
+  discoverSpaces,
   loadLiveKnowledge,
   loadSkills,
   mirrorToSwitch,
@@ -22,7 +25,7 @@ import {
   triageMessage,
   worthAnswering,
 } from "@ferri/knowledge";
-import { gatewayFromEnv } from "@ferri/switch";
+import { SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [cmd, ...rest] = process.argv.slice(2);
@@ -32,20 +35,23 @@ const args = rest.filter((a) => !a.startsWith("--"));
 await runMigrations();
 const { db, close } = createDb();
 
-/** Every room Ferri serves gets the mirror: the test room and the crew room for now (spaces in spec 04). */
-function mirrorRoomIds(env = process.env): string[] {
-  return [env.FERRI_LAB_ROOM_ID, env.FERRI_CREW_ROOM_ID].filter((x): x is string => Boolean(x));
+/** A Switch agent client for one-off ops (no live connection). */
+function switchAgent(): SwitchAgent | null {
+  const agentId = process.env.FERRI_AGENT_ID;
+  const apiKey = process.env.FERRI_AGENT_KEY;
+  if (!agentId || !apiKey) return null;
+  return new SwitchAgent({ baseUrl: process.env.SWITCH_URL ?? "http://localhost:8000", agentId, apiKey, connectionId: "" });
 }
 
 async function mirror(): Promise<void> {
   const gateway = await gatewayFromEnv(path.join(root, "..", "switch", ".env"));
-  const roomIds = mirrorRoomIds();
-  if (!gateway || !roomIds.length) {
-    console.log("mirror skipped: no Switch admin password, or no FERRI_LAB_ROOM_ID / FERRI_CREW_ROOM_ID");
-    return;
-  }
   const kb = await loadLiveKnowledge(db, process.env.FERRI_COMMUNITY);
   if (!kb) throw new Error("no community in the database; run `pnpm kb seed` first");
+  const roomIds = await attachedRoomIds(db, kb.community.id);
+  if (!gateway || !roomIds.length) {
+    console.log("mirror skipped: no Switch admin password, or no space attached to an event yet");
+    return;
+  }
   const r = await mirrorToSwitch({ db, gateway, kb, roomIds });
   console.log(`mirror: ${r.created ? "created" : "updated"} document ${r.documentId} (${r.bytes} bytes), attached to ${r.attached.length} room(s)`);
 }
@@ -57,8 +63,19 @@ try {
       const r = await seedFromDirectory(db, dir);
       console.log(
         `seeded ${r.communitySlug} (events: ${r.events.join(", ") || "none"}): ` +
-          `${r.crew} crew, ${r.created} created, ${r.updated} updated, ${r.restored} restored, ${r.archived} archived, ${r.unchanged} unchanged`,
+          `${r.crew} crew, ${r.created} created, ${r.updated} updated, ${r.restored} restored, ${r.archived} archived, ${r.unchanged} unchanged` +
+          (r.kept ? `, ${r.kept} kept (edited in Desk)` : ""),
       );
+      if (r.keptFromDesk.length) console.log(`kept from Desk: ${r.keptFromDesk.join(", ")}`);
+      // Spaces: find the rooms Ferri is in, then attach the ones event.yaml names.
+      const agent = switchAgent();
+      if (agent) {
+        const d = await discoverSpaces(db, agent, r.communityId);
+        console.log(`spaces: ${d.rooms} room(s) Ferri is in${d.added.length ? `; new (Off): ${d.added.join(", ")}` : ""}`);
+        for (const line of await applySeedSpaces(db, r.spaceRequests)) console.log(`  ${line}`);
+      } else if (r.spaceRequests.length) {
+        console.log("spaces skipped: FERRI_AGENT_ID / FERRI_AGENT_KEY not set (run `pnpm setup:switch`)");
+      }
       if (!flags.has("--no-mirror")) await mirror();
       break;
     }

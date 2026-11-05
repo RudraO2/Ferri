@@ -1,5 +1,5 @@
-export * from "./types.js";
-export { SseParser } from "./sse.js";
-export { SwitchAgent, SwitchHttpError, isAfter } from "./client.js";
-export type { SwitchAgentOptions, StreamHandlers } from "./client.js";
-export { GatewayClient, GatewayError, gatewayFromEnv } from "./gateway.js";
+export * from "./types.ts";
+export { SseParser } from "./sse.ts";
+export { SwitchAgent, SwitchHttpError, isAfter } from "./client.ts";
+export type { SwitchAgentOptions, StreamHandlers } from "./client.ts";
+export { GatewayClient, GatewayError, gatewayFromEnv, type GatewayMe } from "./gateway.ts";

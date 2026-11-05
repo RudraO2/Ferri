@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { cards, knowledgeEntries, knowledgeRevisions, questions, type Db } from "@ferri/db";
-import { structuredCall, type ModelChoice, type Usage } from "./model.js";
-import { TOPICS } from "./triage.js";
+import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import { TOPICS } from "./triage.ts";
 
 /** The Switch session id all of Ferri's question cards live under. */
 export const CARD_SESSION = "ferri-cards";
@@ -31,7 +31,7 @@ export async function listOpenCards(db: Db, communityId: string): Promise<OpenCa
       crewRoomId: cards.crewRoomId,
     })
     .from(cards)
-    .where(and(eq(cards.communityId, communityId), eq(cards.status, "open")))
+    .where(and(eq(cards.communityId, communityId), eq(cards.status, "open"), eq(cards.kind, "question")))
     .orderBy(asc(cards.createdAt));
 }
 

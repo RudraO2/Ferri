@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import type { Db } from "./client.js";
-import { agentState } from "./schema.js";
+import type { Db } from "./client.ts";
+import { agentState } from "./schema.ts";
 
 export async function getState<T>(db: Db, key: string): Promise<T | undefined> {
   const rows = await db.select({ value: agentState.value }).from(agentState).where(eq(agentState.key, key)).limit(1);

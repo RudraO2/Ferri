@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Effort, ModelChoice } from "./model.js";
+import type { Effort, ModelChoice } from "./model.ts";
 
 /** Join skill files (markdown) in order into one stable prompt head. */
 export function loadSkills(dir: string, names: string[]): string {
