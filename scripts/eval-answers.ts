@@ -169,6 +169,7 @@ try {
     card("parking", "venue", "Is there parking for bikes at the venue?"),
     card("dogs", "rules", "Can attendees bring dogs to the event?"),
     card("arjun-reg", "registration", "Is Arjun's registration confirmed?", true),
+    card("team-switch", "teams", "Can a participant switch to a different team after hacking has started?"),
   ];
 
   const prepCases: { q: string; joins: string | null; personal?: boolean }[] = [
@@ -178,6 +179,10 @@ try {
     { q: "can I bring my cat?", joins: null },
     { q: "is my registration confirmed? I'm Meera", joins: null, personal: true },
     { q: "is there a hotel discount for participants?", joins: null, personal: false },
+    // Spec 06: a rule asked as "can I" is not personal, and it joins the open card.
+    { q: "is it ok to move to another team once hacking has begun?", joins: "team-switch", personal: false },
+    { q: "can I bring a friend who is not registered?", joins: null, personal: false },
+    { q: "which team did you put me in? I'm Meera", joins: null, personal: true },
   ];
   const p = await pool(prepCases, 4, async (c) => {
     const r = await prepareCard({ choice: models.fast, question: c.q, asker: "tester", open: openCards });

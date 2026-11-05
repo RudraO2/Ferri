@@ -361,3 +361,41 @@ export const agentState = pgTable("agent_state", {
   value: jsonb("value").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ── Ferri Pocket: Web Push (spec 06) ──────────────────────────────────────
+
+/** A browser or phone that gets push notifications for one Switch user. */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The Switch user (a Desk or Pocket sign-in). Crew members link to it through `handles.switch`. */
+    switchUserId: text("switch_user_id").notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+    failures: integer("failures").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint").on(t.endpoint), index("push_subscriptions_user").on(t.switchUserId)],
+);
+
+/** Every push Ferri sent, so a settled card can replace the notifications it caused. */
+export const pushLog = pgTable(
+  "push_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cardId: uuid("card_id").references(() => cards.id, { onDelete: "cascade" }),
+    switchUserId: text("switch_user_id").notNull(),
+    /** "open", "nudge", "escalate", "expire", "settled" or "test". */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    /** "sent", "gone" (the browser dropped the subscription) or "failed". */
+    status: text("status").notNull(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("push_log_card").on(t.cardId)],
+);

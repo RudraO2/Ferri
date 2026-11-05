@@ -1,6 +1,8 @@
 import { community } from "@/lib/db";
 import { ago, liveEvents, spacesWithSettings } from "@/lib/data";
-import { keepOff, saveSpace } from "../actions";
+import type { GatewayRoom } from "@/lib/ferri";
+import { gatewayAs, requireUser } from "@/lib/session";
+import { addFerri, keepOff, saveSpace } from "../actions";
 import { Empty, Note, PageHead, Section } from "../ui";
 
 const MODE_HELP: Record<string, string> = {
@@ -49,6 +51,16 @@ export default async function SpacesPage({ searchParams }: { searchParams: Promi
   const discovered = all.filter((s) => s.state === "new" && !s.archived);
   const known = all.filter((s) => s.state !== "new" && !s.archived);
   const archived = all.filter((s) => s.archived);
+  // Rooms in Switch that Ferri is not in yet (bridged chats and Switch rooms), so nobody types !invite-agent.
+  const user = await requireUser();
+  const inRooms = new Set(all.filter((s) => !s.archived).map((s) => s.switchRoomId));
+  let outside: GatewayRoom[] = [];
+  let outsideError: string | null = null;
+  try {
+    outside = (await gatewayAs(user).rooms()).filter((r) => !inRooms.has(r.id)).sort((a, b) => a.name.localeCompare(b.name));
+  } catch (err) {
+    outsideError = (err as Error).message.includes("401") ? "Your Switch session ended. Sign in again to list rooms." : "Switch did not list its rooms.";
+  }
   return (
     <>
       <PageHead
@@ -108,6 +120,35 @@ export default async function SpacesPage({ searchParams }: { searchParams: Promi
           </div>
         ) : (
           <Empty>No spaces yet.</Empty>
+        )}
+      </Section>
+
+      <Section title={`Rooms Ferri is not in · ${outside.length}`}>
+        {outsideError ? (
+          <Empty>{outsideError}</Empty>
+        ) : outside.length ? (
+          <div className="card divide-y divide-zinc-100">
+            {outside.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <div className="text-[13px] font-medium">{r.bridge_display_name ? `${r.bridge_display_name}: ${r.name}` : r.name}</div>
+                  <div className="text-[12px] text-zinc-500">
+                    {r.bridge_type ?? "switch"}
+                    {r.bridge_display_name ? ` · ${r.bridge_display_name}` : ""} · {r.agent_count} agent{r.agent_count === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <form action={addFerri}>
+                  <input type="hidden" name="roomId" value={r.id} />
+                  {/* Named the way Ferri's discovery names spaces: "<connection>: <chat>". */}
+                  <input type="hidden" name="name" value={r.bridge_display_name ? `${r.bridge_display_name}: ${r.name}` : r.name} />
+                  <input type="hidden" name="platform" value={r.bridge_type ?? ""} />
+                  <button className="btn">Add Ferri</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty>Ferri is in every room Switch knows. New Telegram, Slack and Discord chats show up here once the Switch bot is in them.</Empty>
         )}
       </Section>
 

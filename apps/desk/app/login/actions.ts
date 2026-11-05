@@ -24,10 +24,12 @@ export async function signIn(_prev: { error?: string } | undefined, form: FormDa
     .values({ switchUserId: me.id, email: me.email, name: me.name || me.email })
     .onConflictDoUpdate({ target: deskUsers.switchUserId, set: { email: me.email, name: me.name || me.email, lastLoginAt: new Date() } });
   await startSession({ uid: me.id, email: me.email, name: me.name || me.email, gw: gateway.session });
-  redirect("/");
+  // Pocket signs in here too and goes back to the Pocket page it came from.
+  const next = String(form.get("next") ?? "/");
+  redirect(next === "/m" || /^\/m\/[A-Za-z0-9/_-]*$/.test(next) ? next : "/");
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(form?: FormData): Promise<void> {
   await endSession();
-  redirect("/login");
+  redirect(form?.get("next") === "/m" ? "/m/login" : "/login");
 }

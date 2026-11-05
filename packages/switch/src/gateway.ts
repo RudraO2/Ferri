@@ -10,6 +10,18 @@ export interface GatewayMe {
   role: string;
 }
 
+export interface GatewayRoom {
+  id: string;
+  name: string;
+  description: string;
+  channel_type: string | null;
+  agent_count: number;
+  connected_user_count: number;
+  bridge_id: string | null;
+  bridge_display_name: string | null;
+  bridge_type?: string | null;
+}
+
 export class GatewayClient {
   private cookie = "";
 
@@ -55,6 +67,16 @@ export class GatewayClient {
   /** The messaging-app connections (admin): which bridge is Slack, Discord, Telegram, ... */
   async bridges(): Promise<{ bridge_id: string; bridge_type: string; display_name: string }[]> {
     return this.call("GET", "/gateway/collaborations");
+  }
+
+  /** Every room this person can read (admin: all of them), with its bridge platform. */
+  async rooms(): Promise<GatewayRoom[]> {
+    return this.call("GET", "/gateway/rooms");
+  }
+
+  /** Add agents to a room (needs write access to the room). */
+  async addAgentsToRoom(roomId: string, agentIds: string[]): Promise<unknown> {
+    return this.call("POST", `/gateway/rooms/${encodeURIComponent(roomId)}/agents`, { agent_ids: agentIds });
   }
 
   async login(): Promise<void> {

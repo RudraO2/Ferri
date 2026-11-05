@@ -1,15 +1,12 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { community, db } from "@/lib/db";
 import {
-  CARD_QUESTION_ID,
-  CARD_SKIP_OPTION,
   TOPICS,
   attachSpace,
-  cards,
   communities,
   createEntry,
   crewMembers,
@@ -17,10 +14,12 @@ import {
   editEntry,
   events,
   mutedPeople,
+  recordSpace,
   setEntryArchived,
   slugify,
   spaces,
 } from "@/lib/ferri";
+import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { gatewayAs, requireUser } from "@/lib/session";
 
 // Browsers send textarea text with CRLF line ends; keep plain newlines.
@@ -61,6 +60,24 @@ export async function saveSpace(form: FormData) {
   }
   revalidatePath("/", "layout");
   back("/spaces", "Saved. Ferri follows it from the next message.");
+}
+
+/** Put Ferri in a Switch room it is not in yet; the room lands in Discovered, Off. */
+export async function addFerri(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const agentId = process.env.FERRI_AGENT_ID;
+  if (!agentId) back("/spaces", "FERRI_AGENT_ID is not set.");
+  const roomId = str(form, "roomId");
+  try {
+    await gatewayAs(user).addAgentsToRoom(roomId, [agentId!]);
+  } catch (err) {
+    const msg = (err as Error).message;
+    back("/spaces", msg.includes("401") ? "Your Switch session ended. Sign in again." : `Switch refused it: ${msg.slice(0, 200)}`);
+  }
+  await recordSpace(db(), c.id, { roomId, name: str(form, "name") || roomId, platform: str(form, "platform") || null });
+  revalidatePath("/", "layout");
+  back("/spaces", `Ferri joined ${str(form, "name")}. It is under Discovered, switched off, until you attach it.`);
 }
 
 export async function keepOff(form: FormData) {
@@ -227,22 +244,11 @@ export async function archiveEntry(form: FormData) {
 
 // ── Cards (answered through Switch as the signed-in person) ──────────────
 
-async function answer(cardId: string, a: { selected: string[]; text: string | null }, path: string) {
+async function answer(cardId: string, a: CardAnswer, path: string) {
   const user = await requireUser();
-  const [card] = await db().select().from(cards).where(and(eq(cards.id, cardId), eq(cards.status, "open"))).limit(1);
-  if (!card) back(path, "That card is no longer open.");
-  const agentId = process.env.FERRI_AGENT_ID;
-  if (!agentId) back(path, "FERRI_AGENT_ID is not set.");
-  try {
-    await gatewayAs(user).answerCard(agentId!, card!.switchSessionId, card!.id, [
-      { question_id: CARD_QUESTION_ID, selected_option_ids: a.selected, custom_text: a.text },
-    ]);
-  } catch (err) {
-    const msg = (err as Error).message;
-    back(path, msg.includes("401") ? "Your Switch session ended. Sign in again." : `Switch refused it: ${msg.slice(0, 200)}`);
-  }
+  const r = await answerAs(user, cardId, a);
   revalidatePath("/cards");
-  back(path, "Sent to Ferri. It goes out in a moment.");
+  back(path, r.note);
 }
 
 export async function answerCard(form: FormData) {
@@ -252,18 +258,14 @@ export async function answerCard(form: FormData) {
 }
 
 export async function skipCard(form: FormData) {
-  await answer(str(form, "cardId"), { selected: [CARD_SKIP_OPTION], text: null }, "/cards");
+  await answer(str(form, "cardId"), skip, "/cards");
 }
 
 export async function sendReply(form: FormData) {
   const cardId = str(form, "cardId");
-  const text = str(form, "text");
-  const [card] = await db().select({ draft: cards.draftText }).from(cards).where(eq(cards.id, cardId)).limit(1);
-  const unchanged = !text || text === (card?.draft ?? "").trim();
-  await answer(cardId, unchanged ? { selected: ["send"], text: null } : { selected: [], text }, "/cards");
+  await answer(cardId, await replyAnswer(cardId, str(form, "text")), "/cards");
 }
 
 export async function skipReply(form: FormData) {
-  await answer(str(form, "cardId"), { selected: [CARD_SKIP_OPTION], text: null }, "/cards");
+  await answer(str(form, "cardId"), skip, "/cards");
 }
-

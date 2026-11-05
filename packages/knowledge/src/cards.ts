@@ -66,7 +66,7 @@ Given a new question and the cards already open:
 - same_as: the id of an open card whose answer would also fully answer the new question, else null. "Where can I park my scooter?" and "is there bike parking?" share an answer; "is there bike parking?" and "is there car parking?" do not; "is there parking?" and "is parking free?" do not. Never match a personal card, and never match when the new question is personal.
 - question: the new question as one short, clear English sentence that someone on the crew understands without the chat around it (for example "Is there parking for two-wheelers at the venue?"). Keep names of places and things.
 - topic: the closest topic.
-- personal: true when only this person's own situation can answer it (their registration, their team, their payment, their ticket), false when the answer would help anyone.`;
+- personal: true only when the answer depends on facts about this one person that the crew must look up (is their registration confirmed, which team they were put in, did their payment go through, where is their lost bag). A rule or policy asked in the first person is not personal, because the same answer helps anyone: "can I switch teams after hacking starts?", "can I bring a friend?", "can I leave early?" are all personal: false.`;
 
 export async function prepareCard(input: {
   choice: ModelChoice;

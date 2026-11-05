@@ -60,12 +60,24 @@ You need Docker Desktop, Node 22 and pnpm.
 
 Desk is where organizers run Ferri: `pnpm desk`, then http://localhost:3100, signing in with a Switch account.
 
-- **Spaces**: every group or channel Ferri is in, on any platform. New ones arrive in a Discovered list, switched off. Attach a space to an event as Listen (reads, never posts), Approve (every reply waits for an organizer), or Auto (answers with sources), or make it the event's crew room, where cards land.
+- **Spaces**: every group or channel Ferri is in, on any platform. New ones arrive in a Discovered list, switched off. Rooms in Switch that Ferri is not in yet are listed with an **Add Ferri** button, so nobody has to type `!invite-agent`. Attach a space to an event as Listen (reads, never posts), Approve (every reply waits for an organizer), or Auto (answers with sources), or make it the event's crew room, where cards land.
 - **Pause**: one switch stops every post everywhere. Questions are still logged, and answers the crew gives during the pause go out when it is lifted.
 - **Cards**: questions waiting for the crew, replies waiting for approval (Send, edit and send, Don't send), answered, unanswered and dismissed. Answers from Desk go through Switch under your name.
 - **Events**: stage, dates, venue, instructions, attached spaces, and the crew with the topics each person owns.
 - **Knowledge**: every entry, searchable; editing one makes a new version that Ferri uses at once. Seeding again never overwrites an edit made in Desk.
 - **Community**: the central instructions, and the mute list.
+
+## Ferri Pocket
+
+Pocket is the crew's phone app: a PWA at `/m` inside Desk (http://localhost:3100/m), with the same Switch sign-in.
+
+- **Needs you**: the cards for you (topics you own, replies waiting for your OK, anything escalated to the whole crew), then the rest of what is open.
+- **A card**: who is waiting, on which platform, and for how long. Write the answer and send it, or don't answer. For a reply waiting in an Approve space: Send, Edit, or Don't send. It goes through Switch under your name.
+- **Who is stuck**: every member still waiting on the crew, longest first, and who never got an answer in the last day.
+- **Me**: say which crew member you are (once), turn on notifications, send a test.
+- **Push**: Web Push (VAPID). Your phone buzzes when a card for you opens, at the nudge, when it is escalated to everyone, and when it expires. When someone else answers, the notification changes to "Answered by Priya" so stale buzzes never linger.
+
+Setup: `pnpm setup:switch` (or `pnpm push:keys`) writes the VAPID keys to `.env`. A crew member without a Switch login gets one with `pnpm crew:account <crew name> <email>`, which also links them. Phones need HTTPS: run `cloudflared tunnel --url http://localhost:3100` and open the `https://….trycloudflare.com/m` link (iPhone: add it to the Home Screen first, then allow notifications). Extra tunnel hosts go in `POCKET_ALLOWED_ORIGINS`.
 
 ## Telegram, Slack and Discord
 
@@ -107,4 +119,6 @@ POST /gateway/collaborations
 | `pnpm dev:mattermost` | Create the local Mattermost test people and put them in the rooms |
 | `pnpm desk` | Run Desk at http://localhost:3100 |
 | `pnpm card:preview <room id>` | Open a sample question card in a room on any platform (`--close` to close it) |
+| `pnpm crew:account <crew name> <email>` | Create a Switch login for a crew member and link it, for Pocket |
+| `pnpm push:keys` | Write Web Push (VAPID) keys to `.env` once |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |

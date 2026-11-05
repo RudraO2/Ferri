@@ -1,5 +1,5 @@
-import { and, eq, isNull, or } from "drizzle-orm";
-import { crewMembers, type Db } from "@ferri/db";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { communities, crewMembers, events, type Db } from "@ferri/db";
 
 export interface CrewMember {
   id: string;
@@ -109,4 +109,45 @@ export function routeCard(crew: CrewMember[], topic: string): { owners: CrewMemb
 export function mention(member: CrewMember, platform: string | null): string {
   const handle = platform ? member.handles[platform]?.trim().replace(/^@/, "") : undefined;
   return handle ? `@${handle}` : member.name;
+}
+
+/** Crew members (any event) linked to this Switch account by `handles.switch`. */
+export async function crewForSwitchEmail(db: Db, communityId: string, email: string) {
+  return db
+    .select()
+    .from(crewMembers)
+    .where(and(eq(crewMembers.communityId, communityId), sql`lower(${crewMembers.handles}->>'switch') = ${email.trim().toLowerCase()}`));
+}
+
+/**
+ * Link a crew member to a Switch account (Pocket's "I am Priya", or
+ * `pnpm crew:account`). Every crew row with the same name in the community is
+ * linked (one person often sits in the community crew and an event crew), any
+ * other row holding this email is unlinked, and the crew counts as edited in
+ * Desk so a re-seed keeps the link.
+ */
+export async function linkCrewAccount(db: Db, input: { communityId: string; crewMemberId: string; email: string | null }): Promise<string[]> {
+  const [member] = await db.select().from(crewMembers).where(eq(crewMembers.id, input.crewMemberId)).limit(1);
+  if (!member || member.communityId !== input.communityId) throw new Error("no such crew member");
+  const email = input.email?.trim().toLowerCase() || null;
+  const all = await db.select().from(crewMembers).where(eq(crewMembers.communityId, input.communityId));
+  const same = all.filter((m) => m.name.trim().toLowerCase() === member.name.trim().toLowerCase());
+  const changed = new Set<string>();
+  for (const m of all) {
+    const holds = email && m.handles.switch?.trim().toLowerCase() === email;
+    const target = same.some((s) => s.id === m.id);
+    if (target || holds) {
+      const handles = { ...m.handles };
+      if (target && email) handles.switch = email;
+      else delete handles.switch;
+      if (handles.switch === m.handles.switch) continue;
+      await db.update(crewMembers).set({ handles, updatedAt: new Date() }).where(eq(crewMembers.id, m.id));
+      changed.add(m.eventId ?? "");
+    }
+  }
+  for (const eventId of changed) {
+    if (eventId) await db.update(events).set({ crewFromDesk: true }).where(eq(events.id, eventId));
+    else await db.update(communities).set({ crewFromDesk: true }).where(eq(communities.id, input.communityId));
+  }
+  return same.map((s) => s.id);
 }

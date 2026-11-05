@@ -13,5 +13,9 @@ export {
   slugify,
   CARD_QUESTION_ID,
   CARD_SKIP_OPTION,
+  crewForSwitchEmail,
+  linkCrewAccount,
+  recordSpace,
 } from "@ferri/knowledge";
-export { GatewayClient, GatewayError } from "@ferri/switch";
+export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
+export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

@@ -60,6 +60,13 @@ export async function requireUser(): Promise<DeskUser> {
   return user;
 }
 
+/** For Pocket pages and actions: the signed-in person, or Pocket's sign-in page. */
+export async function requirePocketUser(next?: string): Promise<DeskUser> {
+  const user = await currentUser();
+  if (!user) redirect(next ? `/m/login?next=${encodeURIComponent(next)}` : "/m/login");
+  return user;
+}
+
 export async function startSession(user: Omit<DeskUser, "exp">): Promise<void> {
   (await cookies()).set(COOKIE, seal({ ...user, exp: Date.now() + MAX_AGE_S * 1000 }), {
     httpOnly: true,

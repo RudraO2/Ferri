@@ -32,6 +32,7 @@ import {
   type LiveKnowledge,
   type OpenCard,
 } from "@ferri/knowledge";
+import { cardNotice, pushToUsers, pushedAboutCard, settledNotice, switchUsersForCrew, type PushKind } from "@ferri/push";
 import type { ApprovalView, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
 
@@ -99,6 +100,43 @@ export function createLoop(deps: LoopDeps) {
   }
 
   const crewRoomFor = (eventId: string | null) => crewRoomForEvent(db, eventId);
+
+  // ── Ferri Pocket pushes (spec 06): next to the crew-room post, never instead of it ──
+
+  function pocketNotify(
+    kind: Exclude<PushKind, "settled" | "test">,
+    card: CardRow,
+    crewIds: string[],
+    extra: { waiting?: number; askerName?: string; roomName?: string } = {},
+  ): void {
+    void (async () => {
+      const facts = {
+        id: card.id,
+        kind: card.kind,
+        question: card.question,
+        topic: card.topic,
+        waiting: extra.waiting ?? 1,
+        askerName: extra.askerName,
+        roomName: extra.roomName,
+        minutesOpen: minutesSince(card.createdAt),
+      };
+      // An expiry also reaches whoever was pushed about the card before.
+      const users = new Set(await switchUsersForCrew(db, crewIds));
+      if (kind === "expire") for (const u of await pushedAboutCard(db, card.id)) users.add(u);
+      const r = await pushToUsers(db, [...users], cardNotice(kind, facts));
+      if (r.sent || r.failed || r.gone) log(`card ${card.id}: ${kind} push to ${r.users} people (${r.sent} sent, ${r.gone} gone, ${r.failed} failed)`);
+    })().catch((err) => log(`card ${card.id}: ${kind} push failed: ${(err as Error).message}`));
+  }
+
+  /** Replace every notification a settled card caused, quietly. */
+  function pocketSettled(card: CardRow, how: "answered" | "dismissed", by: string, reached?: number): void {
+    void (async () => {
+      const users = await pushedAboutCard(db, card.id);
+      if (!users.length) return;
+      const r = await pushToUsers(db, users, settledNotice(card, how, by, reached));
+      log(`card ${card.id}: settled push to ${r.users} people (${r.sent} sent)`);
+    })().catch((err) => log(`card ${card.id}: settled push failed: ${(err as Error).message}`));
+  }
 
   async function crewByIds(ids: string[]): Promise<CrewMember[]> {
     if (!ids.length) return [];
@@ -229,6 +267,8 @@ export function createLoop(deps: LoopDeps) {
           ? "you're on duty, a question for you"
           : "a question for the crew";
     await post(kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, ${why}: “${prep.question}” (${input.askerName} in ${input.roomName}). It's on the card above.`);
+    const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
+    if (opened) pocketNotify("open", opened, route.owners.map((o) => o.id), { waiting: 1, askerName: input.askerName, roomName: input.roomName });
     log(`card ${id} opened in ${crewRoomId} for ${route.owners.map((o) => o.name).join(", ") || "the crew"} (${route.reason}): "${prep.question}"`);
     return { cardId: id, joined: false };
   }
@@ -308,6 +348,8 @@ export function createLoop(deps: LoopDeps) {
     }
     const who = route.owners.map((o) => mention(o, platform));
     await post(input.kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, a reply in ${input.roomName} is waiting for your OK. It's on the card above.`);
+    const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
+    if (opened) pocketNotify("open", opened, route.owners.map((o) => o.id), { askerName: input.askerName, roomName: input.roomName });
     log(`reply card ${id} opened for question ${input.questionId}`);
     return id;
   }
@@ -400,9 +442,11 @@ export function createLoop(deps: LoopDeps) {
 
     if (await isPaused(db, card.communityId)) {
       log(`card ${card.id} answered by ${answer.by} during the pause; delivery held`);
+      pocketSettled(card, "answered", answer.by);
       return { resolved: true, delivered: [], held: true, saved: !card.personal };
     }
     const delivered = await deliver(updated, false);
+    pocketSettled(card, "answered", answer.by, delivered.length);
     return { resolved: true, delivered, held: false, saved: !card.personal };
   }
 
@@ -539,6 +583,7 @@ export function createLoop(deps: LoopDeps) {
   async function dismissCard(cardId: string, by: string): Promise<boolean> {
     const card = await claim(cardId, { status: "dismissed", answeredAt: new Date(), answeredBy: by, answeredVia: "card" });
     if (!card) return false;
+    pocketSettled(card, "dismissed", by);
     if (card.kind === "reply") {
       if (card.targetQuestionId) {
         await db
@@ -560,6 +605,7 @@ export function createLoop(deps: LoopDeps) {
   async function expireCard(cardId: string, fromSwitch: boolean): Promise<boolean> {
     const card = await claim(cardId, { status: "expired" });
     if (!card) return false;
+    pocketNotify("expire", card, card.ownerIds, { waiting: card.kind === "question" ? await waitingCount(db, card.id) : 1 });
     if (!fromSwitch) await agent.closeCard(card.switchSessionId, card.id).catch(() => {});
     if (card.kind === "reply") {
       if (card.targetQuestionId) {
@@ -634,10 +680,16 @@ export function createLoop(deps: LoopDeps) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card", answerText: written });
           // Keep the asker's mention when the organizer's version does not name anyone.
           const mentionPrefix = /^@\S+\s/.exec(card.draftText ?? "")?.[0] ?? "";
-          if (claimed) await sendReply(claimed, written.startsWith("@") ? written : `${mentionPrefix}${written}`, by, true);
+          if (claimed) {
+            await sendReply(claimed, written.startsWith("@") ? written : `${mentionPrefix}${written}`, by, true);
+            pocketSettled(claimed, "answered", by);
+          }
         } else if (a?.selected_option_ids.includes(REPLY_SEND_OPTION)) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card" });
-          if (claimed) await sendReply(claimed, card.draftText ?? "", by, false);
+          if (claimed) {
+            await sendReply(claimed, card.draftText ?? "", by, false);
+            pocketSettled(claimed, "answered", by);
+          }
         } else if (a?.selected_option_ids.includes(CARD_SKIP_OPTION)) {
           await dismissCard(card.id, by);
         }
@@ -708,6 +760,7 @@ export function createLoop(deps: LoopDeps) {
             : `still open after ${minutesSince(card.createdAt)} min: “${card.question}”. ${plural(n, "person is", "people are")} waiting. ` +
               `Answer on the card, or tell me with @${config.agentName} and the answer.`;
         await post(card.communityId, card.crewRoomId, `${owners.join(" ") || "Crew"}, ${what}`);
+        pocketNotify("nudge", card, card.ownerIds, { waiting: n });
         log(`card ${card.id}: nudged ${owners.join(" ")}`);
       }
 
@@ -725,12 +778,14 @@ export function createLoop(deps: LoopDeps) {
         if (!card) continue;
         const n = card.kind === "question" ? await waitingCount(db, card.id) : 1;
         const { platform } = await deps.room(card.crewRoomId);
-        const everyone = (await loadCrew(db, card.communityId, card.eventId)).map((c) => mention(c, platform));
+        const crew = await loadCrew(db, card.communityId, card.eventId);
+        const everyone = crew.map((c) => mention(c, platform));
         const what =
           card.kind === "reply"
             ? `nobody has approved the reply to “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : `nobody has answered “${card.question}” for ${minutesSince(card.createdAt)} min, and ${plural(n, "person is", "people are")} waiting. Whoever knows, please answer.`;
         await post(card.communityId, card.crewRoomId, `${everyone.join(" ") || "Everyone"}: ${what}`);
+        pocketNotify("escalate", card, crew.map((c) => c.id), { waiting: n });
         log(`card ${card.id}: escalated to the whole crew`);
       }
 

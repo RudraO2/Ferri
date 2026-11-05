@@ -150,4 +150,11 @@ if (!readEnv(envPath).get("DESK_SESSION_SECRET")) {
   writeEnv({ DESK_SESSION_SECRET: randomBytes(32).toString("hex") });
   console.log("generated DESK_SESSION_SECRET for Desk");
 }
+// Ferri Pocket's Web Push keys (spec 06); made once. Changing them drops every phone's subscription.
+if (!readEnv(envPath).get("VAPID_PUBLIC_KEY")) {
+  const { generateVapidKeys } = await import("@ferri/push");
+  const keys = generateVapidKeys();
+  writeEnv({ VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey });
+  console.log("generated VAPID keys for Ferri Pocket push");
+}
 console.log("done. .env updated.");

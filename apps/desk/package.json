@@ -12,6 +12,7 @@
   "dependencies": {
     "@ferri/db": "workspace:*",
     "@ferri/knowledge": "workspace:*",
+    "@ferri/push": "workspace:*",
     "@ferri/switch": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.5",

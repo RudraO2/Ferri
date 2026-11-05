@@ -20,15 +20,19 @@
     "dev:mattermost": "tsx scripts/dev-mattermost.ts",
     "desk": "pnpm --filter @ferri/desk dev",
     "desk:build": "pnpm --filter @ferri/desk build",
-    "card:preview": "tsx --env-file-if-exists=.env scripts/card-preview.ts"
+    "card:preview": "tsx --env-file-if-exists=.env scripts/card-preview.ts",
+    "push:keys": "tsx scripts/push-keys.ts",
+    "crew:account": "tsx --env-file-if-exists=.env scripts/crew-account.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
+    "drizzle-orm": "^0.45.4",
     "@ferri/db": "workspace:*",
     "@ferri/knowledge": "workspace:*",
+    "@ferri/push": "workspace:*",
     "@ferri/switch": "workspace:*"
   },
   "pnpm": {

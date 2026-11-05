@@ -14,7 +14,9 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 - `infra/docker-compose.yml`: Ferri's Postgres 16 with pgvector on port 5433 (Switch's Postgres holds 5432).
 - `scripts/`: `setup-switch.ts`, `kb.ts` (`pnpm kb ...`), `eval-answers.ts`, `dev-mattermost.ts` (test people meera, arjun, priya; shared password `MM_TEST_PASSWORD` in `.env`).
 - `apps/desk`: Desk, the organizers' dashboard (Next.js 16, App Router, Tailwind 4) on port 3100. Sign-in with a Switch account through the Gateway; server components and server actions read and write Postgres through `@ferri/db`; cards are answered through the Gateway as the signed-in person.
-- Coming soon: Ferri Pocket (the PWA at `/m` inside `apps/desk`), `builder/` (the Ferri Builder Claude Code workspace).
+- `apps/desk/app/m`: Ferri Pocket, the crew's PWA (Needs you, a card, Who is stuck, Me). `public/m/sw.js` is its service worker (scope `/m`). `lib/pocket.ts` reads its data; `lib/cards.ts` answers cards through the Gateway for Desk and Pocket.
+- `packages/push`: Web Push (VAPID): subscriptions per Switch user, `pushToUsers`, the notice texts. Ferri's loop pushes on card open, nudge, escalate, expire and when a card is settled (same tag, so the notice is replaced).
+- Coming soon: `builder/` (the Ferri Builder Claude Code workspace).
 
 ## Conventions
 - TypeScript, Node 22, ESM, pnpm workspace. Run with `tsx`. Check with `pnpm typecheck` and `pnpm test`.
@@ -35,6 +37,7 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 1. In `../switch`: `docker compose -f deploy/local/standalone-docker-compose.yml --profile collab --profile gateway --project-directory . up -d`
 2. Here: `pnpm install`, `pnpm db:up`, `pnpm setup:switch`, `pnpm dev:mattermost`, `pnpm kb seed`, then put `ANTHROPIC_API_KEY` in `.env`, then `pnpm dev`. `pnpm kb seed` also discovers Ferri's rooms and attaches the spaces `event.yaml` names.
 4. Desk: `pnpm desk` (dev) or `pnpm desk:build` then `pnpm --filter @ferri/desk start`, at http://localhost:3100. Sign in with the Switch admin (`admin@switch.local`, `GATEWAY_ADMIN_PASSWORD` in `../switch/.env`).
+5. Pocket: http://localhost:3100/m on the laptop, or through `cloudflared tunnel --url http://localhost:3100` on a phone. Ladder test timings: start Ferri with `FERRI_NUDGE_SECONDS=60 FERRI_CARD_TTL_SECONDS=300`.
 3. Open Mattermost at http://localhost:8065 (user `user`, password `MATTERMOST_USER_PASSWORD` in `../switch/.env`), go to `ferri-lab`, and say `@ferri when does hacking start?`.
 
 ## Switch behaviour to remember
@@ -46,6 +49,10 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 - Outside platforms: a bridge is added with `POST /gateway/collaborations` (`bridge_type` telegram, slack, discord). A chat becomes a room when the bot lands in it (Discord: on its first message); Ferri joins with `!invite-agent @ferri` or `POST /gateway/rooms/{id}/agents`. `get_room_detail` gives `bridge_id` and the connection's display name, not the platform: `roomPlatform` asks the Gateway for the bridge type, then falls back to a platform named in the display name.
 - Mentions: each bridge rewrites `@<platform username>` into a native mention (Slack `<@U…>`, Discord `<@id>`, Telegram user link). The username must be the raw one from `sender_name`; the sender id holds a folded copy (lowercase, `[^a-z0-9_-]` to `-`), so `parseSender` prefers `sender_name` and crew handles and the mute list compare folded forms (`sameHandle`).
 - Slack and Discord turn a typed `@ferri` into a mention of the bot user when its name starts with "ferri", and the message then misses Ferri. The platform bot and app are named "Switch".
+- A crew member is linked to a Switch account by `handles.switch = <email>` (Pocket's Me tab or `pnpm crew:account`). Pushes reach crew through that link; a Desk or Pocket answer is credited to that crew member's name.
+- A service worker's scope must contain the page: `/m` is outside scope `/m/`, so Pocket's worker uses scope `/m` (header `Service-Worker-Allowed: /m`).
+- A new Mattermost channel becomes a Switch room only when the bridge bot is in it, and adding Mattermost's `ferri` bot user to a channel puts Ferri in that room too. `GET /gateway/rooms` names rooms by the raw chat name ("build-night"); Ferri's spaces use the agent's room detail name ("Pulse Slack: build-night"), so Desk builds that form from `bridge_display_name`.
+- `POST /gateway/rooms` refuses an internal room without an agent ("Internal rooms require at least one agent").
 - Question cards draw buttons on Telegram (inline keyboard), Slack (Block Kit) and Discord (buttons); typed `A1 "text"` works on all of them, even with Slack's curly quotes.
 
 ## Status
@@ -54,3 +61,4 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 - Spec 03, the learning loop with question cards: done 2026-11-06. Crew with topic owners (seeded from `event.yaml`), crew room `ferri-crew`, cards routed owner, on duty, everyone; similar questions join one card; answers from the card, from chat ("@ferri ..."), or "remember" facts; fan-out to every waiting asker with a source; crew answers saved as knowledge with a revision and mirrored; nudge, escalate, expire; replay-safe through `questions` and `crew_actions`. Eval 38/38 on Haiku.
 - Spec 04, community, events, spaces and Desk v1: done 2026-11-06. Spaces discovered Off, attached to events as Listen, Approve or Auto, or as the crew room; master pause with held deliveries; mute list; reply cards for Approve spaces; knowledge scoped to the space's event; Desk edits survive re-seeding; mirror follows every change; Desk with Overview, Cards, Spaces, Events (settings, crew), Knowledge (edit with revisions), Community (instructions, mute list).
 - Spec 05, outside platforms: done 2026-11-06. Telegram, Slack and Discord connected through the Gateway; their spaces arrive in Desk as Discovered and Off; one event with spaces on four platforms; one card answered once in the crew room reaches askers on Telegram, Slack and Discord with native mentions; platform from the bridge type; `pnpm card:preview`.
+- Spec 06, Ferri Pocket: done 2026-11-06. PWA at `/m` (manifest, service worker, icons), Switch sign-in, crew link, Web Push on card open, nudge, escalate, expire and settle; Needs you; answer, don't answer; reply cards Send, Edit, Don't send; Who is stuck; Desk "Add Ferri" for rooms Ferri is not in; works through a Cloudflare tunnel. Card prep no longer calls "can I ..." rule questions personal. Eval 41/41 on Haiku.

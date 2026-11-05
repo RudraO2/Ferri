@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "latest",
     "@ferri/db": "workspace:*",
     "@ferri/knowledge": "workspace:*",
+    "@ferri/push": "workspace:*",
     "@ferri/switch": "workspace:*",
     "drizzle-orm": "^0.45.4"
   }
