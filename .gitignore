@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.ferri-state/
+*.log
+.DS_Store
