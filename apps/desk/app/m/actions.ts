@@ -139,3 +139,15 @@ export async function testPush(): Promise<{ sent: number; error?: string }> {
   if (!r.sent) return { sent: 0, error: r.failed ? "The push service refused it. Turn notifications off and on again." : "No device is subscribed yet." };
   return { sent: r.sent };
 }
+
+// ── Plan decisions (spec 08) ─────────────────────────────────────────────
+
+export async function pocketConfirmPlan(form: FormData) {
+  const cardId = str(form, "cardId");
+  const text = str(form, "text");
+  await answer(cardId, text ? { selected: [], text } : { selected: ["confirm"], text: null }, text ? "Confirmed your version." : "Confirmed. It's in the plan.");
+}
+
+export async function pocketDropPlan(form: FormData) {
+  await answer(str(form, "cardId"), skip, "Dropped from the plan.");
+}

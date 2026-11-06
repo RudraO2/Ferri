@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { shortCardIds, type OpenCard } from "./cards.ts";
 import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
-import type { ChatLine } from "./triage.ts";
+import type { PlanItem } from "./plan.ts";
+import { TOPICS, type ChatLine } from "./triage.ts";
 
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -16,6 +17,18 @@ export const CrewIntentSchema = z.strictObject({
   remind: z.strictObject({ text: z.string(), when: z.string(), who: z.enum(["me", "crew"]) }).nullable(),
   /** team_rooms: the teams to make rooms for, with member usernames as written. */
   teams: z.array(z.strictObject({ name: z.string(), members: z.array(z.string()) })),
+  /** plan: the event plan itself (spec 08). */
+  plan: z
+    .strictObject({
+      action: z.enum(["draft", "show", "done", "add", "owner"]),
+      ref: z.string().nullable(),
+      kind: z.enum(["decision", "task", "question"]),
+      what: z.string(),
+      owner: z.string().nullable(),
+      due: z.string().nullable(),
+      topic: z.enum(TOPICS),
+    })
+    .nullable(),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
 
@@ -24,7 +37,7 @@ const INTENT_SYSTEM = `You read a message that someone on the organizing crew wr
 Decide what the crew member wants:
 - answer_card: they are giving the answer to one of the open cards ("dogs are fine if they're on a leash", "tell them parking is in the basement", "yes, lunch is veg"). card is that card's id. answer is the answer as a standalone statement, in their words, with the @mention and instructions to Ferri removed; add nothing they did not say.
 - remember: they want Ferri to know facts or rules for the future ("remember that...", "note: ...", "FYI the venue has lockers") and none of it answers an open card. card is null, answer is "".
-- question: they are asking Ferri something. card null, answer "", facts [].
+- question: they are asking Ferri something about the event or the community. card null, answer "", facts []. Asking about the plan itself ("what's the plan?", "what's the plan so far?", "what's left to do?", "what have we decided?") is plan with action show, not question.
 - other: anything else (thanks, chat, instructions Ferri cannot follow). card null, answer "", facts [].
 
 facts: every fact in the message that is not part of the card answer, each as a standalone statement in their words (text) with a 2 to 6 word title (heading, for example "Quiet room closing time"). For remember, facts holds everything to keep. For answer_card, it holds only the extra facts beside the answer, often none. Never drop a fact the crew member stated.
@@ -33,7 +46,16 @@ facts: every fact in the message that is not part of the card answer, each as a 
 - remind: they want a reminder for the crew themselves, not the members ("remind me at 5 to order pizza", "remind the crew at 9 PM to stack the chairs"). remind.text is the reminder as a short standalone line ("Order the pizza"), remind.when is ISO 8601 with the offset, remind.who is "me" or "crew".
 - team_rooms: they want rooms or channels made for teams ("make team rooms for Team Alpha with meera and arjun, and Team Beta with priya"). teams lists each team with its name and its members' usernames as written, without the @.
 
-For every intent, announce and remind are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind and team_rooms.
+- plan: they are working on the event plan with Ferri (what is decided, who owns what, tasks and deadlines, the agenda). plan.action:
+  - draft: "draft the agenda", "make a plan for the event", "draft the run of show". plan.what is any guidance they gave ("" if none).
+  - show: "what's the plan?", "what's left?", "what have we decided?", "what's due this week?".
+  - done: a task or open item in the plan is finished or settled ("the projector is booked", "mark the badges done"). plan.ref is that plan item's id (P1, P2, ...) from "Plan".
+  - add: they put something in the plan ("add a task: print badges by Friday, Meera", "add to the plan that we cap teams at 4", "we still need to decide the judging format, put it on the plan"). plan.kind is task, decision or question (still to decide); plan.what is the item as a standalone statement; plan.owner and plan.due as below.
+  - owner: they say who owns a whole area ("Arjun owns registration", "put Meera on food"). plan.owner is that person, plan.topic the area.
+  plan.owner is a person's name as written (the sender's own name for "me"), else null. plan.due is ISO 8601 with the offset ("by Friday" means Friday 6 PM), else null. plan.topic is the closest of: ${TOPICS.join(", ")}. plan.ref is null except for done; plan.kind is "task" unless add says otherwise.
+  "remember X" is for facts members may ask about; a task, an owner or an agenda request is plan.
+
+For every intent, announce, remind and plan are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms and plan.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
@@ -47,11 +69,15 @@ export async function crewIntent(input: {
   announcements?: RecentAnnouncement[];
   /** "Friday 6 November 2026, 3:10 pm (Asia/Kolkata, UTC+05:30)": resolves "at 6 PM". */
   now?: string;
+  /** The event plan with short ids (P1, ...), for "the projector is booked". */
+  plan?: { text: string; byShort: Map<string, PlanItem> };
 }): Promise<{
   intent: CrewIntent | null;
   card: OpenCard | null;
   /** The announcement `announce.revises` names, when it names a real one. */
   revises: RecentAnnouncement | null;
+  /** The plan item `plan.ref` names, when it names a real one. */
+  planItem: PlanItem | null;
   usage: Usage;
   latencyMs: number;
 }> {
@@ -63,6 +89,7 @@ export async function crewIntent(input: {
     system: [{ type: "text", text: INTENT_SYSTEM, cache_control: { type: "ephemeral" } }],
     user:
       `Now: ${input.now ?? new Date().toISOString()}\n\nOpen cards:\n${text}\n\nRecent announcements:\n${recent.text}\n\n` +
+      `Plan:\n${input.plan?.text ?? "(empty)"}\n\n` +
       `Recent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`,
     schema: CrewIntentSchema,
     maxTokens: 2500,
@@ -74,7 +101,9 @@ export async function crewIntent(input: {
   if (intent?.intent === "answer_card" && !card && input.open.length === 1) card = input.open[0]!;
   const ref = intent?.intent === "announce" ? intent.announce?.revises?.trim().toUpperCase() : undefined;
   const revises = ref ? (recent.byShort.get(ref) ?? null) : null;
-  return { intent, card, revises, usage: out.usage, latencyMs: out.latencyMs };
+  const pref = intent?.intent === "plan" ? intent.plan?.ref?.trim().toUpperCase() : undefined;
+  const planItem = pref ? (input.plan?.byShort.get(pref) ?? null) : null;
+  return { intent, card, revises, planItem, usage: out.usage, latencyMs: out.latencyMs };
 }
 
 // ── Announcements a crew member may refer to ─────────────────────────────

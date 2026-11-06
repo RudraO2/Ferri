@@ -13,8 +13,14 @@ import {
   answerQuestion,
   cardsAnsweredBy,
   checkDecision,
+  crewByName,
   crewIntent,
+  draftAgenda,
   draftAnnouncement,
+  readPlanChat,
+  shortPlanIds,
+  type CrewMember,
+  type PlanItem,
   localNow,
   parseWhen,
   worthAnnouncing,
@@ -333,7 +339,100 @@ try {
   console.log(`${draftProblems.length ? "FAIL" : "ok  "} ${JSON.stringify(draft.draft)}`);
   for (const x of draftProblems) console.log(`      -> ${x}`);
 
-  const total = answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1;
+  // ── Spec 08: the plan ─────────────────────────────────────────────────
+  const evCrew: CrewMember[] = [
+    { id: "r", eventId: "e", name: "Rudra", handles: { mattermost: "user" }, topics: ["registration"], lead: true, onDuty: true },
+    { id: "p", eventId: "e", name: "Priya", handles: { mattermost: "priya" }, topics: ["food"], lead: false, onDuty: false },
+    { id: "a", eventId: "e", name: "Arjun", handles: { mattermost: "arjun" }, topics: [], lead: false, onDuty: false },
+  ];
+  const at = new Date();
+  const planRow = (over: Partial<PlanItem>): PlanItem => ({
+    id: over.title ?? "x", communityId: "c", eventId: "e", kind: "task", status: "confirmed", topic: "tech", title: "x", text: "x",
+    ownerId: null, dueAt: null, forMembers: false, origin: "chat", decidedBy: "Rudra", sourceKey: null, cardId: null, entryId: null,
+    remindedAt: null, createdAt: at, updatedAt: at, ...over,
+  });
+  const currentPlan = [
+    planRow({ title: "Projector booking", text: "Book the projector for the main hall.", ownerId: "a" }),
+    planRow({ kind: "decision", title: "Event date", text: "Build Night is on 21 November.", topic: "schedule", forMembers: true }),
+  ];
+  const planIds = shortPlanIds(currentPlan, evCrew);
+  const planIntentCases: { msg: string; action: string; ref?: string; owner?: string; due?: boolean }[] = [
+    { msg: "@ferri draft the agenda for the event", action: "draft" },
+    { msg: "@ferri what's the plan so far?", action: "show" },
+    { msg: "@ferri what's left to do before the event?", action: "show" },
+    { msg: "@ferri the projector is booked", action: "done", ref: "Projector booking" },
+    { msg: "@ferri add a task: print the name badges by Friday, Arjun", action: "add", owner: "Arjun", due: true },
+    { msg: "@ferri Arjun owns registration from now on", action: "owner", owner: "Arjun" },
+  ];
+  const pi = await pool(planIntentCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    const p = r.intent?.plan;
+    if (r.intent?.intent !== "plan") problems.push(`intent ${r.intent?.intent}, expected plan`);
+    else if (p?.action !== c.action) problems.push(`action ${p?.action}, expected ${c.action}`);
+    if (c.ref && r.planItem?.title !== c.ref) problems.push(`ref ${r.planItem?.title ?? "nothing"}, expected ${c.ref}`);
+    if (c.owner && crewByName(evCrew, p?.owner)?.name !== c.owner) problems.push(`owner ${p?.owner}, expected ${c.owner}`);
+    if (c.due && !parseWhen(p?.due, now)) problems.push(`due ${p?.due}, expected a time`);
+    return { c, r, problems };
+  });
+  console.log("\nplan intents");
+  for (const { c, r, problems } of pi) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, plan: r.intent?.plan })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  const planChatCases: { before: ChatLine[]; msg: string; after: ChatLine[]; kinds: string[]; owner?: string; due?: boolean; done?: string; noDone?: boolean }[] = [
+    { before: [], msg: "ok so we're doing it at the Koramangala makerspace, teams of up to 4", after: [], kinds: ["decision", "decision"] },
+    { before: [], msg: "Priya will handle food and Arjun takes care of registration", after: [], kinds: ["owner", "owner"] },
+    { before: [], msg: "Arjun can you book the sound system by Thursday?", after: [{ sender: "Arjun", body: "yep on it" }], kinds: ["task"], owner: "Arjun", due: true },
+    { before: [], msg: "should we cap registrations at 120?", after: [], kinds: [] },
+    { before: [], msg: "projector's booked btw", after: [], kinds: [], done: "Projector booking" },
+    { before: [{ sender: "Rudra", body: "Arjun can you book the projector for the main hall?" }], msg: "yep, on it", after: [], kinds: [], noDone: true },
+    { before: [], msg: "lol the coffee machine here is so loud", after: [], kinds: [] },
+  ];
+  const pc = await pool(planChatCases, 4, async (c) => {
+    const r = await readPlanChat({ choice: models.fast, sender: "Rudra", message: c.msg, before: c.before, after: c.after, plan: currentPlan, crew: evCrew, now: localNow(tz, now) });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    const kinds = (r.read?.items ?? []).map((i) => i.kind).sort();
+    if (JSON.stringify(kinds) !== JSON.stringify([...c.kinds].sort())) problems.push(`items ${JSON.stringify(kinds)}, expected ${JSON.stringify(c.kinds)}`);
+    if (c.owner && !(r.read?.items ?? []).some((i) => crewByName(evCrew, i.owner)?.name === c.owner)) problems.push(`no item owned by ${c.owner}`);
+    if (c.due && !(r.read?.items ?? []).some((i) => parseWhen(i.due, now))) problems.push("no deadline");
+    if (c.done && !r.done.some((d) => d.title === c.done)) problems.push(`done ${JSON.stringify(r.done.map((d) => d.title))}, expected ${c.done}`);
+    if (c.noDone && r.done.length) problems.push(`done ${JSON.stringify(r.done.map((d) => d.title))}, expected nothing done`);
+    return { c, r, problems };
+  });
+  console.log("\nplan from crew chat");
+  for (const { c, r, problems } of pc) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify(r.read)}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  console.log("\nagenda draft");
+  const eventId = kb.events[0]?.id ?? "";
+  const agenda = await draftAgenda({ choice: models.main, kb, eventId, request: "draft the agenda", plan: [], crew: evCrew, now: localNow(tz, now) });
+  const agendaProblems = [
+    !agenda.draft ? "no draft" : null,
+    agenda.draft && agenda.draft.agenda.split("\n").length < 4 ? "agenda too short" : null,
+    agenda.draft && !agenda.draft.decisions.length ? "no decisions to confirm" : null,
+    agenda.draft && agenda.draft.decisions.length > 6 ? "more than 6 decisions" : null,
+  ].filter(Boolean);
+  if (agendaProblems.length) failed++;
+  console.log(`${agendaProblems.length ? "FAIL" : "ok  "} ${JSON.stringify({ summary: agenda.draft?.summary, decisions: agenda.draft?.decisions.map((d) => `${d.title}: ${d.proposal}`) })}`);
+  for (const x of agendaProblems) console.log(`      -> ${x}`);
+
+  const total =
+    answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
+    planIntentCases.length + planChatCases.length + 1;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

@@ -57,6 +57,13 @@
       "when": 1793915520792,
       "tag": "0007_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793945533102,
+      "tag": "0008_plan",
+      "breakpoints": true
     }
   ]
 }

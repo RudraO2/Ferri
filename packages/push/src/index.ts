@@ -158,7 +158,7 @@ export function topicFor(tag: string): string {
 export interface CardFacts {
   id: string;
   /** "announce": `question` is the announcement's title and `roomName` where it goes. */
-  kind: "question" | "reply" | "announce";
+  kind: "question" | "reply" | "announce" | "plan";
   question: string;
   topic: string;
   /** People waiting on the answer. */
@@ -188,6 +188,18 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
         return { ...base, renotify: false, title: "Announcement not posted", body: `Nobody approved ${q} in time.` };
     }
   }
+  if (card.kind === "plan") {
+    switch (kind) {
+      case "open":
+        return { ...base, title: "A plan decision needs your OK", body: `${q}. Confirm, change or drop it.` };
+      case "nudge":
+        return { ...base, title: "Plan decision still waiting", body: `${q} · ${card.minutesOpen ?? "?"} min` };
+      case "escalate":
+        return { ...base, title: "Anyone: a plan decision needs an OK", body: `${q} has waited ${card.minutesOpen ?? "?"} min.` };
+      case "expire":
+        return { ...base, renotify: false, title: "Plan decision not confirmed", body: `Nobody confirmed ${q} in time. It stays open.` };
+    }
+  }
   if (card.kind === "reply") {
     switch (kind) {
       case "open":
@@ -212,8 +224,12 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
   }
 }
 
-export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
+export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" | "plan" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
+  if (card.kind === "plan") {
+    const title = how === "answered" ? `Confirmed${by ? ` by ${by}` : ""}` : how === "dismissed" ? `Dropped${by ? ` · ${by}` : ""}` : "Plan decision not confirmed";
+    return { kind: "settled", title, body: q, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };
+  }
   if (card.kind === "announce") {
     const title =
       how === "answered" ? `Announcement approved${by ? ` by ${by}` : ""}` : how === "dismissed" ? `Not posted${by ? ` · ${by}` : ""}` : "Announcement not posted";

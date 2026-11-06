@@ -1,5 +1,6 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { communities, crewMembers, events, type Db } from "@ferri/db";
+import { applyPlanOwners, planOwners } from "./plan.ts";
 
 export interface CrewMember {
   id: string;
@@ -68,7 +69,7 @@ export async function loadCrew(db: Db, communityId: string, eventId: string | nu
         eventId ? or(eq(crewMembers.eventId, eventId), isNull(crewMembers.eventId)) : isNull(crewMembers.eventId),
       ),
     );
-  return rows
+  const crew = rows
     .map((r) => ({
       id: r.id,
       eventId: r.eventId,
@@ -79,6 +80,8 @@ export async function loadCrew(db: Db, communityId: string, eventId: string | nu
       onDuty: r.onDuty,
     }))
     .sort((a, b) => Number(b.eventId !== null) - Number(a.eventId !== null) || a.name.localeCompare(b.name));
+  // Owners named in the event's plan (spec 08) take their topics over.
+  return eventId ? applyPlanOwners(crew, await planOwners(db, [eventId])) : crew;
 }
 
 /** The crew member a message came from, or null for everyone else. */

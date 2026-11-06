@@ -7,6 +7,7 @@ import { community, db } from "@/lib/db";
 import {
   TOPICS,
   attachSpace,
+  cards,
   communities,
   createAnnouncementRequest,
   createEntry,
@@ -16,6 +17,7 @@ import {
   editEntry,
   events,
   mutedPeople,
+  planItems,
   proposeAnnouncementEdit,
   recordSpace,
   setEntryArchived,
@@ -378,4 +380,89 @@ export async function removeShieldRule(form: FormData) {
   await removeRule(db(), c.id, str(form, "id"));
   revalidatePath("/shield");
   back("/shield", "Rule removed.");
+}
+
+// ── Plan (spec 08) ───────────────────────────────────────────────────────
+
+/** The plan-card option Ferri reads as "confirm the proposal as it stands". */
+const PLAN_CONFIRM_OPTION = "confirm";
+
+/** Confirm a proposed decision through its Switch card: unchanged text confirms Ferri's proposal. */
+export async function confirmPlanItem(form: FormData) {
+  const cardId = str(form, "cardId");
+  const text = str(form, "text");
+  const [card] = await db().select({ draft: cards.draftText }).from(cards).where(eq(cards.id, cardId)).limit(1);
+  const unchanged = !text || text === (card?.draft ?? "").trim();
+  await answer(cardId, unchanged ? { selected: [PLAN_CONFIRM_OPTION], text: null } : { selected: [], text }, planPath(form));
+}
+
+export async function dropPlanItem(form: FormData) {
+  await answer(str(form, "cardId"), skip, planPath(form));
+}
+
+const planPath = (form: FormData) => `/plan${str(form, "eventSlug") ? `?event=${encodeURIComponent(str(form, "eventSlug"))}` : ""}`;
+
+/** Mark a task done (or open again), or take an item out of the plan. Ferri updates the plan document. */
+export async function setPlanStatus(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const status = str(form, "status") as "confirmed" | "done" | "dropped";
+  if (!["confirmed", "done", "dropped"].includes(status)) back(planPath(form), "Unknown status.");
+  const [item] = await db()
+    .update(planItems)
+    .set({ status, updatedAt: new Date(), decidedBy: status === "dropped" ? await crewName(user, c.id) : undefined })
+    .where(eq(planItems.id, str(form, "itemId")))
+    .returning();
+  if (item?.status === "dropped" && item.entryId) await setEntryArchived(db(), { entryId: item.entryId, archived: true, by: user.name });
+  revalidatePath("/plan");
+  back(planPath(form), status === "done" ? "Marked done." : status === "dropped" ? "Taken out of the plan." : "Open again.");
+}
+
+/** Change who owns an item and when it is due. */
+export async function updatePlanItem(form: FormData) {
+  const c = await community();
+  const due = str(form, "due");
+  const dueAt = due ? zonedTime(due, c.timezone) : null;
+  await db()
+    .update(planItems)
+    .set({ ownerId: str(form, "ownerId") || null, dueAt, remindedAt: null, updatedAt: new Date() })
+    .where(eq(planItems.id, str(form, "itemId")));
+  revalidatePath("/plan");
+  back(planPath(form), "Saved. Ferri reminds the owner when it falls due.");
+}
+
+/** Put something in the plan from Desk. A member-facing decision becomes knowledge within seconds. */
+export async function addPlanItem(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const eventId = str(form, "eventId");
+  const kind = str(form, "kind") as "decision" | "task" | "owner" | "question";
+  const text = str(form, "text");
+  const topic = str(form, "topic") || "other";
+  const ownerId = str(form, "ownerId") || null;
+  if (!eventId) back(planPath(form), "Pick the event first.");
+  if (!["decision", "task", "owner", "question"].includes(kind)) back(planPath(form), "Pick what kind of item it is.");
+  if (kind === "owner" && (!ownerId || topic === "other")) back(planPath(form), "An owner needs a person and a topic.");
+  if (kind !== "owner" && !text) back(planPath(form), "Write the item first.");
+  const due = str(form, "due");
+  const dueAt = kind === "task" && due ? zonedTime(due, c.timezone) : null;
+  const owner = ownerId ? (await db().select({ name: crewMembers.name }).from(crewMembers).where(eq(crewMembers.id, ownerId)).limit(1))[0] : null;
+  await db()
+    .insert(planItems)
+    .values({
+      communityId: c.id,
+      eventId,
+      kind,
+      status: "confirmed",
+      topic,
+      title: kind === "owner" ? topic : str(form, "title") || text.replace(/[.]\s*$/, "").slice(0, 60),
+      text: kind === "owner" ? `${owner?.name ?? "Someone"} owns ${topic}.` : text,
+      ownerId,
+      dueAt,
+      forMembers: kind === "decision" && str(form, "forMembers") === "1",
+      origin: "desk",
+      decidedBy: await crewName(user, c.id),
+    });
+  revalidatePath("/plan");
+  back(planPath(form), kind === "owner" ? `Saved. ${topic} cards go to ${owner?.name ?? "them"} first now.` : "Added to the plan.");
 }

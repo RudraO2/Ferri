@@ -294,7 +294,7 @@ export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed"
  * "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent.
  * "announce": a version of an announcement waits for its one approval (spec 09).
  */
-export const cardKind = pgEnum("card_kind", ["question", "reply", "announce"]);
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan"]);
 
 export const cards = pgTable(
   "cards",
@@ -508,6 +508,65 @@ export const teamRooms = pgTable(
   },
   (t) => [uniqueIndex("team_rooms_event_team").on(t.communityId, t.eventId, t.team)],
 );
+
+// ── Plan stage (spec 08) ──────────────────────────────────────────────────
+
+export const planItemKind = pgEnum("plan_item_kind", ["decision", "task", "owner", "question"]);
+export const planItemStatus = pgEnum("plan_item_status", ["proposed", "confirmed", "done", "dropped"]);
+
+/**
+ * One line of an event's living plan: something decided, a task with an
+ * owner and a deadline, who owns a topic, or a question still open. Settled
+ * in crew chat: confirmed at once. Proposed by Ferri (the agenda draft):
+ * waits on a plan card.
+ */
+export const planItems = pgTable(
+  "plan_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    kind: planItemKind("kind").notNull(),
+    status: planItemStatus("status").notNull(),
+    /** The triage topic list (food, venue, schedule, ...). */
+    topic: text("topic").notNull().default("other"),
+    /** Short label ("Date", "Projector booking"). */
+    title: text("title").notNull(),
+    /** The item as one standalone statement. */
+    text: text("text").notNull(),
+    ownerId: uuid("owner_id").references(() => crewMembers.id, { onDelete: "set null" }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /** Members need to know it (saved as knowledge once confirmed). */
+    forMembers: boolean("for_members").notNull().default(false),
+    /** "chat", "draft" or "desk". */
+    origin: text("origin").notNull(),
+    /** Who said it, decided it or confirmed it. */
+    decidedBy: text("decided_by"),
+    /** `<message id>#<n>` for items read from chat, so a replay adds nothing twice. */
+    sourceKey: text("source_key").unique(),
+    cardId: uuid("card_id"),
+    entryId: uuid("entry_id").references(() => knowledgeEntries.id, { onDelete: "set null" }),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("plan_items_event").on(t.eventId, t.status), index("plan_items_due").on(t.status, t.dueAt)],
+);
+
+/** The agenda (run of show) Ferri drafted for an event, newest first. */
+export const planAgendas = pgTable("plan_agendas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  requestedBy: text("requested_by").notNull(),
+  sourceMessageId: text("source_message_id").unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ── Agent state (connection id, cursor, mirror document id) ───────────────
 

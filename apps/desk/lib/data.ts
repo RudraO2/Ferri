@@ -31,13 +31,14 @@ export async function overview() {
   const c = await community();
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   const n = sql<number>`count(*)::int`;
-  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting] = await Promise.all([
+  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting] = await Promise.all([
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "question")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "reply")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "expired"), eq(cards.kind, "question")))),
     count(db().select({ n }).from(spaces).where(and(eq(spaces.communityId, c.id), eq(spaces.state, "new"), eq(spaces.archived, false)))),
     count(db().select({ n }).from(knowledgeEntries).where(and(eq(knowledgeEntries.communityId, c.id), isNull(knowledgeEntries.archivedAt)))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "announce")))),
+    count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "plan")))),
   ]);
   const recent = await db()
     .select({
@@ -54,7 +55,7 @@ export async function overview() {
     .where(eq(questions.communityId, c.id))
     .orderBy(desc(questions.askedAt))
     .limit(15);
-  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, recent };
+  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, recent };
 }
 
 export async function cardLists() {
@@ -78,9 +79,9 @@ export async function cardLists() {
   return {
     openQuestions: withPeople.filter((x) => x.status === "open" && x.kind === "question"),
     repliesWaiting: withPeople.filter((x) => x.status === "open" && x.kind === "reply"),
-    answered: withPeople.filter((x) => x.status === "answered" && x.kind !== "announce").slice(0, 30),
+    answered: withPeople.filter((x) => x.status === "answered" && (x.kind === "question" || x.kind === "reply")).slice(0, 30),
     unanswered: withPeople.filter((x) => x.status === "expired" && x.kind === "question"),
-    dismissed: withPeople.filter((x) => x.kind !== "announce" && (x.status === "dismissed" || (x.status === "expired" && x.kind === "reply"))).slice(0, 30),
+    dismissed: withPeople.filter((x) => (x.kind === "question" || x.kind === "reply") && (x.status === "dismissed" || (x.status === "expired" && x.kind === "reply"))).slice(0, 30),
   };
 }
 

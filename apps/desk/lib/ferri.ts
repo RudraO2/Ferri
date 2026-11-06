@@ -22,6 +22,12 @@ export {
   formatWhen,
   proposeAnnouncementEdit,
   type TargetSpace,
+  latestAgenda,
+  loadCrew,
+  loadPlan,
+  sortPlan,
+  type CrewMember,
+  type PlanItem,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

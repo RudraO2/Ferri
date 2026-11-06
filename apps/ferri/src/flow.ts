@@ -35,6 +35,7 @@ import {
 import type { MessageEvent, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
 import type { Launch } from "./launch.ts";
+import type { Plan } from "./plan.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -47,6 +48,7 @@ export interface FlowDeps {
   rooms: RoomHistory;
   loop: Loop;
   launch: Launch;
+  plan: Plan;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -90,7 +92,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
 
@@ -271,7 +273,7 @@ export function createFlow(deps: FlowDeps) {
   ): Promise<void> {
     const p = ev.payload;
     const open = (await listOpenCards(db, ctx.kb.community.id)).filter((c) => c.eventId === ctx.eventId);
-    const { intent, card, revises } = await crewIntent({
+    const { intent, card, revises, planItem } = await crewIntent({
       choice: config.modelFast,
       sender: member.name,
       message: p.body,
@@ -279,6 +281,7 @@ export function createFlow(deps: FlowDeps) {
       history: chat(rooms.before(ev.room_id, p.message_id, 6)),
       announcements: await recentAnnouncements(db, ctx.kb.community.id, ctx.eventId),
       now: localNow(ctx.kb.community.timezone),
+      plan: await plan.planContext(ctx.kb.community.id, ctx.eventId),
     });
     // Replies to the crew member in this room obey this room's posting rule.
     const say = async (text: string) => (mayPost(posting) ? loop.post(ctx.kb.community.id, ev.room_id, text) : null);
@@ -297,6 +300,34 @@ export function createFlow(deps: FlowDeps) {
       });
       if (!actionId) return;
       const reply = await launchIntent(ev, ctx, member, intent, revises, crewRoom);
+      if (reply) await say(reply);
+      return;
+    }
+
+    // Plan stage (spec 08): the agenda, the plan, tasks and owners.
+    if (intent?.intent === "plan" && intent.plan) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "plan",
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      log(`crew ${member.name}: plan ${intent.plan.action}`);
+      const reply = await plan.intent({
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
+        member,
+        messageId: p.message_id,
+        body: stripMention(p.body),
+        intent,
+        item: planItem,
+        crewRoomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
+      });
       if (reply) await say(reply);
       return;
     }
@@ -449,7 +480,20 @@ export function createFlow(deps: FlowDeps) {
           });
       if (reply) log(`decision not offered: ${reply}`);
     });
-    const settled = run.catch((err) => log(`decision check failed: ${(err as Error).message}`));
+    // The living plan (spec 08) reads the same message, after the announcement check.
+    const withPlan = run.catch((err) => log(`decision check failed: ${(err as Error).message}`)).then(async () => {
+      const line = await plan.fromChat({
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId!,
+        member,
+        messageId: p.message_id,
+        body: p.body,
+        before: chat(rooms.before(ev.room_id, p.message_id, 8)),
+        after: chat(rooms.after(ev.room_id, p.message_id).filter((l) => !l.fromFerri)),
+      });
+      if (line) await loop.post(ctx.kb.community.id, ev.room_id, line);
+    });
+    const settled = withPlan.catch((err) => log(`plan check failed: ${(err as Error).message}`));
     decisionQueue.set(ev.room_id, settled);
     await settled;
   }

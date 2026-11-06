@@ -7,6 +7,7 @@ import { Toast, Where } from "../../bits";
 import { community } from "@/lib/db";
 import { formatWhen } from "@/lib/ferri";
 import { AnnounceActions } from "./announce-actions";
+import { PlanActions } from "./plan-actions";
 import { ReplyActions } from "./reply-actions";
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
@@ -28,7 +29,9 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         : "Announcement"
       : card.kind === "reply"
         ? "Reply waiting for your OK"
-        : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
+        : card.kind === "plan"
+          ? "Plan decision"
+          : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   return (
     <>
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
@@ -118,6 +121,13 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         </section>
       ) : null}
 
+      {open && card.kind === "plan" ? (
+        <section className="mt-4 px-4">
+          <p className="px-1 text-[13px] text-zinc-500">Ferri proposed this in the agenda draft. Nothing is decided until someone on the crew confirms it.</p>
+          <PlanActions cardId={card.id} proposal={card.draftText ?? ""} />
+        </section>
+      ) : null}
+
       {open && card.kind === "reply" ? (
         <section className="mt-4 px-4">
           <div className="px-1">
@@ -131,7 +141,15 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         <section className="mt-4 px-4">
           <div className="rounded-xl border border-zinc-200 bg-white p-4 text-[14px]">
             <div className="font-medium">
-              {card.kind === "announce"
+              {card.kind === "plan"
+                ? card.status === "answered"
+                  ? `Confirmed${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Dropped${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Not confirmed in time; still open in the plan"
+                      : "Replaced by a newer draft"
+                : card.kind === "announce"
                 ? card.status === "answered"
                   ? `Approved${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
                   : card.status === "dismissed"

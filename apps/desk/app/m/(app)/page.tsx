@@ -62,8 +62,16 @@ function CardRow({ card }: { card: PocketCard }) {
   return (
     <Link href={`/m/c/${card.id}`} className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-xs active:bg-zinc-50">
       <div className="flex items-center gap-2">
-        <span className={card.kind === "announce" ? "pill bg-violet-100 text-violet-800" : "pill"}>
-          {card.kind === "announce" ? ((card.announcementVersion ?? 1) > 1 ? "announcement edit" : "announcement") : card.kind === "reply" ? "reply to approve" : card.topic}
+        <span className={card.kind === "announce" ? "pill bg-violet-100 text-violet-800" : card.kind === "plan" ? "pill bg-emerald-100 text-emerald-800" : "pill"}>
+          {card.kind === "announce"
+            ? (card.announcementVersion ?? 1) > 1
+              ? "announcement edit"
+              : "announcement"
+            : card.kind === "reply"
+              ? "reply to approve"
+              : card.kind === "plan"
+                ? "plan decision"
+                : card.topic}
         </span>
         {card.escalatedAt ? (
           <span className="pill bg-amber-100 text-amber-800">escalated</span>
@@ -80,6 +88,8 @@ function CardRow({ card }: { card: PocketCard }) {
           </span>
         ) : card.kind === "reply" ? (
           <Where platform={card.target?.platform} space={card.target?.name} />
+        ) : card.kind === "plan" ? (
+          <span className="text-[12.5px] text-zinc-500">{card.topic} · from the agenda draft</span>
         ) : first ? (
           <>
             <Where platform={first.platform} space={first.spaceName} />

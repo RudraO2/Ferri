@@ -17,14 +17,14 @@ Ferri is one agent that works in two directions, with a bridge between them.
 
 **1. Outward: answers on every platform, with sources.** Ferri sits in every group of the event, on every platform. It answers only from the event's knowledge and names the source under every answer. It also notices questions nobody addressed to it ("does anyone know the wifi password?"), waits a moment so a person can answer first, and steps in only when it has a sourced answer. Each space has a mode: Off, Listen, Approve (every reply waits for an organizer) or Auto.
 
-**2. Inward: the crew decides, Ferri learns.** When Ferri does not know, the member hears "I'm checking with the team" at once, and a Switch question card opens in the crew room for the person who owns that topic (food, venue, judging). The owner's phone buzzes through Ferri Pocket. One answer, on the card, from Desk, or from the phone, reaches everyone who was waiting, on their own app, with a real mention. The answer is saved, so the next person gets it instantly. Nobody answers: Ferri nudges the owner, then the whole crew, and never invents an answer.
+**2. Inward: the crew plans and decides, Ferri learns.** Before the event, Ferri follows the crew's own chat and keeps a living plan: what is decided, who owns what, tasks with deadlines, what is still open. "@ferri draft the agenda" gives a run of show plus one approval card per key decision. Owners named in the plan ("Priya will handle food") take over the routing, so food questions go to Priya. During the event, when Ferri does not know, the member hears "I'm checking with the team" at once, and a Switch question card opens in the crew room for the person who owns that topic (food, venue, judging). The owner's phone buzzes through Ferri Pocket. One answer, on the card, from Desk, or from the phone, reaches everyone who was waiting, on their own app, with a real mention. The answer is saved, so the next person gets it instantly. Nobody answers: Ferri nudges the owner, then the whole crew, and never invents an answer.
 
 **3. The bridge: a decision inside becomes an update outside.** "@ferri tell everyone lunch moves to 1:30" drafts an announcement and opens one approval card with the draft and every space it will reach. One OK posts it to every space of the event on every platform and saves it as knowledge. "@ferri change the lunch announcement, it's 1:45 now" and one more OK **edits the post in place** on Mattermost, Slack, Discord and Telegram. Ferri also follows the crew's own chat: when the crew settles something members need to know ("ok let's push judging to 4pm"), it offers the announcement on a card, credited to whoever decided, and never posts without the OK. Announcements can be scheduled; one not approved by its time is not sent, and the crew is told.
 
 Around the pillars:
 
 - **Shield** keeps scam links, link floods and leaked API keys out of every room, on every platform, before anyone sees them. It is our own Switch Trust endpoint and answers in 2 to 9 ms, with no model in the path.
-- **Desk** is the organizers' dashboard: spaces and modes, master pause, cards, events and crew, knowledge with versions, announcements, Shield.
+- **Desk** is the organizers' dashboard: spaces and modes, master pause, cards, the plan, events and crew, knowledge with versions, announcements, Shield.
 - **Ferri Pocket** is the crew's phone app (a PWA with Web Push): the cards that need you, Post, Edit, Don't post, who is stuck, and a `+ Announce` button.
 - **Crew helpers**: "@ferri remind me at 5 to order the pizza", and "@ferri make team rooms for Team Alpha with meera and arjun", which makes real private channels on the platform from a Switch template.
 
@@ -41,7 +41,7 @@ Ferri does not work without Switch. Every group on every platform is a Switch ro
 | Answering a card as a person (`/gateway/agent-sessions/.../answer`) | Desk and Pocket answer cards through Switch under the signed-in organizer's name. | `apps/desk/lib/cards.ts` |
 | Switch Trust (`/guardrails/check`) | Shield, our own Trust endpoint inside the Ferri service: blocks scams and floods, redacts secrets, alerts the crew. | `packages/shield`, `apps/ferri/src/shield.ts` |
 | Templates v2 (`create_room_from_yaml`) | "Make team rooms" creates real private channels on the platform with the members, Ferri and a kickoff, attached to the event. | `apps/ferri/src/launch.ts` |
-| Library documents | The live knowledge is mirrored into a Switch library document attached to the event's rooms, so it is visible inside Switch. Every edit updates it. | `packages/knowledge/src/mirror.ts` |
+| Library documents | The live knowledge is mirrored into a Switch library document attached to the event's rooms, and each event's living plan is a document in its crew room. Both follow every change. | `packages/knowledge/src/mirror.ts`, `apps/ferri/src/plan.ts` |
 | Gateway (auth, rooms, agents, collaborations, addressing policy) | Desk and Pocket sign in with Switch accounts. Desk adds Ferri to rooms, discovers spaces, connects Shield. | `apps/desk`, `scripts/` |
 | **Agent message edit (new, in our fork)** | Switch had no way for an agent to edit a message it posted. We added it to Switch core. See below. | [`RudraO2/switch@2711974`](https://github.com/RudraO2/switch/commit/2711974943c2e72540e012cb8171c9e59cfd2511) |
 
@@ -187,6 +187,16 @@ POST /gateway/collaborations
 4. Everyone who was waiting gets the answer in their own room, with the source. The answer is saved as knowledge, so the next person gets it instantly.
 5. Nobody answers: Ferri nudges the owner, then the whole crew, and finally marks the question unanswered. It never sends members anything the crew has not said.
 
+## The plan: before the event
+
+Ferri keeps each event's plan from the crew's own chat. Nobody fills in a form.
+
+- Said in the crew room, no mention needed: "ok so we're doing it on 21 Nov at the makerspace, teams of up to 4" becomes three decisions; "I'll handle food, and Arjun takes registration" makes them the owners; "Arjun, can you book the sound system by Thursday?" becomes a task with an owner and a deadline. Ferri says in one line what it added. Questions and proposals ("should we cap at 120?") are not decisions; "yep, on it" does not finish a task.
+- `@ferri draft the agenda` drafts a run of show from the event's knowledge and the plan, and opens one card per key decision still open (registration cap, judging format, prizes). Confirm it, Drop it, or write it your way (`A33 "teams of 2 to 5"`). Confirmed decisions members need are saved as knowledge, so "how many people can register?" is answered at once, with the source.
+- Owners feed the routing: whoever the plan names for a topic gets that topic's cards first ("@ferri I own food from now on").
+- Ferri reminds the owner in the crew room, with a push, when a task falls due. "@ferri the projector is booked" marks it done. "@ferri what's the plan?" sums up what is decided, waiting, open and due next.
+- The plan is a Switch document in the crew room, re-written on every change, and a Plan page in Desk (confirm, drop, mark done, change owner and deadline, add items). Plan cards show in Pocket's Needs you.
+
 ## Announcements: inside to outside
 
 What the crew decides becomes an update on every platform after one approval.
@@ -230,16 +240,16 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 
 ## How we checked it
 
-- `pnpm test`: 83 unit tests (knowledge, policy, cards, launch, Shield detectors, push notices, the Switch stream parser, flow helpers).
+- `pnpm test`: 91 unit tests (knowledge, policy, cards, launch, the plan, Shield detectors, push notices, the Switch stream parser, flow helpers).
 - `pnpm typecheck`: seven packages.
-- `pnpm eval:answers`: 56 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts and the crew decision check. 56 of 56 pass.
+- `pnpm eval:answers`: 70 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, reading the plan from crew chat and the agenda draft. 70 of 70 pass.
 - Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size.
 
 ## Repository layout
 
 ```
-apps/ferri/          the Ferri agent service: message flow, learning loop, announcements,
-                     scheduler, reminders, team rooms, Shield's HTTP route
+apps/ferri/          the Ferri agent service: message flow, learning loop, the plan,
+                     announcements, scheduler, reminders, team rooms, Shield's HTTP route
 apps/desk/           Desk (Next.js) and Ferri Pocket (the PWA at /m)
 packages/switch/     our client for the Switch agent protocol and Gateway
 packages/knowledge/  seeding, search, prompts, triage, answers with sources, drafts, the Switch mirror

@@ -91,7 +91,7 @@ export async function openCards(user: DeskUser) {
     const why = !myIds.size
       ? "open"
       : r.ownerIds.some((id) => myIds.has(id))
-        ? r.kind === "reply" || r.kind === "announce"
+        ? r.kind === "reply" || r.kind === "announce" || r.kind === "plan"
           ? "your OK"
           : `you own ${r.topic}`
         : r.escalatedAt

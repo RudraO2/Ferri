@@ -29,6 +29,7 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
           counts={{
             "/cards": o.openQuestions + o.repliesWaiting,
             "/announcements": o.announcementsWaiting,
+            "/plan": o.planWaiting,
             "/spaces": o.discovered,
           }}
         />
