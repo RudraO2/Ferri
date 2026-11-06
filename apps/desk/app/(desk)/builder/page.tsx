@@ -171,6 +171,9 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
 
 function JobRow({ j }: { j: BuilderJob }) {
   const files = jobFiles(j);
+  // Posters and cards (spec 13): the rendered PNGs as thumbnails, everything else as links.
+  const images = files.filter((f) => /^out\/[^/]+\.png$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+  const others = files.filter((f) => !images.includes(f));
   const live = ["queued", "handed", "working", "stuck"].includes(j.status);
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-3 text-[13px]">
@@ -187,7 +190,7 @@ function JobRow({ j }: { j: BuilderJob }) {
         <div className="mt-1 text-zinc-700">{j.brief}</div>
         {j.url ? (
           <div className="mt-1">
-            <span className={`badge ${ok}`}>live</span>{" "}
+            {j.kind === "site" ? <span className={`badge ${ok}`}>live</span> : <span className="badge">points to</span>}{" "}
             <a className="font-medium text-zinc-900 underline underline-offset-2" href={j.url} target="_blank" rel="noreferrer">
               {j.url}
             </a>
@@ -198,9 +201,20 @@ function JobRow({ j }: { j: BuilderJob }) {
             {j.status === "cancelled" ? `Cancelled by ${j.report}` : j.report}
           </div>
         ) : null}
-        {files.length ? (
+        {images.length ? (
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            {images.map((f) => (
+              <a key={f.name} className="block text-center text-[11px] text-zinc-500 hover:text-zinc-900" href={fileHref(j, f.name)} target="_blank" rel="noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={fileHref(j, f.name)} alt={f.name} className="h-28 w-auto rounded-md border border-zinc-200 bg-zinc-50 object-contain" loading="lazy" />
+                <span className="mt-1 block">{f.name.replace(/^out\//, "").replace(/\.png$/, "").split("-").pop()}</span>
+              </a>
+            ))}
+          </div>
+        ) : null}
+        {others.length ? (
           <div className="mt-1.5 flex flex-wrap gap-2">
-            {files.map((f) => (
+            {others.map((f) => (
               <a key={f.name} className="badge hover:bg-zinc-100" href={`/builder/file?job=${encodeURIComponent(j.id)}&name=${encodeURIComponent(f.name)}`} target="_blank" rel="noreferrer">
                 {f.name} · {size(f.bytes)}
               </a>
@@ -217,3 +231,5 @@ function JobRow({ j }: { j: BuilderJob }) {
     </div>
   );
 }
+
+const fileHref = (j: BuilderJob, name: string) => `/builder/file?job=${encodeURIComponent(j.id)}&name=${encodeURIComponent(name)}`;

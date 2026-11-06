@@ -43,6 +43,7 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
                   </span>
                 </div>
                 <div className="text-[15px] font-medium">{a.waiting!.title}</div>
+                <MediaNote a={a} />
                 {a.liveVersion > 0 && a.text ? <div className="mt-1 text-[12.5px] text-zinc-500 line-through decoration-zinc-300">{a.text}</div> : null}
                 <form action={approveAnnouncement} className="mt-3 space-y-2">
                   <input type="hidden" name="cardId" value={a.waiting!.cardId} />
@@ -127,6 +128,7 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
                   goes out {a.scheduledAt ? formatWhen(a.scheduledAt, tz) : "soon"} · to {describeTargets(a.targets)}
                 </div>
                 <div className="mt-1 text-[15px] font-medium">{a.title}</div>
+                <MediaNote a={a} />
                 <div className="mt-1 text-[13px] whitespace-pre-wrap text-zinc-700">{a.text}</div>
               </div>
             ))}
@@ -177,6 +179,7 @@ function Posted({ a, tz }: { a: AnnouncementView; tz: string }) {
         </span>
       </div>
       <div className="text-[15px] font-medium">{a.title}</div>
+      <MediaNote a={a} />
       <div className="mt-1 text-[13px] whitespace-pre-wrap text-zinc-700">{a.text}</div>
       <ul className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {a.posts.map((p) => (
@@ -209,4 +212,10 @@ function Posted({ a, tz }: { a: AnnouncementView; tz: string }) {
       )}
     </div>
   );
+}
+
+/** An announcement that carries images (a poster from the Builder, spec 13). */
+function MediaNote({ a }: { a: AnnouncementView }) {
+  if (!a.media?.length) return null;
+  return <div className="mt-0.5 text-[12px] text-zinc-500">With the image {a.media.map((m) => m.filename).join(", ")}</div>;
 }

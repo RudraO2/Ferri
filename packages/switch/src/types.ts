@@ -12,7 +12,16 @@ export interface MessagePayload {
   body: string;
   timestamp: number;
   thread_id: string | null;
-  attachments: unknown[];
+  attachments: MessageAttachment[];
+}
+
+/** A file on a message: a pointer, never bytes (download it by `mxc` from the room's media route). */
+export interface MessageAttachment {
+  filename?: string;
+  mimetype?: string;
+  size?: number;
+  mxc?: string;
+  msgtype?: string;
 }
 
 export interface CommandPayload {

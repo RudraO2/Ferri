@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstHttpsUrl, handoffMessage, jobFolder, parseBuilderReport, siteEventLine } from "./builder.ts";
+import { firstHttpsUrl, briefWithFiles, handoffMessage, jobFolder, mediaFromMessage, mergeMedia, parseBuilderReport, posterShareBrief, shareImage, siteEventLine } from "./builder.ts";
 
 describe("parseBuilderReport", () => {
   it("reads a done report, with or without the mention Switch prepends", () => {
@@ -68,5 +68,52 @@ describe("siteEventLine", () => {
     expect(siteEventLine("pool_low", { sponsor: "CloudCo", left: 0 })).toContain("all claimed");
     expect(siteEventLine("pool_refilled", { sponsor: "CloudCo", left: 40 })).toBe("CloudCo credits are topped up on the site: 40 codes left.");
     expect(siteEventLine("something_else", {})).toBeNull();
+  });
+});
+
+describe("poster media (spec 13)", () => {
+  const att = (filename: string, mimetype = "image/png") => ({ filename, mimetype, size: 10, mxc: `switch-media://id-${filename}`, msgtype: "m.image" });
+
+  it("keeps a message's attachments with their room and skips ones without a media id", () => {
+    const media = mediaFromMessage([att("a-square.png"), { filename: "x.png" }], "!room", "$ev");
+    expect(media).toEqual([{ mxc: "switch-media://id-a-square.png", filename: "a-square.png", mimetype: "image/png", size: 10, roomId: "!room", eventId: "$ev" }]);
+    expect(mediaFromMessage(undefined, "!room", null)).toEqual([]);
+  });
+
+  it("merges without keeping a file twice", () => {
+    const a = mediaFromMessage([att("one.png")], "!r", null);
+    const b = mediaFromMessage([att("one.png"), att("two.png")], "!r", null);
+    expect(mergeMedia(a, b).map((m) => m.filename)).toEqual(["one.png", "two.png"]);
+  });
+
+  it("shares the square card (JPEG first), then the 4:5 one, then the first image", () => {
+    const set = mediaFromMessage([att("ln-poster.png"), att("ln-story.png"), att("ln-square.jpg", "image/jpeg"), att("ln-square.png")], "!r", null);
+    expect(shareImage(set)?.filename).toBe("ln-square.jpg");
+    expect(shareImage(mediaFromMessage([att("ln-poster.png"), att("ln-portrait.png")], "!r", null))?.filename).toBe("ln-portrait.png");
+    expect(shareImage(mediaFromMessage([att("ln-poster.png")], "!r", null))?.filename).toBe("ln-poster.png");
+    expect(shareImage(mediaFromMessage([att("notes.md", "text/markdown")], "!r", null))).toBeNull();
+  });
+
+  it("briefs the drafter with the link and leaves the details to the poster", () => {
+    const brief = posterShareBrief({ eventName: "Lantern Build Night", url: "https://lantern-build-night.vercel.app" });
+    expect(brief).toContain("Lantern Build Night poster");
+    expect(brief).toContain("register at https://lantern-build-night.vercel.app");
+    expect(brief).toContain("Do not repeat the date, time or venue");
+  });
+});
+
+describe("files attached to a build request", () => {
+  it("rides on the brief and reaches the hand-off whole", () => {
+    const files = mediaFromMessage([{ filename: "last.png", mimetype: "image/png", mxc: "switch-media://abc123" }], "!r", "$e");
+    const brief = briefWithFiles("Make the poster with this photo", files);
+    const text = handoffMessage({
+      job: { number: 7, title: "Poster", brief, kind: "poster", requestedBy: "Rudra" },
+      eventName: "Lantern Build Night",
+      documents: [],
+      agentName: "ferri",
+    });
+    expect(text).toContain('Rudra asked: "Make the poster with this photo"');
+    expect(text).toContain("They attached last.png (switch-media://abc123). Fetch each with download_attachment");
+    expect(briefWithFiles("x", [])).toBe("x");
   });
 });

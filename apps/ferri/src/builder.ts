@@ -4,7 +4,13 @@ import {
   builderName,
   createAnnouncementRequest,
   createBuilderJob,
+  draftAnnouncement,
   firstHttpsUrl,
+  loadLiveKnowledge,
+  mediaFromMessage,
+  mergeMedia,
+  posterShareBrief,
+  shareImage,
   loadCrew,
   siteEventLine,
   findBuilderJob,
@@ -224,6 +230,9 @@ export function createBuilder(deps: BuilderDeps) {
     const fromBuilder = (b && p.sender === b.agentId) || p.sender_name?.toLowerCase() === name;
     if (!fromBuilder) return false;
     const space = await findCommunity(db, config.community);
+    // Files it posts for a job it is working on (posters, cards): kept on the job by their Switch media id.
+    const media = mediaFromMessage(p.attachments, ev.room_id, p.message_id ?? null);
+    if (media.length) await keepMedia(ev.room_id, media);
     const report = parseBuilderReport(p.body);
     if (report && space) {
       const job = await findBuilderJob(db, space.id, report.ref);
@@ -241,6 +250,8 @@ export function createBuilder(deps: BuilderDeps) {
       log(`builder: ${jobRef(job)} ${report.outcome}: ${clip(report.text, 160)}`);
       // A site the crew allowed to go live: Shield trusts its domain, and the crew gets the announcement on a card.
       if (url && job.kind === "site" && url !== job.url) await siteLive(updated, url);
+      // Posters and cards: the crew decides on a card whether they go outside.
+      if (report.outcome === "done" && job.kind === "poster" && job.status !== "done") await posterReady(updated);
       if (job.requestedById) {
         await pushToUsers(db, await switchUsersForCrew(db, [job.requestedById]), {
           kind: "builder",
@@ -306,6 +317,109 @@ export function createBuilder(deps: BuilderDeps) {
       origin: "builder",
     });
     log(`builder: ${jobRef(job)} "site is live" announcement requested`);
+  }
+
+  /** The Builder posted files in a room: they belong to the job it is working on there. */
+  async function keepMedia(roomId: string, media: ReturnType<typeof mediaFromMessage>): Promise<void> {
+    const [job] = await db
+      .select()
+      .from(builderJobs)
+      .where(and(eq(builderJobs.roomId, roomId), inArray(builderJobs.status, ["handed", "working"])))
+      .orderBy(desc(builderJobs.number))
+      .limit(1);
+    if (!job) return;
+    await db
+      .update(builderJobs)
+      .set({ media: mergeMedia(job.media ?? [], media), updatedAt: new Date() })
+      .where(eq(builderJobs.id, job.id));
+    log(`builder: ${jobRef(job)} posted ${media.map((m) => m.filename).join(", ")}`);
+  }
+
+  /**
+   * A poster job is done: Ferri drafts a short post and opens the announcement
+   * card with the square card attached. One OK posts the image and the text to
+   * every space of the event; "Don't post" keeps it inside the crew room.
+   */
+  async function posterReady(job: BuilderJob): Promise<void> {
+    const eventId = job.eventId;
+    if (!eventId) return;
+    // Switch delivers only messages addressed to Ferri, so the Builder's file post is read back from the room.
+    const posted = await postedMedia(job);
+    if (posted.length) {
+      job = { ...job, media: mergeMedia(job.media ?? [], posted) };
+      await db.update(builderJobs).set({ media: job.media, updatedAt: new Date() }).where(eq(builderJobs.id, job.id));
+      log(`builder: ${jobRef(job)} posted ${posted.map((m) => m.filename).join(", ")}`);
+    }
+    const image = shareImage(job.media ?? []);
+    if (!image) {
+      log(`builder: ${jobRef(job)} is done, but it posted no image to share`);
+      return;
+    }
+    const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+    const kb = await loadLiveKnowledge(db, config.community, { eventId: eventId });
+    const site = job.url ?? (await siteUrl(eventId));
+    const brief = posterShareBrief({ eventName: ev?.name ?? "event", url: site });
+    let text = `${ev?.name ?? "The event"}: the poster is out.${site ? ` Register at ${site}` : ""}`;
+    let title = `${ev?.name ?? "Event"} poster`;
+    if (kb) {
+      try {
+        const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: brief, sender: "Ferri Builder" });
+        if (draft) {
+          text = draft.text;
+          title = draft.title;
+        }
+      } catch (err) {
+        log(`builder: drafting the poster post failed: ${(err as Error).message}; using a plain line`);
+      }
+    }
+    await createAnnouncementRequest(db, {
+      communityId: job.communityId,
+      eventId: eventId,
+      title,
+      text,
+      scheduledAt: null,
+      targetSpaceIds: null,
+      by: job.requestedBy,
+      origin: "builder",
+      reason: `the Builder made the poster (${jobRef(job)})`,
+      media: [image],
+    });
+    log(`builder: ${jobRef(job)} poster share card requested with ${image.filename}`);
+  }
+
+  /** Files the Builder posted in the job's room since the hand-off (`read_context` gives their media ids). */
+  async function postedMedia(job: BuilderJob): Promise<ReturnType<typeof mediaFromMessage>> {
+    if (!job.roomId) return [];
+    interface Entry {
+      id: string;
+      sender: string;
+      sender_name: string;
+      attachments?: { filename?: string; mimetype?: string; size?: number; mxc?: string }[];
+    }
+    try {
+      const b = await builder();
+      const since = new Date((job.handedAt ?? job.createdAt).getTime() - 5_000).toISOString();
+      const out = await agent.op<{ threads: { root: Entry; replies: Entry[] }[] }>("read_context", { room_id: job.roomId, since, limit: 100 });
+      const mine = (e: Entry) => (b && e.sender.includes(b.agentId)) || e.sender_name?.toLowerCase() === name;
+      return out.threads
+        .flatMap((t) => [t.root, ...t.replies])
+        .filter((e) => mine(e) && e.attachments?.length)
+        .flatMap((e) => mediaFromMessage(e.attachments, job.roomId!, e.id));
+    } catch (err) {
+      log(`builder: reading ${jobRef(job)}'s files from the room failed: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  /** The event's live site from an earlier site job, for the poster's post. */
+  async function siteUrl(eventId: string): Promise<string | null> {
+    const [site] = await db
+      .select({ url: builderJobs.url })
+      .from(builderJobs)
+      .where(and(eq(builderJobs.eventId, eventId), eq(builderJobs.kind, "site"), isNotNull(builderJobs.url)))
+      .orderBy(desc(builderJobs.number))
+      .limit(1);
+    return site?.url ?? null;
   }
 
   /** What the shipped site reported (registrations, credit pools): told to the crew in their room. */

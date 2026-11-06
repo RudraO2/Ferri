@@ -82,7 +82,7 @@ if (!controllerId) {
 const template = path.join(root, "builder");
 fs.mkdirSync(path.join(paths.dir, "jobs"), { recursive: true });
 fs.mkdirSync(paths.claudeHome, { recursive: true });
-const skip = [`${path.sep}jobs${path.sep}`, `${path.sep}node_modules`, `${path.sep}.next`, `${path.sep}.vercel`];
+const skip = [`${path.sep}jobs${path.sep}`, `${path.sep}example${path.sep}out`, `${path.sep}example${path.sep}art`, `${path.sep}node_modules`, `${path.sep}.next`, `${path.sep}.vercel`];
 fs.cpSync(template, paths.dir, { recursive: true, force: true, filter: (src) => !skip.some((s) => src.includes(s)) });
 
 // What the ship-event-site skill needs that the controller does not pass to sessions
@@ -111,12 +111,33 @@ fs.writeFileSync(path.join(paths.dir, ".ferri", "site.json"), JSON.stringify(sit
 if (!siteSettings.supabase.orgId) console.warn("FERRI_SITE_SUPABASE_ORG is not set: the Builder cannot create the event site's database.");
 console.log(`Site settings: Supabase org ${siteSettings.supabase.orgId ?? "unset"} (${siteSettings.supabase.region}), Vercel ${siteSettings.vercel.scope ?? "default scope"}, hook ${siteSettings.hook.url}, ${admins.length} admin(s).`);
 
+// Posters (spec 13): the image model and its limits (the controller passes only provider
+// keys to sessions, so these go in a file), the community's own images, and the kit's
+// packages, installed once here rather than in every job.
+const studio = {
+  model: env.FERRI_IMAGE_MODEL ?? "gpt-image-2.6-flare",
+  quality: env.FERRI_IMAGE_QUALITY ?? "medium",
+  maxCallsPerJob: Number(env.FERRI_IMAGE_MAX_CALLS ?? 2),
+};
+fs.writeFileSync(path.join(paths.dir, ".ferri", "studio.json"), JSON.stringify(studio, null, 2));
+const assets = path.join(root, "seed", "assets");
+if (fs.existsSync(assets)) fs.cpSync(assets, path.join(paths.dir, "assets", "community"), { recursive: true, force: true });
+const posterKit = path.join(paths.dir, "kits", "posters");
+if (fs.existsSync(path.join(posterKit, "package-lock.json")) && !fs.existsSync(path.join(posterKit, "node_modules", "satori"))) {
+  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: posterKit, encoding: "utf8", shell: process.platform === "win32" });
+  if (npm.status !== 0) throw new Error(`npm ci in ${posterKit} failed:\n${npm.stderr || npm.stdout}`);
+}
+if (!env.OPENAI_API_KEY) console.warn("OPENAI_API_KEY is not set: posters use the kit's own background instead of generated art.");
+console.log(`Posters: ${studio.model} (${studio.quality}, at most ${studio.maxCallsPerJob} image calls per job), image key ${env.OPENAI_API_KEY ? "set" : "missing"}.`);
+
 const apiKey = need("ANTHROPIC_API_KEY");
 fs.writeFileSync(
   paths.envFile,
   [
-    "# Written by `pnpm builder:setup`. The Builder's own Claude home and key; never commit.",
+    "# Written by `pnpm builder:setup`. The Builder's own Claude home and keys; never commit.",
     `ANTHROPIC_API_KEY=${apiKey}`,
+    // Image generation for posters (spec 13); on the controller's allowlist, so sessions see it.
+    ...(env.OPENAI_API_KEY ? [`OPENAI_API_KEY=${env.OPENAI_API_KEY}`] : []),
     `CLAUDE_CONFIG_DIR=${paths.claudeHome}`,
     "SWITCH_CONTROLLER_SELF_UPDATE=off",
     "",

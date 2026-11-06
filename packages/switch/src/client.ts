@@ -172,6 +172,38 @@ export class SwitchAgent {
     return out.edited;
   }
 
+  /**
+   * Post files (a poster, a social card) as native image or file events, with
+   * an optional caption. Every bridge uploads them to its platform as real
+   * files. Several files arrive as one message. Returns the event id.
+   */
+  async sendMedia(
+    roomId: string,
+    files: { filename: string; bytes: Uint8Array; mimetype: string }[],
+    caption?: string,
+  ): Promise<string> {
+    const form = new FormData();
+    for (const f of files) form.append("files", new Blob([new Uint8Array(f.bytes)], { type: f.mimetype }), f.filename);
+    if (caption) form.append("caption", caption);
+    const path = `/agents/${this.opts.agentId}/rooms/${encodeURIComponent(roomId)}/media`;
+    const res = await fetch(`${this.opts.baseUrl}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.opts.apiKey}` },
+      body: form,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new SwitchHttpError(res.status, text, `POST ${path}`);
+    return (JSON.parse(text) as { event_id: string }).event_id;
+  }
+
+  /** The bytes of a file posted in a room this agent is in (its `mxc` from the message's attachments). */
+  async downloadMedia(roomId: string, mxc: string): Promise<Uint8Array> {
+    const path = `/agents/${this.opts.agentId}/rooms/${encodeURIComponent(roomId)}/media?mxc=${encodeURIComponent(mxc)}`;
+    const res = await fetch(`${this.opts.baseUrl}${path}`, { headers: { authorization: `Bearer ${this.opts.apiKey}` } });
+    if (!res.ok) throw new SwitchHttpError(res.status, await res.text(), `GET ${path}`);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
   async setTyping(roomId: string, isTyping: boolean): Promise<void> {
     await this.request("POST", `/agents/${this.opts.agentId}/typing`, { room_id: roomId, is_typing: isTyping });
   }

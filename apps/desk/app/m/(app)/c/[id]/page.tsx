@@ -111,6 +111,7 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                 ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.`
                 : "Goes out as soon as it is approved."}
             {a?.origin === "decision" ? " Ferri spotted this decision in the crew chat." : ""}
+            {!edit && a?.media?.length ? ` It goes out with the image ${a.media.map((m) => m.filename).join(", ")}.` : ""}
           </p>
           {edit && a?.text ? (
             <div className="mt-3 px-1 text-[13px] text-zinc-400">

@@ -380,6 +380,17 @@ export const announcementStatus = pgEnum("announcement_status", [
   "missed",
 ]);
 
+/** A file that lives in Switch: its media id (`mxc`), the room it was posted in, and what it is. */
+export interface SwitchMedia {
+  mxc: string;
+  filename: string;
+  mimetype: string;
+  size: number | null;
+  roomId: string;
+  /** The Switch event that carried it. */
+  eventId: string | null;
+}
+
 export const announcements = pgTable(
   "announcements",
   {
@@ -406,6 +417,8 @@ export const announcements = pgTable(
     /** The crew-room message it came from, so a replay never asks twice. */
     sourceMessageId: text("source_message_id").unique(),
     entryId: uuid("entry_id").references(() => knowledgeEntries.id, { onDelete: "set null" }),
+    /** Images posted with the text (a poster or social card from the Builder), by their Switch media id. */
+    media: jsonb("media").$type<SwitchMedia[]>(),
     ...timestamps,
   },
   (t) => [index("announcements_status").on(t.communityId, t.status)],
@@ -702,6 +715,8 @@ export const builderJobs = pgTable(
     folder: text("folder"),
     /** The live address the Builder reported (the first https link of its done report). */
     url: text("url"),
+    /** Files the Builder posted in the room for this job (images, by their Switch media id). */
+    media: jsonb("media").$type<SwitchMedia[]>().notNull().default([]),
     handedAt: timestamp("handed_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     ...timestamps,

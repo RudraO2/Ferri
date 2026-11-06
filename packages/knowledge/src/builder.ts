@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { builderJobs, type Db } from "@ferri/db";
+import { builderJobs, type Db, type SwitchMedia } from "@ferri/db";
 
 // ── Ferri Builder (spec 11): a Claude Code agent that Switch runs ─────────
 
@@ -60,9 +60,12 @@ export function handoffMessage(input: {
 }): string {
   const ref = jobRef(input.job);
   const folder = `jobs/${jobFolder(input.job.number, input.job.title)}/`;
+  // Files attached to the request travel as an "Attached:" line, kept whole (the brief itself is clipped).
+  const [ask, attached] = input.job.brief.split(ATTACHED_MARK);
   const lines = [
     `Job ${ref}: ${input.job.title}${input.eventName ? ` for ${input.eventName}` : ""}.`,
-    `${input.job.requestedBy} asked: "${input.job.brief.replace(/\s+/g, " ").trim().slice(0, 1200)}"`,
+    `${input.job.requestedBy} asked: "${ask!.replace(/\s+/g, " ").trim().slice(0, 1200)}"`,
+    attached ? `They attached ${attached.trim()}. Fetch each with download_attachment (its media id, from this room) and use it as they asked.` : "",
     "",
     input.documents.length
       ? `The facts are in this room's documents (${input.documents.map((d) => `"${d}"`).join(" and ")}); read them with load_internal_documents and use only what they say.`
@@ -71,13 +74,22 @@ export function handoffMessage(input: {
     KIND_HINT[(input.job.kind as BuilderJobKind) ?? "other"] ?? "",
     "Nothing goes public (deploy, push, post, email) without a yes on a card first.",
   ];
-  return lines.filter((l, i) => l || i === 2).join("\n");
+  return lines.filter((l, i) => l || i === 3).join("\n");
+}
+
+const ATTACHED_MARK = "\nAttached: ";
+
+/** A job brief with the files a crew member attached to the request (name and Switch media id). */
+export function briefWithFiles(brief: string, files: SwitchMedia[]): string {
+  if (!files.length) return brief;
+  return `${brief}${ATTACHED_MARK}${files.map((f) => `${f.filename} (${f.mxc})`).join(", ")}`;
 }
 
 const KIND_HINT: Record<BuilderJobKind, string> = {
-  site: "If this is the event's site with registration, sign-in or credits, or it should go live, follow your ship-event-site skill. A single page that stays here is one self-contained index.html: inline CSS, no scripts, mobile first, with what, when, where, the schedule, how to register and who to ask.",
+  site: "If this is the event's site with registration, sign-in or credits, or it should go live, call your ship-event-site skill with the Skill tool (even if you used it before; it may have changed) and follow it. A single page that stays here is one self-contained index.html: inline CSS, no scripts, mobile first, with what, when, where, the schedule, how to register and who to ask.",
   checklist: "Make it checklist.md with - [ ] items grouped as the week before, the day before, on the day and after, each with an owner where the plan names one.",
-  poster: "Make the text and layout as an HTML file sized for the poster; no generated images yet.",
+  poster:
+    "Start by calling your make-posters skill with the Skill tool, even if you used it before (it may have changed), and follow it: background art plus the exact text, every size, posted here in one message. Write design.json fresh from this room's documents; reuse an earlier job's art or photo only when asked, never its text. Point the QR code at the event's site when there is one. Do not post them anywhere else; I ask the crew on a card before anything is shared outside.",
   other: "",
 };
 
@@ -185,4 +197,56 @@ export function siteEventLine(type: string, p: Record<string, unknown>): string 
   }
   if (type === "pool_refilled") return `${sponsor} credits are topped up on the site: ${left} code${left === 1 ? "" : "s"} left.`;
   return null;
+}
+
+// ── Files the Builder posts (spec 13) ─────────────────────────────────────
+
+/** The attachments of a Switch message as media Ferri can keep and post again. */
+export function mediaFromMessage(
+  attachments: { filename?: string; mimetype?: string; size?: number; mxc?: string }[] | undefined,
+  roomId: string,
+  eventId: string | null,
+): SwitchMedia[] {
+  return (attachments ?? [])
+    // Switch's media ids are `switch-media://...` (older servers: `mxc://...`).
+    .filter((a) => typeof a.mxc === "string" && /^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(a.mxc))
+    .map((a) => ({
+      mxc: a.mxc!,
+      filename: a.filename?.trim() || a.mxc!.split("/").pop() || "file",
+      mimetype: a.mimetype ?? "application/octet-stream",
+      size: typeof a.size === "number" ? a.size : null,
+      roomId,
+      eventId,
+    }));
+}
+
+/** Add new media to what a job already has (the same file twice is kept once). */
+export function mergeMedia(have: SwitchMedia[], add: SwitchMedia[]): SwitchMedia[] {
+  const seen = new Set(have.map((m) => m.mxc));
+  return [...have, ...add.filter((m) => !seen.has(m.mxc) && seen.add(m.mxc))];
+}
+
+/**
+ * The image to share outside from a poster job: the square social card (it
+ * fits every chat platform), else the 4:5 card, else the first image. The
+ * JPEG before the PNG: a 1 MB PNG makes Switch's Telegram upload time out
+ * (the photo lands, then a "couldn't be relayed" note follows it).
+ */
+export function shareImage(media: SwitchMedia[]): SwitchMedia | null {
+  const images = media.filter((m) => m.mimetype.startsWith("image/") || /\.(png|jpe?g)$/i.test(m.filename));
+  const named = (re: RegExp) => images.find((m) => re.test(m.filename) && /\.jpe?g$/i.test(m.filename)) ?? images.find((m) => re.test(m.filename));
+  return named(/square/i) ?? named(/portrait/i) ?? images[0] ?? null;
+}
+
+/**
+ * What Ferri asks its drafter for when a poster job is done: share it, with the
+ * link. No date, time or venue: the poster shows them exactly, and a caption
+ * that words them differently (the event's start vs "doors 9:00 AM") confuses.
+ */
+export function posterShareBrief(input: { eventName: string; url: string | null }): string {
+  return (
+    `Share the new ${input.eventName} poster (the image goes with this post). ` +
+    (input.url ? `Invite everyone to register at ${input.url}.` : "Invite everyone to come.") +
+    " One or two short lines. Do not repeat the date, time or venue: the poster shows them."
+  );
 }

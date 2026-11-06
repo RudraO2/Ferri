@@ -107,6 +107,25 @@ export function createLoop(deps: LoopDeps) {
     }
   }
 
+  /** A post with files (a poster): the same pause rule as `post`. */
+  async function postMedia(
+    communityId: string,
+    roomId: string,
+    files: { filename: string; bytes: Uint8Array; mimetype: string }[],
+    caption: string,
+  ): Promise<string | null> {
+    if (await isPaused(db, communityId)) {
+      log(`paused: not posting files to ${roomId}`);
+      return null;
+    }
+    try {
+      return await agent.sendMedia(roomId, files, caption);
+    } catch (err) {
+      log(`post with files to ${roomId} failed: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
   const crewRoomFor = (eventId: string | null) => crewRoomForEvent(db, eventId);
 
   // ── Ferri Pocket pushes (spec 06): next to the crew-room post, never instead of it ──
@@ -868,6 +887,7 @@ export function createLoop(deps: LoopDeps) {
 
   return {
     post,
+    postMedia,
     crewRoomFor,
     ladder,
     claim,

@@ -245,7 +245,8 @@ export function createLaunch(deps: LaunchDeps) {
       ...times,
     });
     const when = a.scheduledAt && !edit ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.` : edit ? "Approving it edits the post everywhere it went." : "Goes out as soon as it is approved.";
-    const head = `${edit ? "Announcement edit" : "Announcement"} · to ${where} · `;
+    const image = !edit && a.media?.length ? a.media.map((m) => m.filename).join(", ") : null;
+    const head = `${edit ? "Announcement edit" : image ? "Announcement with image" : "Announcement"} · to ${where} · `;
     try {
       await agent.openQuestionsCard(CARD_SESSION, {
         request_id: id,
@@ -257,7 +258,9 @@ export function createLaunch(deps: LaunchDeps) {
             id: CARD_QUESTION_ID,
             title: edit ? "Edit the announcement everywhere?" : "Post this announcement?",
             prompt:
-              `${edit ? "New version" : "Ferri's draft"}:\n\n${v.draft.slice(0, 3000)}\n\n${when}\n\n` +
+              `${edit ? "New version" : "Ferri's draft"}:\n\n${v.draft.slice(0, 3000)}\n\n` +
+              (image ? `It goes out with the image ${image}, as the Builder posted it here.\n\n` : "") +
+              `${when}\n\n` +
               `Pick ${edit ? "Edit everywhere or Keep it as it is" : "Post it or Don't post"}, or write your own version in quotes after the card code to post that instead.`,
             options: [
               { id: ANNOUNCE_POST_OPTION, label: edit ? "Edit everywhere" : "Post it", description: null },
@@ -369,8 +372,10 @@ export function createLaunch(deps: LaunchDeps) {
     const targets = await announcementTargets(db, a.eventId, a.targetSpaceIds);
     const ok: TargetSpace[] = [];
     const failed: TargetSpace[] = [];
+    // With an image (a poster from the Builder): fetched once from Switch, posted as a real upload with the text as its caption.
+    const files = claimed.media?.length ? await mediaFiles(claimed) : null;
     for (const t of targets) {
-      const eventId = await loop.post(a.communityId, t.roomId, text);
+      const eventId = files ? await loop.postMedia(a.communityId, t.roomId, files, text) : await loop.post(a.communityId, t.roomId, text);
       await db
         .insert(announcementPosts)
         .values({
@@ -398,6 +403,19 @@ export function createLaunch(deps: LaunchDeps) {
       );
     }
     return ok.length;
+  }
+
+  /** The announcement's images, downloaded from the rooms they were posted in. A file that cannot be fetched is left out, and logged. */
+  async function mediaFiles(a: AnnouncementRow): Promise<{ filename: string; bytes: Uint8Array; mimetype: string }[] | null> {
+    const out: { filename: string; bytes: Uint8Array; mimetype: string }[] = [];
+    for (const m of a.media ?? []) {
+      try {
+        out.push({ filename: m.filename, mimetype: m.mimetype, bytes: await agent.downloadMedia(m.roomId, m.mxc) });
+      } catch (err) {
+        log(`announcement ${a.id}: could not fetch ${m.filename} from Switch: ${(err as Error).message}; posting the text without it`);
+      }
+    }
+    return out.length ? out : null;
   }
 
   async function saveKnowledge(a: AnnouncementRow, text: string, by: string): Promise<string | null> {

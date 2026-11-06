@@ -1,0 +1,18 @@
+{
+  "event": "Riverside Game Night",
+  "kicker": "Example Club presents",
+  "tagline": "An evening of board games for everyone. Come alone or bring friends.",
+  "date": "Fri 5 December 2025",
+  "time": "7:00 PM",
+  "venue": "Riverside Library, Hall 2, Pune",
+  "url": "https://example.org/game-night",
+  "cta": "Save your seat",
+  "highlights": ["Free entry", "₹500 game vouchers", "Snacks"],
+  "community": "Example Club",
+  "logo": "logo.svg",
+  "photo": null,
+  "accent": "#22C55E",
+  "art": "art/background.png",
+  "artPrompt": "A cosy room with a big wooden table, scattered dice and cards, warm lamp light, soft focus",
+  "formats": ["poster", "square", "portrait", "story", "link", "x"]
+}

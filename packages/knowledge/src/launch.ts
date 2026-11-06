@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { announcementVersions, announcements, eventSpaces, spaces, type Db } from "@ferri/db";
+import { announcementVersions, announcements, eventSpaces, spaces, type Db, type SwitchMedia } from "@ferri/db";
 import type { CrewMember } from "./crew.ts";
 import type { RecentAnnouncement } from "./intent.ts";
 import { shortAnnouncementIds } from "./intent.ts";
@@ -294,6 +294,10 @@ export async function createAnnouncementRequest(
     targetSpaceIds: string[] | null;
     by: string;
     origin: "desk" | "pocket" | "builder";
+    /** Why it exists, for the card ("the Builder made the poster"). */
+    reason?: string;
+    /** Images to post with the text (spec 13). */
+    media?: SwitchMedia[] | null;
   },
 ): Promise<string> {
   const text = stripRoomWide(input.text.trim());
@@ -311,9 +315,11 @@ export async function createAnnouncementRequest(
         targetSpaceIds: input.targetSpaceIds?.length ? input.targetSpaceIds : null,
         origin: input.origin,
         requestedBy: input.by,
+        media: input.media?.length ? input.media : null,
       })
       .returning({ id: announcements.id });
-    await tx.insert(announcementVersions).values({ announcementId: a!.id, version: 1, title, draft: text, reason: input.origin === "builder" ? "the Builder put the site live" : "written in " + (input.origin === "desk" ? "Desk" : "Pocket"), proposedBy: input.by });
+    const reason = input.reason ?? (input.origin === "builder" ? "the Builder put the site live" : "written in " + (input.origin === "desk" ? "Desk" : "Pocket"));
+    await tx.insert(announcementVersions).values({ announcementId: a!.id, version: 1, title, draft: text, reason, proposedBy: input.by });
     return a!.id;
   });
 }

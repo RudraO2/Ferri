@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { communities, crewActions, questions, spaces, type Db } from "@ferri/db";
 import {
   answerQuestion,
+  briefWithFiles,
+  mediaFromMessage,
   checkDecision,
   crewIntent,
   formatWhen,
@@ -354,7 +356,8 @@ export function createFlow(deps: FlowDeps) {
         eventId: ctx.eventId,
         kind: intent.build.kind,
         title: intent.build.title,
-        brief: intent.build.what || stripMention(p.body),
+        // A photo or file sent with the request goes to the Builder too (spec 13: community images).
+        brief: briefWithFiles(intent.build.what || stripMention(p.body), mediaFromMessage(p.attachments, ev.room_id, p.message_id)),
         requestedBy: member.name,
         requestedById: member.id,
         origin: "chat",
