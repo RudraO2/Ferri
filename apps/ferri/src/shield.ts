@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { eventSpaces, events, shieldEvents, type Db } from "@ferri/db";
 import { approvers, crewRoomForEvent, loadCrew, resolveSpace, spaceLabel } from "@ferri/knowledge";
 import { pushToUsers, switchUsersForCrew } from "@ferri/push";
@@ -106,7 +106,7 @@ export function createShield(deps: ShieldDeps): { start(): Promise<Server | null
       .select({ eventId: eventSpaces.eventId })
       .from(eventSpaces)
       .innerJoin(events, eq(events.id, eventSpaces.eventId))
-      .where(and(eq(events.communityId, communityId), eq(eventSpaces.role, "crew"), ne(events.stage, "wrap")))
+      .where(and(eq(events.communityId, communityId), eq(eventSpaces.role, "crew"), isNull(events.closedAt)))
       .limit(1);
     return row ? crewRoomForEvent(db, row.eventId) : null;
   }

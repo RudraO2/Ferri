@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq, gte, ilike, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { contactMessages, contacts, type Db } from "@ferri/db";
-import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import { structuredCall, voiceSystem, voiceUser, type ModelChoice, type Usage } from "./model.ts";
 import { renderInstructions, renderKnowledge } from "./render.ts";
 import type { LiveKnowledge } from "./store.ts";
 
@@ -278,6 +278,8 @@ export async function draftOutreachEmail(input: {
   sender: string;
   /** Answering a reply: what they wrote (the new part) and the subject. */
   replyTo?: { subject: string | null; text: string } | null;
+  /** Spec 21: the crew's tone and language (`voiceBlock`), after the rules. */
+  voice?: string;
 }): Promise<{ draft: EmailDraft | null; usage: Usage; latencyMs: number }> {
   const entries = input.kb.entries.filter((e) => e.eventId === input.eventId || e.eventId === null);
   const user = [
@@ -292,8 +294,8 @@ export async function draftOutreachEmail(input: {
     .join("\n\n");
   const out = await structuredCall({
     choice: input.choice,
-    system: [{ type: "text", text: EMAIL_SYSTEM, cache_control: { type: "ephemeral" } }],
-    user,
+    system: [{ type: "text", text: EMAIL_SYSTEM, cache_control: { type: "ephemeral" } }, ...voiceSystem(input.voice)],
+    user: user + voiceUser(input.voice),
     schema: EmailDraftSchema,
     maxTokens: 2000,
   });

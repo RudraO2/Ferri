@@ -7,12 +7,14 @@ import { pocketAnswer, pocketDontOffer, pocketOfferSpot, pocketSkip } from "../.
 import { Toast, Where } from "../../bits";
 import { CareScreen } from "../../care-case";
 import { community } from "@/lib/db";
-import { SEND_KIND_LABEL, formatWhen } from "@/lib/ferri";
+import { SEND_KIND_LABEL, formatWhen, translationsFrom } from "@/lib/ferri";
 import { audienceLine } from "@/lib/guests";
 import { AnnounceActions } from "./announce-actions";
 import { GuestSendActions } from "./guest-actions";
 import { PlanActions } from "./plan-actions";
 import { ReplyActions } from "./reply-actions";
+import { WrapActions } from "./wrap-actions";
+import { DeskActions } from "./desk-actions";
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
 
@@ -46,6 +48,10 @@ export default async function CardPage({ params, searchParams }: { params: Promi
             ? "Email to guests"
           : card.kind === "spot"
             ? "Spot to offer"
+          : card.kind === "wrap"
+            ? "Close the event"
+          : card.kind === "desk"
+            ? "Desks to make"
           : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   const gc = card.guestCard;
   return (
@@ -134,6 +140,13 @@ export default async function CardPage({ params, searchParams }: { params: Promi
               Now it says: <span className="line-through decoration-zinc-300">{a.text}</span>
             </div>
           ) : null}
+          {/* Spec 21: a space with its own language gets this version; the one OK covers it too. */}
+          {Object.values(translationsFrom(card.payload, card.draftText ?? "")).map((t) => (
+            <div key={t.language} className="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-[14px] whitespace-pre-wrap text-zinc-700">
+              <div className="mb-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">In {t.language}</div>
+              {t.text}
+            </div>
+          ))}
           <AnnounceActions cardId={card.id} draft={card.draftText ?? ""} edit={edit} scheduled={!!a?.scheduledAt && !edit} />
         </section>
       ) : null}
@@ -193,6 +206,18 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         </section>
       ) : null}
 
+      {open && card.kind === "wrap" ? (
+        <section className="mt-4 px-4">
+          <WrapActions cardId={card.id} payload={card.payload} what={card.draftText} />
+        </section>
+      ) : null}
+
+      {open && card.kind === "desk" ? (
+        <section className="mt-4 px-4">
+          <DeskActions cardId={card.id} payload={card.payload} what={card.draftText} />
+        </section>
+      ) : null}
+
       {open && card.kind === "reply" ? (
         <section className="mt-4 px-4">
           <div className="px-1">
@@ -237,6 +262,22 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                     ? `Not offered${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
                     : card.status === "expired"
                       ? "Not answered in time"
+                      : "Closed"
+                : card.kind === "wrap"
+                ? card.status === "answered"
+                  ? `${card.answerText ?? "Closed"}${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Not yet${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Nobody closed it in time; the event stays open"
+                      : "Closed with the event"
+                : card.kind === "desk"
+                ? card.status === "answered"
+                  ? `Made${card.answeredBy ? ` · approved by ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Not made${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Nobody answered in time; nothing was made"
                       : "Closed"
                 : card.status === "answered"
                 ? `${card.kind === "reply" ? "Reply sent" : card.kind === "outreach" ? "Email sent" : "Answered"}${card.answeredBy ? ` by ${card.answeredBy}` : ""}`

@@ -6,6 +6,7 @@ import { crewFor, spacesWithSettings } from "@/lib/data";
 import { TOPICS, events } from "@/lib/ferri";
 import { removeCrewMember, saveCrewMember, saveEvent } from "../../actions";
 import { Empty, Note, PageHead, Section } from "../../ui";
+import { SettingsForm } from "../../settings-form";
 
 const local = (d: Date | null) => (d ? new Date(d.getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 16) : "");
 const handlesText = (h: Record<string, string>) =>
@@ -109,6 +110,14 @@ export default async function EventPage({
             <button className="btn-primary">Save event</button>
           </div>
         </form>
+      </Section>
+
+      {/* Customization (spec 21): this event's own settings, on top of the community's. */}
+      <Section title="How Ferri runs this event" aside={<Link className="text-[12px] text-zinc-500 underline" href="/community">Community settings</Link>}>
+        <SettingsForm level="event" scope={{ communityId: c.id, eventId: e.id }} back={`/events/${e.slug}`} />
+        <p className="muted mt-2">
+          Tone and language can also be set for one space on the Spaces page. The citation check, the approval cards and the pause stay in code.
+        </p>
       </Section>
 
       <Section title="Spaces" aside={<Link className="text-[12px] text-zinc-500 underline" href="/spaces">Manage spaces</Link>}>

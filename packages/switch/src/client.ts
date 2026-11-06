@@ -36,6 +36,17 @@ export class SwitchHttpError extends Error {
   }
 }
 
+/** The most of a card prompt Switch's text renderer shows whole (it cuts at 800). */
+export const CARD_PROMPT_MAX = 780;
+
+/** A long prompt's stand-in on the card: its last paragraph (usually how to answer) and where the rest is. */
+export function shortPrompt(prompt: string): string {
+  const paras = prompt.trim().split(/\n\s*\n/);
+  const last = paras.length > 1 ? paras[paras.length - 1]!.trim() : "";
+  const head = "The full text is in the message just above this card.";
+  return last && last.length < CARD_PROMPT_MAX - head.length - 4 ? head + "\n\n" + last : head;
+}
+
 /**
  * A small client for the Switch agent protocol:
  * one SSE stream down (all rooms), heartbeat and operations up over HTTP.
@@ -213,6 +224,16 @@ export class SwitchAgent {
 
   /** Open a questions card in a room. Re-opening with the same content is a no-op. */
   async openQuestionsCard(sessionId: string, card: OpenQuestionsCard): Promise<ApprovalView> {
+    // Switch's text renderer (Mattermost, WhatsApp) shows at most 800 characters of a prompt; a longer
+    // one is cut and the card says it "cannot be answered from this message". So a long prompt goes
+    // to the room as a message just above the card, and the card keeps a short prompt that points to it.
+    const long = card.room_id ? card.questions.filter((q) => q.prompt.length > CARD_PROMPT_MAX) : [];
+    if (long.length && card.room_id) {
+      for (const q of long) {
+        await this.sendMessage(card.room_id, q.prompt);
+        q.prompt = shortPrompt(q.prompt);
+      }
+    }
     return this.request<ApprovalView>("POST", `/agent-sessions/${encodeURIComponent(sessionId)}/approvals`, {
       kind: "questions",
       options: [],

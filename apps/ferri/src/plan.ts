@@ -314,7 +314,7 @@ export function createPlan(deps: PlanDeps) {
     let opened = 0;
     for (const item of proposed) {
       const route = routeCard(crew, item.topic);
-      const times = loop.ladder(event.stage, event.endsAt);
+      const times = await loop.ladderFor(event.communityId, event);
       const id = randomUUID();
       await db.insert(cards).values({
         id,

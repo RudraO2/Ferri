@@ -158,7 +158,7 @@ export function topicFor(tag: string): string {
 export interface CardFacts {
   id: string;
   /** "announce": `question` is the announcement's title and `roomName` where it goes. */
-  kind: "question" | "reply" | "announce" | "plan" | "outreach" | "care" | "guests" | "spot";
+  kind: "question" | "reply" | "announce" | "plan" | "outreach" | "care" | "guests" | "spot" | "wrap" | "desk" | "social";
   question: string;
   topic: string;
   /** People waiting on the answer. */
@@ -175,6 +175,19 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
   const q = `“${clip(card.question, 140)}”`;
   const from = card.askerName && card.roomName ? `${card.askerName} in ${card.roomName}` : null;
   const base = { kind, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: true, cardId: card.id };
+  if (card.kind === "wrap" || card.kind === "desk" || card.kind === "social") {
+    const what = card.kind === "wrap" ? "Closing the event" : card.kind === "desk" ? "New desks" : "A social post";
+    switch (kind) {
+      case "open":
+        return { ...base, title: `${what} needs your OK`, body: q };
+      case "nudge":
+        return { ...base, title: `${what} still waiting for your OK`, body: `${q} · ${card.minutesOpen ?? "?"} min` };
+      case "escalate":
+        return { ...base, title: `Anyone: ${what.toLowerCase()} needs an OK`, body: `${q} has waited ${card.minutesOpen ?? "?"} min.` };
+      case "expire":
+        return { ...base, renotify: false, title: `${what}: not decided in time`, body: `Nobody decided ${q}. Nothing was done.` };
+    }
+  }
   if (card.kind === "care") {
     // `question` is the case's plain-language reason; `topic` names it ("Case 3 · stuck").
     switch (kind) {
@@ -262,8 +275,12 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
   }
 }
 
-export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" | "plan" | "outreach" | "care" | "guests" | "spot" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
+export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" | "plan" | "outreach" | "care" | "guests" | "spot" | "wrap" | "desk" | "social" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
+  if (card.kind === "wrap" || card.kind === "desk" || card.kind === "social") {
+    const title = how === "answered" ? `Decided${by ? ` · ${by}` : ""}` : how === "dismissed" ? `Not now${by ? ` · ${by}` : ""}` : "Not decided in time";
+    return { kind: "settled", title, body: q, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };
+  }
   if (card.kind === "guests" || card.kind === "spot") {
     const title = how === "answered" ? `${card.kind === "guests" ? "Sending" : "Offered"}${by ? ` · ${by}` : ""}` : how === "dismissed" ? `${card.kind === "guests" ? "Not sent" : "Not offered"}${by ? ` · ${by}` : ""}` : "Not decided in time";
     return { kind: "settled", title, body: q, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };

@@ -23,6 +23,12 @@ import {
   switchExpiry,
   teamRoomName,
   teamRoomsTemplate,
+  languagesNeeded,
+  translateAnnouncement,
+  translationBlock,
+  translationsFrom,
+  voiceBlock,
+  type AnnounceTranslations,
   type RoomDetail,
   type TargetSpace,
 } from "@ferri/knowledge";
@@ -77,6 +83,75 @@ export function createLaunch(deps: LaunchDeps) {
     return kb?.community.id === communityId ? kb.community.timezone : "Asia/Kolkata";
   }
 
+  // ── Languages (spec 21) ────────────────────────────────────────────────
+
+  type Spot = { spaceId: string; name: string; platform: string | null };
+
+  /**
+   * The version each space reads: a space whose language setting differs from
+   * the event's gets the text in its language (one fast-model call per
+   * language not in `have`). `made` lists the languages translated just now.
+   */
+  async function spaceVersions(a: Pick<AnnouncementRow, "id" | "communityId" | "eventId">, text: string, where: Spot[], have: AnnounceTranslations["byLanguage"]) {
+    const base = (await loop.settings({ communityId: a.communityId, eventId: a.eventId })).language;
+    const list: (Spot & { language: string })[] = [];
+    for (const t of where) {
+      if (list.some((x) => x.spaceId === t.spaceId)) continue;
+      list.push({ ...t, language: (await loop.settings({ communityId: a.communityId, eventId: a.eventId, spaceId: t.spaceId })).language });
+    }
+    const needed = languagesNeeded(base, list);
+    const byLanguage: AnnounceTranslations["byLanguage"] = { ...have };
+    const made: string[] = [];
+    for (const [k, g] of needed) {
+      if (byLanguage[k]) continue;
+      try {
+        const r = await translateAnnouncement({ choice: config.modelFast, text, language: g.language });
+        if (r.text) {
+          byLanguage[k] = { language: g.language, text: r.text };
+          made.push(g.language);
+        }
+      } catch (err) {
+        log(`announcement ${a.id}: translating into ${g.language} failed: ${(err as Error).message}`);
+      }
+    }
+    const bySpace = new Map<string, { language: string; text: string }>();
+    for (const [k, g] of needed) {
+      const t = byLanguage[k];
+      if (t) for (const s of g.spaces) bySpace.set(s.spaceId, t);
+    }
+    return { needed, byLanguage, bySpace, made };
+  }
+
+  /** The translations on the card of this version, when they translate this text. */
+  async function storedTranslations(announcementId: string, version: number, text: string) {
+    const [row] = await db
+      .select({ cardId: announcementVersions.cardId, payload: cards.payload })
+      .from(announcementVersions)
+      .leftJoin(cards, eq(cards.id, announcementVersions.cardId))
+      .where(and(eq(announcementVersions.announcementId, announcementId), eq(announcementVersions.version, version)))
+      .limit(1);
+    return { cardId: row?.cardId ?? null, byLanguage: translationsFrom(row?.payload ?? null, text) };
+  }
+
+  /** Keep what was posted on the version's card (`cards.payload.translations`), for later edits and Desk. */
+  async function keepTranslations(cardId: string | null, text: string, byLanguage: AnnounceTranslations["byLanguage"]): Promise<void> {
+    if (!cardId) return;
+    const [c] = await db.select({ payload: cards.payload }).from(cards).where(eq(cards.id, cardId)).limit(1);
+    const translations: AnnounceTranslations = { source: text, byLanguage };
+    await db.update(cards).set({ payload: { ...(c?.payload ?? {}), translations } }).where(eq(cards.id, cardId));
+  }
+
+  /** " WhatsApp Lantern Build Night got it in Hindi." for the crew room. */
+  function languageNote(langs: Awaited<ReturnType<typeof spaceVersions>>): string {
+    const parts: string[] = [];
+    for (const [k, g] of langs.needed) {
+      const where = g.spaces.map(spaceLabel).join(", ");
+      parts.push(langs.byLanguage[k] ? `${where} got it in ${g.language}` : `${where} got the original (the ${g.language} translation failed)`);
+    }
+    if (!parts.length) return "";
+    return ` ${parts.join("; ")}.${langs.made.length ? ` I translated the approved words into ${langs.made.join(", ")} after the OK.` : ""}`;
+  }
+
   // ── Asking for an announcement ─────────────────────────────────────────
 
   /**
@@ -90,7 +165,8 @@ export function createLaunch(deps: LaunchDeps) {
     what: string;
     when: Date | null;
     by: string;
-    origin: "chat" | "decision";
+    /** "ferri": Ferri proposed it itself (the wrap's thank-you, spec 19). */
+    origin: "chat" | "decision" | "ferri";
     sourceMessageId: string;
   }): Promise<string | null> {
     if (!input.eventId) return "This room is not attached to an event, so there is nowhere to announce it.";
@@ -98,7 +174,8 @@ export function createLaunch(deps: LaunchDeps) {
     if (!targets.length) return "This event has no Auto or Approve spaces yet, so there is nowhere to announce it. Attach some in Desk.";
     const kb = await loadLiveKnowledge(db, config.community, { eventId: input.eventId });
     if (!kb) return null;
-    const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: input.what, sender: input.by });
+    const voice = voiceBlock(await loop.settings({ communityId: input.communityId, eventId: input.eventId }));
+    const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: input.what, sender: input.by, voice });
     if (!draft) return "I could not draft that announcement. Try saying it again in other words.";
     const [a] = await db
       .insert(announcements)
@@ -141,7 +218,8 @@ export function createLaunch(deps: LaunchDeps) {
     const current = a.text ?? latest?.text ?? latest?.draft ?? a.title;
     const kb = await loadLiveKnowledge(db, config.community, { eventId: a.eventId });
     if (!kb) return null;
-    const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: input.what, current, sender: input.by });
+    const voice = voiceBlock(await loop.settings({ communityId: a.communityId, eventId: a.eventId }));
+    const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: input.what, current, sender: input.by, voice });
     if (!draft) return "I could not redraft that announcement. Try saying the change again.";
     await replaceWaiting(a.id, null);
     await db.insert(announcementVersions).values({
@@ -219,9 +297,11 @@ export function createLaunch(deps: LaunchDeps) {
     const tz = await communityTz(a.communityId);
     const targets = await announcementTargets(db, a.eventId, a.targetSpaceIds);
     const where = describeTargets(targets);
+    // Spec 21: a space with its own language gets its own version, shown on the card, so the one OK covers what every space sees.
+    const langs = await spaceVersions(a, v.draft, targets, {});
     const crew = await loadCrew(db, a.communityId, a.eventId);
     const route = approvers(crew);
-    const times = loop.ladder(event?.stage ?? null, event?.endsAt ?? null);
+    const times = await loop.ladderFor(a.communityId, event);
     const edit = a.liveVersion > 0;
     // A post scheduled for later can only be approved until its time.
     if (a.scheduledAt && !edit) {
@@ -242,6 +322,7 @@ export function createLaunch(deps: LaunchDeps) {
       draftText: v.draft,
       announcementId: a.id,
       announcementVersion: v.version,
+      payload: langs.needed.size ? { translations: { source: v.draft, byLanguage: langs.byLanguage } satisfies AnnounceTranslations } : null,
       ...times,
     });
     const when = a.scheduledAt && !edit ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.` : edit ? "Approving it edits the post everywhere it went." : "Goes out as soon as it is approved.";
@@ -257,11 +338,14 @@ export function createLaunch(deps: LaunchDeps) {
           {
             id: CARD_QUESTION_ID,
             title: edit ? "Edit the announcement everywhere?" : "Post this announcement?",
+            // Switch keeps 4000 characters of a prompt: with translations, each version gets its share.
             prompt:
-              `${edit ? "New version" : "Ferri's draft"}:\n\n${v.draft.slice(0, 3000)}\n\n` +
+              `${edit ? "New version" : "Ferri's draft"}:\n\n${v.draft.slice(0, langs.needed.size ? 1600 : 3000)}\n\n` +
+              (langs.needed.size ? `${translationBlock(langs.needed, langs.byLanguage, Math.floor(1900 / langs.needed.size) - 80)}\n\n` : "") +
               (image ? `It goes out with the image ${image}, as the Builder posted it here.\n\n` : "") +
               `${when}\n\n` +
-              `Pick ${edit ? "Edit everywhere or Keep it as it is" : "Post it or Don't post"}, or write your own version in quotes after the card code to post that instead.`,
+              `Pick ${edit ? "Edit everywhere or Keep it as it is" : "Post it or Don't post"}, or write your own version in quotes after the card code to post that instead.` +
+              (langs.needed.size ? " Your own version is translated the same way." : ""),
             options: [
               { id: ANNOUNCE_POST_OPTION, label: edit ? "Edit everywhere" : "Post it", description: null },
               { id: CARD_SKIP_OPTION, label: edit ? "Keep it as it is" : "Don't post", description: null },
@@ -286,6 +370,8 @@ export function createLaunch(deps: LaunchDeps) {
     const ask =
       a.origin === "decision" && !edit
         ? `sounds like a decision the members should hear: “${v.title}”. Want me to announce it (${where})?`
+        : a.origin === "ferri" && !edit
+        ? `the event is over: want me to thank everyone? “${v.title}” (${where}).`
         : edit
           ? `${v.proposedBy} wants to change the announcement “${a.title}” everywhere it went. The new version needs your OK.`
           : `an announcement needs your OK: “${v.title}” (${where}${a.scheduledAt ? `, at ${formatWhen(a.scheduledAt, tz)}` : ""}).`;
@@ -370,12 +456,17 @@ export function createLaunch(deps: LaunchDeps) {
     if (!claimed) return 0;
     const text = claimed.text ?? a.text ?? "";
     const targets = await announcementTargets(db, a.eventId, a.targetSpaceIds);
+    // Spec 21: each space with its own language gets the version the card showed (or, for the approver's own words, its translation).
+    const stored = await storedTranslations(a.id, version, text);
+    const langs = await spaceVersions(claimed, text, targets, stored.byLanguage);
+    if (langs.made.length) await keepTranslations(stored.cardId, text, langs.byLanguage);
     const ok: TargetSpace[] = [];
     const failed: TargetSpace[] = [];
     // With an image (a poster from the Builder): fetched once from Switch, posted as a real upload with the text as its caption.
     const files = claimed.media?.length ? await mediaFiles(claimed) : null;
     for (const t of targets) {
-      const eventId = files ? await loop.postMedia(a.communityId, t.roomId, files, text) : await loop.post(a.communityId, t.roomId, text);
+      const body = langs.bySpace.get(t.spaceId)?.text ?? text;
+      const eventId = files ? await loop.postMedia(a.communityId, t.roomId, files, body) : await loop.post(a.communityId, t.roomId, body);
       await db
         .insert(announcementPosts)
         .values({
@@ -399,7 +490,7 @@ export function createLaunch(deps: LaunchDeps) {
       await loop.post(
         a.communityId,
         crewRoomId,
-        `Posted “${claimed.title}” to ${describeTargets(ok)}.${miss}${entryId ? " It's in the knowledge too, so I answer with it from now on." : ""}`,
+        `Posted “${claimed.title}” to ${describeTargets(ok)}.${miss}${languageNote(langs)}${entryId ? " It's in the knowledge too, so I answer with it from now on." : ""}`,
       );
     }
     return ok.length;
@@ -458,15 +549,25 @@ export function createLaunch(deps: LaunchDeps) {
       return 0;
     }
     const posts = await db.select().from(announcementPosts).where(eq(announcementPosts.announcementId, a.id));
+    // Spec 21: each space's language version of the new text, as the card showed it.
+    const stored = await storedTranslations(a.id, v.version, text);
+    const langs = await spaceVersions(
+      a,
+      text,
+      posts.flatMap((p) => (p.spaceId ? [{ spaceId: p.spaceId, name: p.spaceName, platform: p.platform }] : [])),
+      stored.byLanguage,
+    );
+    if (langs.made.length) await keepTranslations(stored.cardId, text, langs.byLanguage);
     const edited: string[] = [];
     const reposted: string[] = [];
     const failed: string[] = [];
     for (const p of posts) {
       const label = spaceLabel({ name: p.spaceName, platform: p.platform });
+      const body = (p.spaceId ? langs.bySpace.get(p.spaceId)?.text : undefined) ?? text;
       let done = false;
       if (p.eventId) {
         try {
-          done = await agent.editMessage(p.roomId, p.eventId, text);
+          done = await agent.editMessage(p.roomId, p.eventId, body);
         } catch (err) {
           log(`announcement ${a.id}: edit in ${p.spaceName} failed: ${(err as Error).message}`);
         }
@@ -476,7 +577,7 @@ export function createLaunch(deps: LaunchDeps) {
         edited.push(label);
         continue;
       }
-      const eventId = await loop.post(a.communityId, p.roomId, p.eventId ? `Update: ${text}` : text);
+      const eventId = await loop.post(a.communityId, p.roomId, p.eventId ? `Update: ${body}` : body);
       await db
         .update(announcementPosts)
         .set({
@@ -501,6 +602,7 @@ export function createLaunch(deps: LaunchDeps) {
         edited.length ? `Edited “${v.title}” in place in ${plural(edited.length, "space", "spaces")} (${edited.join(", ")}).` : null,
         reposted.length ? `In ${reposted.join(", ")} the post could not be edited, so I posted the new version as an update.` : null,
         failed.length ? `It did not go through in ${failed.join(", ")}.` : null,
+        languageNote(langs).trim() || null,
         "The knowledge has the new version too.",
       ];
       await loop.post(a.communityId, crewRoomId, parts.filter(Boolean).join(" "));

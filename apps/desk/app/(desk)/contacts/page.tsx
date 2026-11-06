@@ -94,6 +94,11 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
                       {x.email ?? "no published address"}
                       {x.why ? ` · ${x.why}` : ""}
                     </div>
+                    {x.worked.length ? (
+                      <div className="mt-0.5 text-[12px] text-emerald-700">
+                        {x.worked.map((w) => `Worked with us on ${w.eventName} (${w.role})`).join(" · ")}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="shrink-0 text-right text-[12px] text-zinc-400">
                     {x.messages.length ? `${x.messages.length} email${x.messages.length === 1 ? "" : "s"} · ` : ""}

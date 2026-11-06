@@ -125,9 +125,12 @@ export function ladderTimes(input: {
   eventEndsAt: Date | null;
   nudgeSeconds?: number;
   ttlSeconds?: number;
+  /** The event's own T (spec 21 settings `ladderLiveMinutes`, `ladderBeforeMinutes`); `nudgeSeconds` (tests) still wins. */
+  liveMinutes?: number;
+  beforeMinutes?: number;
 }): LadderTimes {
   const now = input.now.getTime();
-  const t = (input.nudgeSeconds ?? (input.stage === "live" ? 10 * 60 : 2 * 60 * 60)) * 1000;
+  const t = (input.nudgeSeconds ?? (input.stage === "live" ? (input.liveMinutes ?? 10) * 60 : (input.beforeMinutes ?? 120) * 60)) * 1000;
   let ttl: number;
   if (input.ttlSeconds !== undefined) {
     ttl = input.ttlSeconds * 1000;

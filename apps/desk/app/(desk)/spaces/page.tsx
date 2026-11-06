@@ -4,6 +4,7 @@ import type { GatewayRoom } from "@/lib/ferri";
 import { gatewayAs, requireUser } from "@/lib/session";
 import { addFerri, keepOff, saveSpace } from "../actions";
 import { Empty, Note, PageHead, Section } from "../ui";
+import { SpaceVoiceForm } from "../settings-form";
 
 const MODE_HELP: Record<string, string> = {
   off: "ignored",
@@ -115,6 +116,12 @@ export default async function SpacesPage({ searchParams }: { searchParams: Promi
                   </div>
                 </div>
                 <SpaceForm space={s} events={events} submit="Save" />
+                {/* Spec 21: tone and language for this space only (a Hindi WhatsApp group, a playful Discord). */}
+                {s.attachment ? (
+                  <div className="w-full">
+                    <SpaceVoiceForm communityId={c.id} eventId={s.attachment.eventId} spaceId={s.id} />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

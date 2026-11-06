@@ -125,8 +125,18 @@ export function careRoute(crew: CrewMember[], r: Pick<CareReading, "signal" | "t
  * Whether a case goes to the Builder at once, without a tap: a technical
  * problem during the event (Live), in a space where Ferri posts on its own.
  */
-export function autoHelp(input: { technical: boolean; kind: string; stage: string | null; mode: string | null; paused: boolean }): boolean {
-  return input.technical && (input.kind === "stuck" || input.kind === "confused") && input.stage === "live" && input.mode === "auto" && !input.paused;
+export function autoHelp(input: {
+  technical: boolean;
+  kind: string;
+  stage: string | null;
+  mode: string | null;
+  paused: boolean;
+  /** Spec 21 `autoHelp`: live (the default), always (any stage), never (only on the crew's tap). */
+  when?: "live" | "always" | "never";
+}): boolean {
+  const when = input.when ?? "live";
+  if (when === "never") return false;
+  return input.technical && (input.kind === "stuck" || input.kind === "confused") && (when === "always" || input.stage === "live") && input.mode === "auto" && !input.paused;
 }
 
 /** Whether the Builder may be sent to a case's space at all (the crew's tap, or automatically). */
@@ -202,8 +212,8 @@ export function caseLine(c: Pick<CareCase, "number" | "kind" | "status" | "reaso
 }
 
 /** Check-ins: 30 minutes during the event, 4 hours before; at most three. */
-export function checkInDelayMs(stage: string | null): number {
-  return stage === "live" ? 30 * 60_000 : 4 * 3600_000;
+export function checkInDelayMs(stage: string | null, s?: { checkInLiveMinutes: number; checkInBeforeMinutes: number }): number {
+  return stage === "live" ? (s?.checkInLiveMinutes ?? 30) * 60_000 : (s?.checkInBeforeMinutes ?? 240) * 60_000;
 }
 export const MAX_CHECK_INS = 3;
 

@@ -6,7 +6,6 @@ import {
   discoverSpaces,
   findCommunity,
   loadLiveKnowledge,
-  loadSkills,
   mirrorToSwitch,
   roomPlatform,
   type RoomDetail,
@@ -21,6 +20,10 @@ import { createOutreach } from "./outreach.ts";
 import { createCare } from "./care.ts";
 import { createGuests } from "./guests.ts";
 import { createShield } from "./shield.ts";
+import { createPrompts } from "./prompts.ts";
+import { createWrap } from "./wrap.ts";
+import { createDesks } from "./desks.ts";
+import { createSettings } from "./settings.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
 import { ConnectionStore } from "./state.ts";
@@ -92,8 +95,8 @@ const rooms = new RoomHistory(async (roomId) => {
   return lines;
 });
 
-// Read on every question, so a skill edit applies without a restart.
-const skills = () => loadSkills(config.skillsDir, ["ferri", "librarian"]);
+// Skills are read on every question (from Desk's edits, else the files), so an edit applies without a restart.
+const prompts = createPrompts({ db });
 
 // Spaces: ask Switch which rooms Ferri is in, now and every minute. New rooms land in Discovered, Off.
 const roomCache = new Map<string, { roomId: string; name: string; platform: string | null }>();
@@ -132,7 +135,7 @@ async function watchMirror(): Promise<void> {
   }
 }
 
-const loop = createLoop({ db, agent, skills, room, log });
+const loop = createLoop({ db, agent, skillsFor: prompts.skillsFor, room, log });
 const launch = createLaunch({ db, agent, loop, room, log });
 loop.setAnnounceHooks(launch.hooks);
 const plan = createPlan({ db, agent, loop, gateway: gateway ?? null, room, log });
@@ -149,7 +152,13 @@ loop.setGuestHooks(guests.sendHooks, guests.spotHooks);
 outreach.setGuestsHook(guests);
 builder.setSiteGuestHook(guests.siteEvent);
 log(outreach.enabled ? `email: on, from ${outreach.mailbox}` : "email: off (no RESEND_API_KEY)");
-const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, skills, room, log });
+const wrap = createWrap({ db, agent, loop, launch, builder, gateway: gateway ?? null, prompts, room, log });
+loop.setKindHooks("wrap", wrap.hooks);
+const desks = createDesks({ db, agent, loop, builder, gateway: gateway ?? null, prompts, room, log });
+loop.setKindHooks("desk", desks.hooks);
+prompts.setDeskSkill(desks.skillFor);
+const settings = createSettings({ db, prompts, room, log });
+const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, wrap, desks, settings, prompts, room, log });
 const stopLoop = loop.start();
 const shield = await createShield({ db, loop, log }).start();
 await discover();
@@ -168,6 +177,10 @@ const timers = [
   setInterval(() => void care.tick(), config.ladderTickMs),
   // RSVP: guest syncs (Luma, the site), RSVP answers, the waitlist, sends to guests, Ferri's own proposals.
   setInterval(() => void guests.tick(), config.ladderTickMs),
+  // Wrap: Ferri's own wrap proposal after the end, closes and reopens asked for in Desk.
+  setInterval(() => void wrap.tick(), config.ladderTickMs),
+  // Desks: desks and packs asked for in Desk, sheet documents.
+  setInterval(() => void desks.tick(), config.ladderTickMs),
 ];
 void launch.tick();
 void watchMirror();

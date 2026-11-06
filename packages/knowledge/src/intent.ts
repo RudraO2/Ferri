@@ -2,12 +2,13 @@ import { z } from "zod";
 import { shortCardIds, type OpenCard } from "./cards.ts";
 import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
 import type { PlanItem } from "./plan.ts";
+import { SETTING_KEYS } from "./settings.ts";
 import { TOPICS, type ChatLine } from "./triage.ts";
 
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "guests", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "guests", "wrap", "desk", "settings", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -65,8 +66,54 @@ export const CrewIntentSchema = z.strictObject({
       note: z.string(),
     })
     .nullable(),
+  // Specs 19 to 21 add objects that are always present with action "none" (not nullable: the schema allows 16 unions at most).
+  /** wrap: after the event (spec 19). */
+  wrap: z.strictObject({
+    action: z.enum(["none", "recap", "close", "kit", "partners", "reopen", "start"]),
+    /** The event they mean, as written ("" = the event of this room); for start, the new event's name. */
+    event: z.string(),
+    /** start: the event (or its starter kit) to start from, as written. Else "". */
+    from: z.string(),
+    /** close: the event to move the spaces to, as written. Else "". */
+    to: z.string(),
+    /** start: when the new event starts, ISO 8601 with the offset. Else "". */
+    when: z.string(),
+  }),
+  /** desk: rooms with a desk skill (spec 20). */
+  desk: z.strictObject({
+    action: z.enum(["none", "make", "pack", "custom", "list", "sheet"]),
+    /** make and sheet: the desk kind; pack: the kind of event. Else "". */
+    kind: z.string(),
+    /** The desk's own name if they gave one ("rangoli judges"). Else "". */
+    name: z.string(),
+    /** Usernames to invite, as written, without the @. */
+    members: z.array(z.string()),
+    /** custom: what the desk is for, in their words. Else "". */
+    what: z.string(),
+    /** A platform they named (discord, slack, telegram, mattermost, whatsapp). Else "". */
+    platform: z.string(),
+  }),
+  /** settings: how Ferri behaves (spec 21). */
+  settings: z.strictObject({
+    action: z.enum(["none", "set", "show", "reset"]),
+    scope: z.enum(["community", "event", "space"]),
+    /** scope space: the space as written ("the WhatsApp group", "Discord"). Else "". */
+    space: z.string(),
+    key: z.enum(["", ...SETTING_KEYS]),
+    value: z.string(),
+  }),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
+
+/** The first call's schema: everything but the spec 19 to 21 objects (with them the grammar is too large for the API). */
+export const CrewIntentBaseSchema = CrewIntentSchema.omit({ wrap: true, desk: true, settings: true });
+
+/** The spec 19 to 21 objects when the intent is not theirs. */
+const NO_EXTRA_INTENT = (): Pick<CrewIntent, "wrap" | "desk" | "settings"> => ({
+  wrap: { action: "none", event: "", from: "", to: "", when: "" },
+  desk: { action: "none", kind: "", name: "", members: [], what: "", platform: "" },
+  settings: { action: "none", scope: "community", space: "", key: "", value: "" },
+});
 
 const INTENT_SYSTEM = `You read a message that someone on the organizing crew wrote to Ferri, the AI teammate of their community. Ferri holds open question cards: questions from members it could not answer and is waiting on the crew for.
 
@@ -116,7 +163,32 @@ facts: every fact in the message that is not part of the card answer, each as a 
   guests.audience is "waitlist" only when they ask to write to the people on the waitlist, else "going". what and when are "" for status and sync.
   Telling the members in the chat spaces is announce; a reminder for the crew themselves is remind; emailing the registered guests is guests.
 
-For every intent, announce, remind, plan, build, outreach, care and guests are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build, outreach, care and guests.
+- wrap: the event is over, or they are moving on to the next one. wrap.action:
+  - recap: how the event went ("how did build night go?", "give me the recap", "send the numbers", "wrap up build night").
+  - close: close the event, so its spaces stop ("close build night", "we're done, shut the event down", "close it and move the spaces to Build Night 2"). wrap.to is the event to move the spaces to, as written, else "".
+  - kit: pack the event into a starter kit for next time ("make a starter kit from build night").
+  - partners: save the people and organizations the event worked with to contacts ("save the partners to contacts", "add our sponsors to the CRM for next time").
+  - reopen: undo a close ("reopen build night").
+  - start: start a new event, usually from an earlier one's kit ("start Build Night 2 on 12 December from the Build Night kit", "set up the next meetup like the last one"). wrap.event is the new event's name, wrap.from the earlier event or kit as written ("" if none), wrap.when its start as ISO 8601 with the offset ("" if not given).
+  wrap.event is the event they mean as written ("" for the one this room belongs to), except for start. Unused fields are "".
+- desk: a desk is a room Ferri makes for one job at the event, with its own way of working (help, judging, mentors, volunteers, checkin, speakers, sponsors, food, safety, tables, lost-found). desk.action:
+  - make: one desk of a kind on that list ("make a judging desk with arjun and priya", "we need a help desk", "set up a check-in desk for the volunteers"). desk.kind is the kind from the list, desk.members the usernames as written without @, desk.name a name they gave ("" if none).
+  - pack: every desk one kind of event needs ("set up the desks for a meetup", "make the hackathon rooms"). desk.kind is the kind of event: hackathon, meetup, game-night, festival, workshop or conference (a party, Diwali or a fair is festival; a board game night is game-night; a talk or tech meetup is meetup).
+  - custom: a desk for a job not on the list ("make a desk for the rangoli judges where they post their scores", "a room where the photographers log their shots"). desk.what is what the desk is for, in their words, desk.name a short name.
+  - list: what desks there are ("what desks do we have?").
+  - sheet: show what a desk has collected ("show the judging scores", "who has checked in so far?", "what's in lost and found?"). desk.kind is that desk's kind.
+  desk.platform is a platform they named for the room, else "". Team rooms (rooms for teams of participants) are team_rooms, not desk.
+- settings: how Ferri behaves, for the whole community, this event, or one space. settings.action is set, show ("what are the settings?", "how are you set up for Build Night?") or reset (back to the default). settings.key is one of:
+  - tone: how Ferri sounds ("be more playful on Discord", "keep it professional"); value: playful, warm, professional, brief, or their own words.
+  - language: the language Ferri replies in ("reply in Hindi in the WhatsApp group"); value: the language name, or "" for each person's own language.
+  - stepInSeconds: how long Ferri waits before answering a question said to the room ("wait a minute before answering in the rooms": 60).
+  - ladderLiveMinutes, ladderBeforeMinutes: how soon an unanswered card nudges its owner, during the event and before it.
+  - care: on or off ("stop reading people's mood", "turn off care").
+  - autoHelp: when the Builder helps stuck members without a tap: live, always or never.
+  - checkInLiveMinutes, checkInBeforeMinutes, guestReminderHours, guestNudgeDays, guestDailyCap, autoWrap (on or off), wrapAfterMinutes, decisionWatcher (on or off: offering announcements from crew decisions), planReader (on or off: keeping the plan from crew chat).
+  settings.scope is space when they name a space or platform ("in the WhatsApp group", "on Discord"), with settings.space as written without "in" or "on" ("the WhatsApp group", "Discord"); "in the room" or "in the rooms" without naming one is not a space. scope is event when they name the event or say "for this event"; else community. settings.value is the new value as plain text ("60", "off", "Hindi", "playful"), "" for show and reset. settings.key is "" for show, and "" for a reset of everything ("reset the settings for Build Night"). Undoing one change is reset with that key ("stop replying in Hindi in the WhatsApp group": reset, language; "go back to your normal tone on Discord": reset, tone). Telling Ferri how to behave is settings, not remember: "remember" is for facts members may ask about.
+
+For every intent, announce, remind, plan, build, outreach, care and guests are null unless the intent is that one, and teams is [] unless the intent is team_rooms. wrap.action, desk.action and settings.action are "none" unless the intent is that one (with every other field of that object "" or [], and settings.scope "community"). facts is [] for announce, remind, team_rooms, plan, build, outreach, care, guests, wrap, desk and settings.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
@@ -147,21 +219,45 @@ export async function crewIntent(input: {
   const { text, byShort } = shortCardIds(input.open);
   const recent = shortAnnouncementIds(input.announcements ?? []);
   const history = input.history.slice(-6).map((l) => `${l.sender}: ${l.body}`).join("\n") || "(none)";
+  const user =
+    `Now: ${input.now ?? new Date().toISOString()}\n\nOpen cards:\n${text}\n\nRecent announcements:\n${recent.text}\n\n` +
+    `Plan:\n${input.plan?.text ?? "(empty)"}\n\n` +
+    `Open cases:\n${input.cases?.length ? input.cases.join("\n") : "(none)"}\n\n` +
+    `Recent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`;
+  // The whole schema is past the API's grammar limit ("The compiled grammar is too large"), so the
+  // wrap, desk and settings objects (specs 19 to 21) come from a second small call, only for those intents.
   const out = await structuredCall({
     choice: input.choice,
     system: [{ type: "text", text: INTENT_SYSTEM, cache_control: { type: "ephemeral" } }],
-    user:
-      `Now: ${input.now ?? new Date().toISOString()}\n\nOpen cards:\n${text}\n\nRecent announcements:\n${recent.text}\n\n` +
-      `Plan:\n${input.plan?.text ?? "(empty)"}\n\n` +
-      `Open cases:\n${input.cases?.length ? input.cases.join("\n") : "(none)"}\n\n` +
-      `Recent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`,
-    schema: CrewIntentSchema,
+    user,
+    schema: CrewIntentBaseSchema,
     maxTokens: 2500,
   });
-  const intent = out.data;
+  const usage = { ...out.usage };
+  let latencyMs = out.latencyMs;
+  let intent: CrewIntent | null = out.data ? { ...out.data, ...NO_EXTRA_INTENT() } : null;
+  if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings")) {
+    const k = intent.intent;
+    const more = await structuredCall({
+      choice: input.choice,
+      system: [{ type: "text", text: INTENT_SYSTEM, cache_control: { type: "ephemeral" } }],
+      user: `${user}\n\nThe intent is ${k}. Fill in only the ${k} object for this message, by the rules above.`,
+      schema: z.strictObject({ [k]: CrewIntentSchema.shape[k] }),
+      maxTokens: 1500,
+    });
+    usage.input += more.usage.input;
+    usage.output += more.usage.output;
+    usage.cacheRead += more.usage.cacheRead;
+    usage.cacheWrite += more.usage.cacheWrite;
+    latencyMs += more.latencyMs;
+    const extra = (more.data as Partial<Pick<CrewIntent, "wrap" | "desk" | "settings">> | null)?.[k];
+    if (extra) intent = { ...intent, [k]: extra } as CrewIntent;
+    else intent = { ...intent, intent: "other" };
+  }
   // "other" or "question" with exactly one intent's details filled in: that intent (Haiku sometimes labels it loosely).
   if (intent && (intent.intent === "other" || intent.intent === "question")) {
-    const filled = (["announce", "remind", "plan", "build", "outreach", "care", "guests"] as const).filter((k) => intent[k] !== null);
+    const filled: CrewIntent["intent"][] = (["announce", "remind", "plan", "build", "outreach", "care", "guests"] as const).filter((k) => intent[k] !== null);
+    for (const k of ["wrap", "desk", "settings"] as const) if (intent[k].action !== "none") filled.push(k);
     if (filled.length === 1) intent.intent = filled[0]!;
   }
   let card =
@@ -172,7 +268,7 @@ export async function crewIntent(input: {
   const revises = ref ? (recent.byShort.get(ref) ?? null) : null;
   const pref = intent?.intent === "plan" ? intent.plan?.ref?.trim().toUpperCase() : undefined;
   const planItem = pref ? (input.plan?.byShort.get(pref) ?? null) : null;
-  return { intent, card, revises, planItem, usage: out.usage, latencyMs: out.latencyMs };
+  return { intent, card, revises, planItem, usage, latencyMs };
 }
 
 // ── Announcements a crew member may refer to ─────────────────────────────

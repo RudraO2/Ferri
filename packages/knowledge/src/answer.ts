@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Db } from "@ferri/db";
 import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
 import { formatSourceLine, renderInstructions, renderKnowledge } from "./render.ts";
+import { TONE_PRESETS, sourceLabel } from "./settings.ts";
 import { searchKnowledge, type KnowledgeItem, type LiveKnowledge } from "./store.ts";
 import type { ChatLine } from "./triage.ts";
 
@@ -44,6 +45,8 @@ export function knowledgeSize(kb: LiveKnowledge): number {
 export function finalizeAnswer(
   out: ModelAnswer,
   ids: Map<string, KnowledgeItem>,
+  /** Spec 21: the place's language setting, for the source label ("स्रोत" in Hindi). The citation check is the same. */
+  opts: { language?: string } = {},
 ): Pick<AnswerResult, "kind" | "text" | "sources" | "missing" | "downgraded"> {
   const sources: KnowledgeItem[] = [];
   for (const id of out.source_ids) {
@@ -55,7 +58,8 @@ export function finalizeAnswer(
     if (sources.length === 0 || !reply) {
       return { kind: "unknown", text: HOLDING_REPLY, sources: [], missing: null, downgraded: true };
     }
-    return { kind: "answer", text: `${reply}\n\n${formatSourceLine(sources)}`, sources, missing: out.missing?.trim() || null, downgraded: false };
+    const label = opts.language?.trim() ? (many: boolean) => sourceLabel(opts.language!, many) : undefined;
+    return { kind: "answer", text: `${reply}\n\n${formatSourceLine(sources, label)}`, sources, missing: out.missing?.trim() || null, downgraded: false };
   }
   if (out.kind === "unknown") {
     return { kind: "unknown", text: reply || HOLDING_REPLY, sources: [], missing: null, downgraded: false };
@@ -84,6 +88,10 @@ export async function answerQuestion(input: {
    * the team has answered since: write the follow-up.
    */
   followUp?: boolean;
+  /** Spec 21: the place's language setting ("" or unset: the person's own), for the source label. */
+  language?: string;
+  /** Spec 21: the tone the crew set for this place (a preset name or their words; "" for the default). */
+  tone?: string;
 }): Promise<AnswerResult> {
   const { kb } = input;
   const inline = knowledgeSize(kb) <= (input.inlineLimit ?? INLINE_LIMIT_CHARS);
@@ -120,12 +128,23 @@ export async function answerQuestion(input: {
       : input.addressed
         ? `${input.sender} asked you directly:\n${input.question}`
         : `${input.sender} asked the room (not you), and you may step in only with a sourced answer:\n${input.question}`,
-  ].join("\n\n");
+    // Spec 21: the crew set this place's language. Said here, next to the question, it wins over
+    // "reply in the person's language"; the knowledge stays in its own language and is translated.
+    input.language?.trim()
+      ? `The crew set this room's language to ${input.language.trim()}. Write the whole reply in ${input.language.trim()} (translate the facts from the knowledge), ` +
+        "even if the question is in another language. Keep names, times, links and codes exactly as written. Say nothing about the language itself."
+      : "",
+    input.tone?.trim()
+      ? `The crew set the tone for this room: ${TONE_PRESETS[input.tone.trim().toLowerCase()] ?? input.tone.trim()} Write the reply in that tone; the facts stay exactly as written.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const out = await structuredCall({ choice: input.choice, system, user, schema: AnswerSchema, maxTokens: 8000 });
   const base = { retrieval: inline ? ("inline" as const) : ("search" as const), model: out.model, usage: out.usage, latencyMs: out.latencyMs };
 
   if (out.refused) return { kind: "declined", text: "", sources: [], missing: null, downgraded: false, ...base };
   if (!out.data) return { kind: "invalid", text: "", sources: [], missing: null, downgraded: false, ...base };
-  return { ...finalizeAnswer(out.data, rendered.ids), ...base };
+  return { ...finalizeAnswer(out.data, rendered.ids, { language: input.language }), ...base };
 }

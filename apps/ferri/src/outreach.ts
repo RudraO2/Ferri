@@ -14,6 +14,7 @@ import {
   contactByCode,
   contactsSummary,
   draftOutreachEmail,
+  voiceBlock,
   finalEmailText,
   findContact,
   jobRef,
@@ -198,6 +199,8 @@ export function createOutreach(deps: OutreachDeps) {
           ask: m.ask ?? "Introduce the event and ask if they would like to partner.",
           sender: m.requestedBy ?? "the crew",
           replyTo: theirs ? { subject: theirs.subject, text: theirs.text ?? "" } : null,
+          // Spec 21: the crew's tone and language for the community or the event.
+          voice: voiceBlock(await loop.settings({ communityId: m.communityId, eventId: m.eventId ?? contact.eventId })),
         });
         if (draft) {
           subject = theirs ? reSubject(theirs.subject) : draft.subject;

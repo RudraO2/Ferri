@@ -37,6 +37,11 @@ import {
   worthAnswering,
   type ChatLine,
   type OpenCard,
+  normalizeSettingInput,
+  parseSetting,
+  translateAnnouncement,
+  voiceBlock,
+  type SettingKey,
 } from "@ferri/knowledge";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -699,10 +704,239 @@ try {
   console.log(`      ${(gd.draft?.text ?? "").replace(/\n+/g, " | ")}`);
   for (const x of gdProblems) console.log(`      -> ${x}`);
 
+  // ── Spec 21: customization (settings intents, answers in a set language, voice in drafts) ──
+  let spec21Cases = 0;
+  {
+    const settingsCases: { msg: string; action: string; key?: string; scope?: string; space?: RegExp; value?: unknown }[] = [
+      { msg: "@ferri reply in Hindi in the WhatsApp group", action: "set", key: "language", scope: "space", space: /whatsapp/i, value: "Hindi" },
+      { msg: "@ferri be more playful on Discord", action: "set", key: "tone", scope: "space", space: /discord/i, value: "playful" },
+      { msg: "@ferri turn off care for Build Night", action: "set", key: "care", scope: "event", value: "off" },
+      { msg: "@ferri wait a minute before answering questions in the room", action: "set", key: "stepInSeconds", value: 60 },
+      { msg: "@ferri what are the settings?", action: "show" },
+      { msg: "@ferri stop replying in Hindi in the WhatsApp group", action: "reset", key: "language", scope: "space", space: /whatsapp/i },
+    ];
+    const si = await pool(settingsCases, 4, async (c) => {
+      const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+      tokensIn += r.usage.input + r.usage.cacheWrite;
+      tokensOut += r.usage.output;
+      cacheRead += r.usage.cacheRead;
+      const s = r.intent?.settings;
+      const problems: string[] = [];
+      if (r.intent?.intent !== "settings" || !s) problems.push(`intent ${r.intent?.intent}, expected settings`);
+      else {
+        if (s.action !== c.action) problems.push(`action ${s.action}, expected ${c.action}`);
+        if (c.key && s.key !== c.key) problems.push(`key ${s.key}, expected ${c.key}`);
+        if (c.scope && s.scope !== c.scope) problems.push(`scope ${s.scope}, expected ${c.scope}`);
+        if (!c.scope && s.scope === "space") problems.push("scope space, expected no space");
+        if (c.space && !c.space.test(s.space)) problems.push(`space "${s.space}"`);
+        if (c.value !== undefined && s.key) {
+          const v = parseSetting(s.key as SettingKey, normalizeSettingInput(s.key as SettingKey, s.value));
+          if (v !== c.value) problems.push(`value "${s.value}" reads as ${JSON.stringify(v)}, expected ${JSON.stringify(c.value)}`);
+        }
+      }
+      return { c, r, problems };
+    });
+    console.log("\nsettings intents (spec 21)");
+    for (const { c, r, problems } of si) {
+      if (problems.length) failed++;
+      console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+      console.log(`      ${JSON.stringify({ intent: r.intent?.intent, settings: r.intent?.settings })}`);
+      for (const x of problems) console.log(`      -> ${x}`);
+    }
+    spec21Cases += settingsCases.length;
+
+    // An answer where the space's language is Hindi: in Hindi, with a real source and the Hindi source label.
+    const hindi = voiceBlock({ tone: "", language: "Hindi" });
+    const ha = await answerQuestion({ db, kb, choice: models.main, skills: `${skills}\n\n${hindi}`, roomName: "eval", sender: "tester", question: "what time is lunch?", history: [], addressed: true, language: "Hindi" });
+    tokensIn += ha.usage.input + ha.usage.cacheWrite;
+    tokensOut += ha.usage.output;
+    cacheRead += ha.usage.cacheRead;
+    const haProblems = [
+      ha.kind !== "answer" ? `kind ${ha.kind}` : null,
+      !ha.sources.some((x) => x.key.includes("#food")) ? "no citation of #food" : null,
+      !/[ऀ-ॿ]/.test(ha.text.split("\n\n")[0] ?? "") ? "reply not in Devanagari" : null,
+      !/\n\nस्रोत: /.test(ha.text) ? "no Hindi source line" : null,
+    ].filter(Boolean);
+    if (haProblems.length) failed++;
+    console.log(`\n${haProblems.length ? "FAIL" : "ok  "} answer in Hindi with a source :: ${ha.text.replace(/\n+/g, " | ")}`);
+    for (const x of haProblems) console.log(`      -> ${x}`);
+    spec21Cases++;
+
+    // The voice block reaches the announcement drafter.
+    const vd = await draftAnnouncement({ choice: models.main, kb, what: "Lunch moves to 1:30 PM on Saturday because the caterer is late", sender: "Rudra", voice: voiceBlock({ tone: "playful", language: "Hindi" }) });
+    tokensIn += vd.usage.input + vd.usage.cacheWrite;
+    tokensOut += vd.usage.output;
+    cacheRead += vd.usage.cacheRead;
+    const vdProblems = [
+      !vd.draft ? "no draft" : null,
+      vd.draft && !/[ऀ-ॿ]/.test(vd.draft.text) ? "draft not in Hindi" : null,
+      vd.draft && !/1:30/.test(vd.draft.text) ? "drops 1:30" : null,
+      vd.draft && /@(everyone|channel|here)/i.test(vd.draft.text) ? "pages the room" : null,
+    ].filter(Boolean);
+    if (vdProblems.length) failed++;
+    console.log(`${vdProblems.length ? "FAIL" : "ok  "} announcement draft with a Hindi, playful voice :: ${(vd.draft?.text ?? "").replace(/\n+/g, " | ")}`);
+    for (const x of vdProblems) console.log(`      -> ${x}`);
+    spec21Cases++;
+
+    // One announcement, translated for a Hindi space: same facts.
+    const tr = await translateAnnouncement({ choice: models.fast, text: "Lunch moves to 1:30 PM on Saturday. It's in Hall B. Details: https://lantern.example/food", language: "Hindi" });
+    tokensIn += tr.usage.input + tr.usage.cacheWrite;
+    tokensOut += tr.usage.output;
+    cacheRead += tr.usage.cacheRead;
+    const trProblems = [
+      !tr.text ? "no translation" : null,
+      tr.text && !/[ऀ-ॿ]/.test(tr.text) ? "not in Hindi" : null,
+      tr.text && !/1:30/.test(tr.text) ? "drops 1:30" : null,
+      tr.text && !tr.text.includes("https://lantern.example/food") ? "changes the link" : null,
+    ].filter(Boolean);
+    if (trProblems.length) failed++;
+    console.log(`${trProblems.length ? "FAIL" : "ok  "} announcement translated into Hindi :: ${(tr.text ?? "").replace(/\n+/g, " | ")}`);
+    for (const x of trProblems) console.log(`      -> ${x}`);
+    spec21Cases++;
+  }
+
+  // ── Spec 19: wrap (crew intents, lessons with no invented numbers, partners, keep/check) ──
+  let spec19Cases = 0;
+  {
+    const wrapLib = await import("@ferri/knowledge");
+    const wrapCases: { msg: string; action: string; event?: RegExp; from?: RegExp; to?: RegExp; when?: boolean }[] = [
+      { msg: "@ferri how did build night go?", action: "recap" },
+      { msg: "@ferri close build night and move the spaces to Build Night 2", action: "close", to: /build night 2/i },
+      { msg: "@ferri start Lantern Build Night 2 on 12 December from the Build Night kit", action: "start", event: /build night 2/i, from: /build night/i, when: true },
+      { msg: "@ferri reopen build night", action: "reopen", event: /build night/i },
+      { msg: "@ferri save our sponsors and partners to contacts for next time", action: "partners" },
+      { msg: "@ferri make a starter kit from build night", action: "kit", event: /build night/i },
+    ];
+    const wi = await pool(wrapCases, 4, async (c) => {
+      const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+      tokensIn += r.usage.input + r.usage.cacheWrite;
+      tokensOut += r.usage.output;
+      cacheRead += r.usage.cacheRead;
+      const w = r.intent?.wrap;
+      const problems: string[] = [];
+      if (r.intent?.intent !== "wrap" || !w) problems.push(`intent ${r.intent?.intent}, expected wrap`);
+      else {
+        if (w.action !== c.action) problems.push(`action ${w.action}, expected ${c.action}`);
+        if (c.event && !c.event.test(w.event)) problems.push(`event "${w.event}"`);
+        if (c.from && !c.from.test(w.from)) problems.push(`from "${w.from}"`);
+        if (c.to && !c.to.test(w.to)) problems.push(`to "${w.to}"`);
+        const when = parseWhen(w.when || null, now);
+        if (c.when && (!when || when.getUTCMonth() !== 11 || ![11, 12].includes(when.getUTCDate()))) problems.push(`when "${w.when}", expected 12 December`);
+      }
+      return { c, r, problems };
+    });
+    console.log("\nwrap intents (spec 19)");
+    for (const { c, r, problems } of wi) {
+      if (problems.length) failed++;
+      console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+      console.log(`      ${JSON.stringify({ intent: r.intent?.intent, wrap: r.intent?.wrap })}`);
+      for (const x of problems) console.log(`      -> ${x}`);
+    }
+    spec19Cases += wrapCases.length;
+
+    // Lessons: grounded, and no number that is not in the stats (checked again here on the guarded output).
+    const stats = {
+      event: { name: "Lantern Build Night", startsAt: null, endsAt: null },
+      questions: { asked: 42, people: 17, answeredByFerri: 30, answeredByCrew: 8, unanswered: 4, listened: 0, medianFerriSeconds: 3, medianCrewMinutes: 12, platforms: ["mattermost", "telegram"] },
+      knowledge: { crewAnswers: 6 },
+      cards: { opened: 14, byKind: { question: 10, announce: 4 }, answered: 11, expired: 3, dismissed: 0 },
+      announcements: { sent: 3, spaces: 9, edits: 1 },
+      care: { cases: 5, solved: 4, byBuilder: 2, open: 1 },
+      guests: { registered: 120, going: 95, waitlist: 10, pending: 0, notGoing: 15, checkedIn: 80, confirmed: 60, freed: 12, reoffered: 9, sources: { site: 70, luma: 50 } },
+      guestEmails: { sends: 2, mails: 190, delivered: 185 },
+      outreach: { emailed: 8, replies: 5, interested: 3, declined: 1 },
+      listings: [],
+      builder: { done: 4, byKind: { site: 1, poster: 2, listing: 1 } },
+      shield: { checks: 300, blocked: 2, redacted: 1 },
+      spaces: { count: 9, platforms: ["mattermost", "telegram"] },
+      computedAt: now.toISOString(),
+    } as unknown as import("@ferri/knowledge").RecapStats;
+    const record = {
+      unanswered: ["Where can teams sleep overnight?", "Is there parking for bikes?", "Can we bring our own monitor?"],
+      topAsked: [{ question: "When does hacking start?", count: 9 }, { question: "What is the wifi password?", count: 7 }],
+      caseReasons: ["stuck (solved): could not connect to the wifi with a Linux laptop", "upset (open): lost their team after the team mixer"],
+      expiredCards: ["question: Where can teams sleep overnight?", "question: Is there parking for bikes?", "question: Can we bring our own monitor?"],
+      replySummaries: ["CloudCo will give every team 100 dollars of credits and wants a logo on the site."],
+      announcements: ["Lunch moves to 1:30 PM", "Judging starts at 4 PM"],
+    };
+    const lessons = await wrapLib.writeLessons({ choice: models.fast, eventName: "Lantern Build Night", stats, record });
+    const allowed = wrapLib.allowedNumbers(stats);
+    const all = [...lessons.wentWell, ...lessons.toFix, ...lessons.answerEarly];
+    const invented = all.filter((l) => wrapLib.numbersIn(l.split("Lantern Build Night").join(" ")).some((x) => !allowed.has(x)));
+    const lProblems = [
+      !lessons.wentWell.length ? "no went-well lines" : null,
+      !lessons.toFix.length ? "no to-fix lines" : null,
+      !lessons.answerEarly.some((l) => /sleep|overnight|parking|monitor/i.test(l)) ? "answer-early misses the unanswered questions" : null,
+      invented.length ? `invented numbers: ${invented.join(" | ")}` : null,
+    ].filter(Boolean);
+    if (lProblems.length) failed++;
+    console.log(`\n${lProblems.length ? "FAIL" : "ok  "} wrap lessons with only real numbers :: ${JSON.stringify(lessons)}`);
+    for (const x of lProblems) console.log(`      -> ${x}`);
+    spec19Cases++;
+
+    // Partners from the knowledge and plan: organizations that took part, email only when written.
+    const sources = [
+      { id: "K1", title: "Lantern Build Night FAQ: Sponsors", text: "CloudCo gives every team cloud credits. Questions about credits: asha@cloudco.example. Prizes are given by Nimbus Labs." },
+      { id: "K2", title: "Lantern Build Night FAQ: Venue", text: "We are at the Koramangala Makerspace, 3rd floor. Register on Luma; chat with us on Discord." },
+      { id: "P1", title: "plan decision: Food", text: "Dinner is pizza from Slice House, paid by the community." },
+      { id: "P2", title: "plan task: Outreach", text: "Ask DataWorks if they want to sponsor next time." },
+    ];
+    const found = await wrapLib.extractPartners({ choice: models.fast, eventName: "Lantern Build Night", communityName: "Lantern Labs", sources });
+    const has = (re: RegExp) => found.find((p) => re.test(p.org));
+    const pProblems = [
+      !has(/cloudco/i) ? "misses CloudCo" : null,
+      has(/cloudco/i) && has(/cloudco/i)!.email !== "asha@cloudco.example" ? `CloudCo email ${has(/cloudco/i)!.email}` : null,
+      !has(/slice house/i) ? "misses Slice House" : null,
+      !has(/makerspace/i) ? "misses the venue" : null,
+      !has(/nimbus/i) ? "misses the prize giver" : null,
+      has(/luma|discord/i) ? "lists a platform as a partner" : null,
+      has(/lantern labs/i) ? "lists the community itself" : null,
+      found.some((p) => p.email && !sources.some((s) => s.text.includes(p.email!))) ? "an email that is not written" : null,
+    ].filter(Boolean);
+    if (pProblems.length) failed++;
+    console.log(`${pProblems.length ? "FAIL" : "ok  "} partners from knowledge and plan :: ${found.map((p) => `${p.org} (${p.role}${p.email ? `, ${p.email}` : ""})`).join("; ")}`);
+    for (const x of pProblems) console.log(`      -> ${x}`);
+    spec19Cases++;
+
+    // Keep or check: evergreen facts stay, edition facts get checked.
+    const kitEntries = [
+      { heading: "Code of conduct", body: "Be kind. Harassment of any kind is not tolerated; tell any crew member.", sourceTitle: "Lantern Build Night FAQ" },
+      { heading: "Wi-Fi", body: "The makerspace wifi is Lantern-Guest; the password is on the wall by the door.", sourceTitle: "Lantern Build Night FAQ" },
+      { heading: "Prizes", body: "First prize is 50,000 rupees from Nimbus Labs; second prize is a 3D printer.", sourceTitle: "Lantern Build Night FAQ" },
+      { heading: "Schedule", body: "Doors open Saturday 21 November at 10 AM; hacking ends Sunday at 10 AM.", sourceTitle: "Lantern Build Night FAQ" },
+    ];
+    const sorted = await wrapLib.sortKitKnowledge({ choice: models.fast, eventName: "Lantern Build Night", entries: kitEntries });
+    const keep = sorted.keep.map((e) => e.heading);
+    const check = sorted.check.map((e) => e.heading);
+    const kProblems = [
+      !keep.includes("Code of conduct") ? "code of conduct not kept" : null,
+      !keep.includes("Wi-Fi") ? "wifi not kept" : null,
+      !check.includes("Prizes") ? "prizes not checked" : null,
+      !check.includes("Schedule") ? "schedule not checked" : null,
+    ].filter(Boolean);
+    if (kProblems.length) failed++;
+    console.log(`${kProblems.length ? "FAIL" : "ok  "} kit knowledge keep/check :: keep [${keep.join(", ")}], check [${sorted.check.map((e) => `${e.heading}: ${e.check}`).join("; ")}]`);
+    for (const x of kProblems) console.log(`      -> ${x}`);
+    spec19Cases++;
+  }
+
+  // ── Spec 20: desks (crew desk intents, sheet readings, the custom desk writer; cases in scripts/eval-desks.ts) ──
+  let spec20Cases = 0;
+  {
+    const { deskEval } = await import("./eval-desks.ts");
+    const d = await deskEval({ fast: models.fast, now, tz });
+    failed += d.failed;
+    spec20Cases += d.cases;
+    tokensIn += d.usage.input + d.usage.cacheWrite;
+    tokensOut += d.usage.output;
+    cacheRead += d.usage.cacheRead;
+  }
+
   const total =
+    spec20Cases +
     answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
     planIntentCases.length + buildCases.length + planChatCases.length + 1 + outreachCases.length + replyCases.length + 1 +
-    careCases.length + careIntentCases.length + guestIntentCases.length + guestReplyCases.length + 1;
+    careCases.length + careIntentCases.length + guestIntentCases.length + guestReplyCases.length + 1 + spec21Cases + spec19Cases;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

@@ -15,6 +15,7 @@ import {
   builderPaths,
   countsLine,
   draftGuestEmail,
+  voiceBlock,
   firstName,
   formatWhen,
   guestCounts,
@@ -373,7 +374,7 @@ export function createGuests(deps: GuestsDeps) {
     if (!crewRoomId) return;
     const crew = await loadCrew(db, ev.communityId, ev.id);
     const route = approvers(crew);
-    const times = loop.ladder(ev.stage, ev.endsAt);
+    const times = await loop.ladderFor(ev.communityId, ev);
     const id = randomUUID();
     const how = next.lumaId && ev.lumaEventId ? "Luma admits them and emails them itself." : `I email them the offer from ${mailbox}; they have ${OFFER_HOURS} hours to say yes on their RSVP link.`;
     const question = clip(`${freed ? `${firstName(freed.name)} can't come. ` : ""}Offer the spot to ${next.name}?`, 300);
@@ -519,8 +520,10 @@ export function createGuests(deps: GuestsDeps) {
     let subject: string | null = null;
     let text: string | null = null;
     let missing: string[] = [];
+    // Spec 21: the event's tone and language, and its daily cap.
+    const settings = await loop.settings({ communityId: ev.communityId, eventId: ev.id });
     try {
-      const { draft } = await draftGuestEmail({ choice: config.modelMain, kb, eventId: ev.id, kind: s.kind as SendKind, ask: s.ask ?? "", now: localNow(kb.community.timezone) });
+      const { draft } = await draftGuestEmail({ choice: config.modelMain, kb, eventId: ev.id, kind: s.kind as SendKind, ask: s.ask ?? "", now: localNow(kb.community.timezone), voice: voiceBlock(settings) });
       if (draft) {
         subject = draft.subject;
         text = draft.text;
@@ -548,12 +551,12 @@ export function createGuests(deps: GuestsDeps) {
     const crew = await loadCrew(db, ev.communityId, ev.id);
     const asker = s.requestedById ? crew.find((c) => c.id === s.requestedById) : undefined;
     const owners = asker ? [asker] : approvers(crew).owners;
-    const times = loop.ladder(ev.stage, ev.endsAt);
+    const times = await loop.ladderFor(ev.communityId, ev);
     const id = randomUUID();
     const sample = personalText({ kind: s.kind as SendKind, text, name: people[0]!.name, url: rsvpUrl(config.publicUrl, people[0]!.code), eventName: ev.name });
-    const left = Math.max(0, config.guestDailyCap - (await guestMailsToday(db)));
+    const left = Math.max(0, settings.guestDailyCap - (await guestMailsToday(db)));
     const when = s.scheduledAt ? `at ${formatWhen(s.scheduledAt, kb.community.timezone)}` : "as soon as it's approved";
-    const capNote = people.length > left ? ` I send at most ${config.guestDailyCap} guest emails a day (Resend's free plan), so ${people.length - left} of them go out over the next day.` : "";
+    const capNote = people.length > left ? ` I send at most ${settings.guestDailyCap} guest emails a day, so ${people.length - left} of them go out over the next day.` : "";
     const title = `${SEND_KIND_LABEL[s.kind]!.replace(/^./, (c) => c.toUpperCase())} · ${ev.name} · to ${plural(people.length, "guest", "guests")} ${s.audience === "waitlist" ? "on the waitlist" : "going"}`;
     await db.insert(cards).values({
       id,
@@ -661,11 +664,13 @@ export function createGuests(deps: GuestsDeps) {
         .innerJoin(guests, eq(guests.id, guestMails.guestId))
         .where(and(eq(guestMails.sendId, s.id), eq(guestMails.status, "queued")))
         .limit(20);
-      const left = config.guestDailyCap - (await guestMailsToday(db));
+      // Spec 21: the event's `guestDailyCap` (FERRI_GUEST_EMAIL_DAILY_CAP is the base).
+      const cap = (await loop.settings({ communityId: s.communityId, eventId: s.eventId })).guestDailyCap;
+      const left = cap - (await guestMailsToday(db));
       if (queued.length && left <= 0) {
         if (!s.error?.startsWith("daily cap")) {
           await db.update(guestSends).set({ error: `daily cap: the rest goes out as the 24-hour limit frees up`, updatedAt: new Date() }).where(eq(guestSends.id, s.id));
-          await say(s.eventId, s.communityId, `I've sent ${config.guestDailyCap} guest emails in the last 24 hours, the most I send in a day, so the rest of the ${SEND_KIND_LABEL[s.kind]} goes out as that frees up.`);
+          await say(s.eventId, s.communityId, `I've sent ${cap} guest emails in the last 24 hours, the most I send in a day, so the rest of the ${SEND_KIND_LABEL[s.kind]} goes out as that frees up.`);
         }
         continue;
       }
@@ -748,8 +753,10 @@ export function createGuests(deps: GuestsDeps) {
           .returning();
         if (row) log(`guests: proposing the ${SEND_KIND_LABEL[kind]} for ${ev.name}`);
       };
-      if (c.going && now >= start - 30 * 3600_000) await propose("reminder", "The day-before reminder: when and where, when the doors open, and what to bring.");
-      if (c.going && c.waitlist && now >= start - 3 * 86400_000 && now < start - 6 * 3600_000) {
+      // Spec 21: the event's reminder hours and nudge days (0 turns either off).
+      const s = await loop.settings({ communityId: ev.communityId, eventId: ev.id });
+      if (c.going && s.guestReminderHours > 0 && now >= start - s.guestReminderHours * 3600_000) await propose("reminder", "The day-before reminder: when and where, when the doors open, and what to bring.");
+      if (c.going && c.waitlist && s.guestNudgeDays > 0 && now >= start - s.guestNudgeDays * 86400_000 && now < start - 6 * 3600_000) {
         await propose("nudge", `The event is full and ${plural(c.waitlist, "person is", "people are")} on the waitlist: ask everyone to confirm they're still coming, or free their spot.`);
       }
     }

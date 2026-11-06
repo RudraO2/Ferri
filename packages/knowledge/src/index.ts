@@ -19,3 +19,6 @@ export * from "./builder.ts";
 export * from "./outreach.ts";
 export * from "./care.ts";
 export * from "./guests.ts";
+export * from "./wrap.ts";
+export * from "./desks.ts";
+export * from "./settings.ts";

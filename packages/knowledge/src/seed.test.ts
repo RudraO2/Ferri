@@ -37,7 +37,7 @@ describe.skipIf(!reachable)("seedFromDirectory (Postgres)", () => {
     write("knowledge/about.md", "# About\n\n## Contact\nmail us\n## Hours\n9 to 5\n");
     write("events/night/event.yaml", "name: Test Night\nstage: live\nstarts_at: 2026-11-21T10:00:00+05:30\n");
     write("events/night/knowledge/faq.md", "---\ntitle: Night FAQ\n---\n## Food\nLunch is at 1:30 PM.\n");
-    write("events/old/event.yaml", "name: Old Night\nstage: wrap\n");
+    write("events/old/event.yaml", "name: Old Night\nstage: wrap\nclosed: true\n");
     write("events/old/knowledge/faq.md", "## Food\nPizza.\n");
   });
 

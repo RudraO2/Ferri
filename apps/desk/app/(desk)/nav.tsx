@@ -11,11 +11,14 @@ const ITEMS = [
   { href: "/plan", label: "Plan" },
   { href: "/announcements", label: "Announcements" },
   { href: "/builder", label: "Builder" },
+  { href: "/desks", label: "Desks" },
   { href: "/contacts", label: "Contacts" },
   { href: "/spaces", label: "Spaces" },
   { href: "/shield", label: "Shield" },
   { href: "/events", label: "Events" },
+  { href: "/wrap", label: "Wrap" },
   { href: "/knowledge", label: "Knowledge" },
+  { href: "/skills", label: "Skills" },
   { href: "/community", label: "Community" },
 ];
 

@@ -42,6 +42,8 @@ export const communities = pgTable("communities", {
   deskEditedAt: timestamp("desk_edited_at", { withTimezone: true }),
   /** The community-wide crew is managed in Desk; the seed leaves it alone. */
   crewFromDesk: boolean("crew_from_desk").notNull().default(false),
+  /** Spec 21: settings the crew changed for the whole community (only the changed keys; see `@ferri/knowledge` settings). */
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
   ...timestamps,
 });
 
@@ -74,6 +76,15 @@ export const events = pgTable(
     guestSyncRequestedAt: timestamp("guest_sync_requested_at", { withTimezone: true }),
     /** Per source ("site", "luma"): the last sync, its result and any error. */
     guestSync: jsonb("guest_sync").$type<Record<string, { at: string; ok: boolean; count: number; error?: string | null }>>(),
+    /** Spec 21: settings changed for this event (only the changed keys), on top of the community's. */
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    /** Spec 19: closed (its spaces Off or moved, its context in a starter kit). Live means not closed, whatever the stage. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedBy: text("closed_by"),
+    /** Spec 19: Ferri proposed the wrap (recap, close card, thank-you) itself, once. */
+    wrapProposedAt: timestamp("wrap_proposed_at", { withTimezone: true }),
+    /** Spec 19: the starter kit this event was started from. */
+    fromKitId: uuid("from_kit_id"),
     ...timestamps,
   },
   (t) => [uniqueIndex("events_community_slug").on(t.communityId, t.slug)],
@@ -120,6 +131,8 @@ export const eventSpaces = pgTable(
     /** "crew": the event's inside room, where cards go. */
     role: spaceRole("role").notNull().default("members"),
     attachedBy: text("attached_by").notNull().default("seed"),
+    /** Spec 21: tone and language for this space only ({ tone?: string, language?: string }). */
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
     ...timestamps,
   },
   (t) => [uniqueIndex("event_spaces_event_space").on(t.eventId, t.spaceId), index("event_spaces_space").on(t.spaceId)],
@@ -305,8 +318,11 @@ export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed"
  * "care": a member needs a person; the card asks who takes the case (spec 16).
  * "guests": an email to the event's guests (reminder, nudge) waits for its one approval (spec 17).
  * "spot": a freed spot waits to be offered to the next person on the waitlist (spec 17).
+ * "wrap": close the event (spaces Off or moved, context archived) (spec 19).
+ * "desk": make desks (rooms with a desk skill), or a desk skill Ferri wrote (spec 20).
+ * "social": a post to LinkedIn, X and Instagram through Buffer (spec 18).
  */
-export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach", "care", "guests", "spot"]);
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach", "care", "guests", "spot", "wrap", "desk", "social"]);
 
 export const cards = pgTable(
   "cards",
@@ -336,6 +352,8 @@ export const cards = pgTable(
     /** Guest cards (spec 17): the send this card approves, or the waitlisted guest a spot card offers to. */
     guestSendId: uuid("guest_send_id"),
     guestId: uuid("guest_id"),
+    /** Kinds from spec 18 on (wrap, desk, social): what the card is about, owned by the module that settles it. */
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),
@@ -1070,4 +1088,172 @@ export const emailEvents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("email_events_open").on(t.handledAt, t.createdAt)],
+);
+
+// ── Wrap (spec 19): the recap, the starter kit, partners per event ────────
+
+/** One recap of an event: numbers computed in code, lessons from Haiku, the text posted to the crew. Newest is current. */
+export const eventRecaps = pgTable(
+  "event_recaps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    /** The numbers (`RecapStats` in @ferri/knowledge). */
+    stats: jsonb("stats").$type<Record<string, unknown>>().notNull(),
+    lessons: jsonb("lessons").$type<{ wentWell: string[]; toFix: string[]; answerEarly: string[] }>().notNull(),
+    /** What Ferri posted in the crew room. */
+    text: text("text").notNull(),
+    /** The Switch library document ("<event>: recap"). */
+    documentId: text("document_id"),
+    /** "chat", "desk", "ferri" (proposed itself) or "close". */
+    origin: text("origin").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    sourceMessageId: text("source_message_id").unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("event_recaps_event").on(t.eventId, t.createdAt)],
+);
+
+/** An event's context, packed when it closes, for the next event to start from. One per event. */
+export const starterKits = pgTable(
+  "starter_kits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    fromEventId: uuid("from_event_id").references(() => events.id, { onDelete: "set null" }),
+    /** "Lantern Build Night kit". */
+    name: text("name").notNull(),
+    /** `StarterKitContent` in @ferri/knowledge. */
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    markdown: text("markdown").notNull(),
+    documentId: text("document_id"),
+    createdBy: text("created_by").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("starter_kits_event").on(t.fromEventId)],
+);
+
+/** A contact worked with us on an event (spec 19: partners saved for the next event). */
+export const contactEvents = pgTable(
+  "contact_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    /** "sponsor", "venue", "food", "community", "college", "media", "judge", "prize", "partner", "other". */
+    role: text("role").notNull().default("partner"),
+    /** One line: what they did ("Gave every team CloudCo credits"). */
+    note: text("note"),
+    addedBy: text("added_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("contact_events_pair").on(t.contactId, t.eventId)],
+);
+
+// ── Desks (spec 20): rooms from templates plus a desk skill ───────────────
+
+/** One desk: a room Ferri made (or a space it turned into one) with a desk skill that sets how Ferri behaves there. */
+export const desks = pgTable(
+  "desks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** "judging", "help", ..., or "custom-<slug>". */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    /** The skill that sets the behavior ("desks/judging"), and its version when the desk was made. */
+    skillKey: text("skill_key").notNull(),
+    skillVersion: integer("skill_version").notNull().default(0),
+    spaceId: uuid("space_id").references(() => spaces.id, { onDelete: "set null" }),
+    roomName: text("room_name").notNull(),
+    switchRoomId: text("switch_room_id"),
+    platform: text("platform"),
+    /** "private" or "public". */
+    visibility: text("visibility").notNull().default("private"),
+    members: text("members").array().notNull().default(sql`'{}'::text[]`),
+    /** "planned" (waits on a desk card), "created", "failed", "dismissed", "removed". */
+    status: text("status").notNull().default("planned"),
+    error: text("error"),
+    cardId: uuid("card_id"),
+    /** The sheet's Switch library document. */
+    sheetDocumentId: text("sheet_document_id"),
+    requestedBy: text("requested_by").notNull(),
+    sourceMessageId: text("source_message_id"),
+    ...timestamps,
+  },
+  (t) => [index("desks_event").on(t.eventId, t.status), index("desks_room").on(t.switchRoomId)],
+);
+
+/** One row of a desk's sheet (a score, a shift, a check-in, a found item), from what someone said in the desk. */
+export const deskRows = pgTable(
+  "desk_rows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    deskId: uuid("desk_id")
+      .notNull()
+      .references(() => desks.id, { onDelete: "cascade" }),
+    data: jsonb("data").$type<Record<string, string | number | null>>().notNull(),
+    by: text("by").notNull(),
+    /** The message it came from, so a replay adds nothing twice (null for rows added in Desk). */
+    messageId: text("message_id").unique(),
+    /** "active" or "removed". */
+    status: text("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [index("desk_rows_desk").on(t.deskId, t.createdAt)],
+);
+
+// ── Customization (spec 21): community-edited skills ──────────────────────
+
+/** A skill the community edited (or Ferri wrote): overrides the file in skills/ with the same key. */
+export const skills = pgTable(
+  "skills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** "ferri", "librarian", "desks/judging", "packs/hackathon", "desks/custom-rangoli-judges". */
+    key: text("key").notNull(),
+    body: text("body").notNull(),
+    version: integer("version").notNull().default(1),
+    /** "desk" (edited in Desk) or "ferri" (written by Ferri, e.g. a custom desk). */
+    origin: text("origin").notNull().default("desk"),
+    editedBy: text("edited_by").notNull(),
+    /** Reset to the default file: the row stays for its history but is not used. */
+    resetAt: timestamp("reset_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("skills_key").on(t.communityId, t.key)],
+);
+
+export const skillRevisions = pgTable(
+  "skill_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    body: text("body").notNull(),
+    editedBy: text("edited_by").notNull(),
+    /** "created", "edited", "reset". */
+    change: text("change").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("skill_revisions_version").on(t.skillId, t.version)],
 );

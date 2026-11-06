@@ -231,13 +231,19 @@ export async function seedFromDirectory(db: Db, dir: string, editedBy = "seed"):
         .from(events)
         .where(and(eq(events.communityId, communityId), eq(events.slug, values.slug)))
         .limit(1);
+      // `closed: true` closes an event (spec 19); the seed never reopens one that Desk or Ferri closed.
+      const closing = e.closed === true ? { closedAt: new Date(), closedBy: "seed" } : {};
       let event = existingEvent;
       if (!event) {
-        [event] = await tx.insert(events).values(values).returning();
+        [event] = await tx.insert(events).values({ ...values, ...closing }).returning();
       } else if (event.deskEditedAt) {
         keptFromDesk.push(`${values.slug} settings`);
       } else {
-        [event] = await tx.update(events).set({ ...values, updatedAt: new Date() }).where(eq(events.id, event.id)).returning();
+        [event] = await tx
+          .update(events)
+          .set({ ...values, ...(event.closedAt ? {} : closing), updatedAt: new Date() })
+          .where(eq(events.id, event.id))
+          .returning();
       }
       eventSlugs.push(values.slug);
       if (event!.crewFromDesk) keptFromDesk.push(`${values.slug} crew`);

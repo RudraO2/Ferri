@@ -49,7 +49,7 @@ export function renderInstructions(kb: LiveKnowledge): string {
  * "Source: Lantern Build Night FAQ (Food)" or
  * "Sources: Lantern Build Night FAQ (Food, Wi-Fi); Lantern Build Night schedule (Saturday 21 November)".
  */
-export function formatSourceLine(items: KnowledgeItem[]): string {
+export function formatSourceLine(items: KnowledgeItem[], label?: (many: boolean) => string): string {
   const bySource = new Map<string, string[]>();
   for (const item of items) {
     const headings = bySource.get(item.sourceTitle) ?? [];
@@ -60,7 +60,8 @@ export function formatSourceLine(items: KnowledgeItem[]): string {
     headings.length === 1 && headings[0] === "Overview" ? title : `${title} (${headings.join(", ")})`,
   );
   if (parts.length === 0) return "";
-  return `${parts.length === 1 ? "Source" : "Sources"}: ${parts.join("; ")}`;
+  const many = parts.length > 1;
+  return `${label ? label(many) : many ? "Sources" : "Source"}: ${parts.join("; ")}`;
 }
 
 /**

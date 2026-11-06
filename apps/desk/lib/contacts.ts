@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { community, db } from "./db";
-import { cards, contactMessages, contacts, listContacts, type Contact, type ContactMessage } from "./ferri";
+import { cards, contactEventLines, contactMessages, contacts, listContacts, type Contact, type ContactMessage } from "./ferri";
 
 export interface EmailWaiting {
   cardId: string;
@@ -35,6 +35,8 @@ export async function emailsWaiting(): Promise<EmailWaiting[]> {
 
 export interface ContactView extends Contact {
   messages: ContactMessage[];
+  /** Spec 19: the events they worked with us on, newest first. */
+  worked: { eventName: string; role: string; note: string | null }[];
 }
 
 /** Contacts with their timelines (oldest message first). */
@@ -49,7 +51,8 @@ export async function contactsWithTimeline(status?: string | null): Promise<Cont
     .orderBy(contactMessages.createdAt);
   const by = new Map<string, ContactMessage[]>();
   for (const m of msgs) by.set(m.contactId, [...(by.get(m.contactId) ?? []), m]);
-  return list.map((x) => ({ ...x, messages: by.get(x.id) ?? [] }));
+  const worked = await contactEventLines(db(), list.map((x) => x.id));
+  return list.map((x) => ({ ...x, messages: by.get(x.id) ?? [], worked: worked.get(x.id) ?? [] }));
 }
 
 export async function contactCounts(): Promise<Record<string, number>> {

@@ -11,6 +11,7 @@ import {
   listingAnnouncement,
   createBuilderJob,
   draftAnnouncement,
+  voiceBlock,
   firstHttpsUrl,
   loadLiveKnowledge,
   mediaFromMessage,
@@ -484,7 +485,8 @@ export function createBuilder(deps: BuilderDeps) {
     let title = `${ev?.name ?? "Event"} poster`;
     if (kb) {
       try {
-        const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: brief, sender: "Ferri Builder" });
+        const voice = voiceBlock(await loop.settings({ communityId: job.communityId, eventId }));
+        const { draft } = await draftAnnouncement({ choice: config.modelMain, kb, what: brief, sender: "Ferri Builder", voice });
         if (draft) {
           text = draft.text;
           title = draft.title;

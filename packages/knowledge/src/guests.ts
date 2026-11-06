@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { guestMails, guestSends, guests, type Db } from "@ferri/db";
-import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import { structuredCall, voiceSystem, voiceUser, type ModelChoice, type Usage } from "./model.ts";
 import { renderInstructions, renderKnowledge } from "./render.ts";
 import type { LiveKnowledge } from "./store.ts";
 
@@ -319,14 +319,16 @@ export async function draftGuestEmail(input: {
   kind: SendKind;
   ask: string;
   now: string;
+  /** Spec 21: the crew's tone and language for the event (`voiceBlock`), after the rules. */
+  voice?: string;
 }): Promise<{ draft: GuestDraft | null; usage: Usage }> {
   const entries = input.kb.entries.filter((e) => e.eventId === input.eventId || e.eventId === null);
   const out = await structuredCall({
     choice: input.choice,
-    system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }, ...voiceSystem(input.voice)],
     user:
       `${renderInstructions(input.kb)}\n\n${renderKnowledge(entries).text}\n\n` +
-      `Now: ${input.now}\nEvent: ${input.kb.events.find((e) => e.id === input.eventId)?.name ?? "the event"}\nKind: ${input.kind}\nWhat the crew asked it to say: ${input.ask || "(nothing beyond the kind)"}`,
+      `Now: ${input.now}\nEvent: ${input.kb.events.find((e) => e.id === input.eventId)?.name ?? "the event"}\nKind: ${input.kind}\nWhat the crew asked it to say: ${input.ask || "(nothing beyond the kind)"}` + voiceUser(input.voice),
     schema: GuestDraftSchema,
     maxTokens: 2000,
   });

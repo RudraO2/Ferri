@@ -7,7 +7,7 @@ export async function liveEvents(communityId: string) {
   return db()
     .select()
     .from(events)
-    .where(and(eq(events.communityId, communityId), ne(events.stage, "wrap")))
+    .where(and(eq(events.communityId, communityId), isNull(events.closedAt)))
     .orderBy(asc(events.startsAt), asc(events.name));
 }
 
@@ -22,7 +22,7 @@ export async function spacesWithSettings(communityId: string) {
     .select({ spaceId: eventSpaces.spaceId, eventId: eventSpaces.eventId, mode: eventSpaces.mode, role: eventSpaces.role, eventName: events.name })
     .from(eventSpaces)
     .innerJoin(events, eq(events.id, eventSpaces.eventId))
-    .where(ne(events.stage, "wrap"));
+    .where(isNull(events.closedAt));
   const bySpace = new Map(atts.map((a) => [a.spaceId, a]));
   return rows.map((s) => ({ ...s, attachment: bySpace.get(s.id) ?? null }));
 }

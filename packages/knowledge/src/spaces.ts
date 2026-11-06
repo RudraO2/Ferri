@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import { communities, eventSpaces, events, mutedPeople, spaces, type Db } from "@ferri/db";
 import { sameHandle } from "./crew.ts";
 import type { SpaceMode, SpaceRole, SpaceSetting } from "./policy.ts";
@@ -83,7 +83,7 @@ export async function resolveSpace(db: Db, roomId: string): Promise<ResolvedSpac
     .select({ eventId: eventSpaces.eventId, mode: eventSpaces.mode, role: eventSpaces.role })
     .from(eventSpaces)
     .innerJoin(events, eq(events.id, eventSpaces.eventId))
-    .where(and(eq(eventSpaces.spaceId, space.id), ne(events.stage, "wrap")))
+    .where(and(eq(eventSpaces.spaceId, space.id), isNull(events.closedAt)))
     .limit(1);
   return {
     spaceId: space.id,
@@ -115,7 +115,7 @@ export async function attachedRoomIds(db: Db, communityId: string): Promise<stri
     .from(eventSpaces)
     .innerJoin(spaces, eq(spaces.id, eventSpaces.spaceId))
     .innerJoin(events, eq(events.id, eventSpaces.eventId))
-    .where(and(eq(spaces.communityId, communityId), eq(spaces.archived, false), ne(events.stage, "wrap")));
+    .where(and(eq(spaces.communityId, communityId), eq(spaces.archived, false), isNull(events.closedAt)));
   return rows.map((r) => r.roomId);
 }
 
@@ -133,7 +133,7 @@ export async function attachSpace(
       .select({ id: eventSpaces.id })
       .from(eventSpaces)
       .innerJoin(events, eq(events.id, eventSpaces.eventId))
-      .where(and(eq(eventSpaces.spaceId, input.spaceId), ne(eventSpaces.eventId, input.eventId), ne(events.stage, "wrap")));
+      .where(and(eq(eventSpaces.spaceId, input.spaceId), ne(eventSpaces.eventId, input.eventId), isNull(events.closedAt)));
     if (others.length) await tx.delete(eventSpaces).where(inArray(eventSpaces.id, others.map((o) => o.id)));
     if (input.role === "crew") {
       await tx
@@ -199,7 +199,7 @@ export async function applySeedSpaces(db: Db, requests: SeedSpaceRequest[]): Pro
       .select({ eventId: eventSpaces.eventId })
       .from(eventSpaces)
       .innerJoin(events, eq(events.id, eventSpaces.eventId))
-      .where(and(eq(eventSpaces.spaceId, space.id), ne(events.stage, "wrap")))
+      .where(and(eq(eventSpaces.spaceId, space.id), isNull(events.closedAt)))
       .limit(1);
     if (current) {
       done.push(`${r.room}: already attached, kept`);

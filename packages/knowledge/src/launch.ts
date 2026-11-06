@@ -4,7 +4,7 @@ import { announcementVersions, announcements, eventSpaces, spaces, type Db, type
 import type { CrewMember } from "./crew.ts";
 import type { RecentAnnouncement } from "./intent.ts";
 import { shortAnnouncementIds } from "./intent.ts";
-import { structuredCall, type ModelChoice, type Usage } from "./model.ts";
+import { structuredCall, voiceSystem, voiceUser, type ModelChoice, type Usage } from "./model.ts";
 import type { LiveKnowledge } from "./store.ts";
 import type { ChatLine } from "./triage.ts";
 
@@ -127,6 +127,8 @@ export async function draftAnnouncement(input: {
   /** Set for a revision: the post as it reads now. */
   current?: string | null;
   sender: string;
+  /** Spec 21: the crew's tone and language for the event (`voiceBlock`), after the rules. */
+  voice?: string;
 }): Promise<{ draft: Draft | null; usage: Usage; latencyMs: number }> {
   const user = [
     toneOnly(input.kb),
@@ -138,8 +140,8 @@ export async function draftAnnouncement(input: {
     .join("\n\n");
   const out = await structuredCall({
     choice: input.choice,
-    system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }],
-    user,
+    system: [{ type: "text", text: DRAFT_SYSTEM, cache_control: { type: "ephemeral" } }, ...voiceSystem(input.voice)],
+    user: user + voiceUser(input.voice),
     schema: DraftSchema,
     maxTokens: 3000,
   });
@@ -151,6 +153,86 @@ export async function draftAnnouncement(input: {
 /** An announcement never pages a whole channel. */
 export function stripRoomWide(text: string): string {
   return text.replace(/(^|\s)@(everyone|channel|here|all)\b[:,]?\s*/gi, "$1").trim();
+}
+
+// ── Languages (spec 21): one version per space language ───────────────────
+
+export const TranslationSchema = z.strictObject({ text: z.string() });
+
+const TRANSLATE_SYSTEM = `You translate an announcement from a community's organizing crew for the members of one chat group, who read it in another language. The crew approved the original, so the translation must say exactly the same thing.
+
+Rules:
+- Translate faithfully: add nothing, drop nothing, no comments, no greeting the original does not have.
+- Keep every name, time, date, number, price, room, link, email address, code and emoji exactly as written. Keep the line breaks.
+- Natural, friendly everyday language for a chat group, in the language's usual script (Devanagari for Hindi, and so on), not stiff or formal. Common English tech words people say as they are (Wi-Fi, laptop, hackathon) may stay in English.
+- Plain text. Never add @everyone, @channel, @here or any @mention.
+- If the text is already in that language, return it unchanged.`;
+
+/** The announcement in one language, with one fast-model call. Null when the model gave nothing usable. */
+export async function translateAnnouncement(input: { choice: ModelChoice; text: string; language: string }): Promise<{ text: string | null; usage: Usage; latencyMs: number }> {
+  const out = await structuredCall({
+    choice: input.choice,
+    system: [{ type: "text", text: TRANSLATE_SYSTEM, cache_control: { type: "ephemeral" } }],
+    user: `Language: ${input.language}\n\nThe announcement:\n${input.text}`,
+    schema: TranslationSchema,
+    maxTokens: 3000,
+  });
+  const t = out.data?.text.trim();
+  return { text: t ? stripRoomWide(t).slice(0, 3000) : null, usage: out.usage, latencyMs: out.latencyMs };
+}
+
+/** "hindi " and "Hindi" are one language. */
+export const languageKey = (language: string) => language.trim().toLowerCase();
+
+/**
+ * The languages an announcement needs beside its own: each target space's
+ * language setting when it is set and differs from the announcement's
+ * language (the event's), with the spaces that read it.
+ */
+export function languagesNeeded<T extends { spaceId: string; language: string }>(baseLanguage: string, targets: T[]): Map<string, { language: string; spaces: T[] }> {
+  const out = new Map<string, { language: string; spaces: T[] }>();
+  const base = languageKey(baseLanguage);
+  for (const t of targets) {
+    const k = languageKey(t.language);
+    if (!k || k === base) continue;
+    const g = out.get(k) ?? { language: t.language.trim(), spaces: [] };
+    g.spaces.push(t);
+    out.set(k, g);
+  }
+  return out;
+}
+
+/**
+ * The translations an announce card carries in `cards.payload.translations`:
+ * the text they translate (so a different approved text is translated again)
+ * and one version per language key.
+ */
+export interface AnnounceTranslations {
+  source: string;
+  byLanguage: Record<string, { language: string; text: string }>;
+}
+
+export function translationsFrom(payload: unknown, source: string): AnnounceTranslations["byLanguage"] {
+  const t = (payload as { translations?: AnnounceTranslations } | null)?.translations;
+  if (!t || typeof t !== "object" || t.source?.trim() !== source.trim() || !t.byLanguage || typeof t.byLanguage !== "object") return {};
+  const out: AnnounceTranslations["byLanguage"] = {};
+  for (const [k, v] of Object.entries(t.byLanguage)) if (v && typeof v.text === "string" && v.text.trim()) out[k] = { language: String(v.language ?? k), text: v.text };
+  return out;
+}
+
+/** The card's lines for each translation: "In Hindi for WhatsApp Lantern Build Night:\n...". */
+export function translationBlock(
+  needed: Map<string, { language: string; spaces: { name: string; platform: string | null }[] }>,
+  byLanguage: AnnounceTranslations["byLanguage"],
+  max = 1500,
+): string {
+  const parts: string[] = [];
+  for (const [k, g] of needed) {
+    const where = g.spaces.map(spaceLabel).join(", ");
+    const t = byLanguage[k];
+    parts.push(t ? `In ${g.language} for ${where}:\n\n${t.text.slice(0, max)}` : `In ${g.language} for ${where}: the translation could not be made, so it gets the text above.`);
+  }
+  return parts.join("\n\n");
 }
 
 // ── Decisions in crew chatter ─────────────────────────────────────────────

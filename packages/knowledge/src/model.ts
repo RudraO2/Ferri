@@ -32,6 +32,17 @@ export function anthropic(): Anthropic {
   return shared;
 }
 
+/** The same voice said again at the end of the request: Haiku follows tone and language there (spec 21). */
+export function voiceUser(voice: string | undefined | null): string {
+  if (!voice?.trim()) return "";
+  return `\n\n${voice.trim()}\nWrite this text in that tone and language; names, times, links and codes stay exactly as written.`;
+}
+
+/** Spec 21: the crew's voice block (tone and language) as a system block after the cached rules, or nothing. */
+export function voiceSystem(voice: string | undefined | null): Anthropic.Beta.BetaTextBlockParam[] {
+  return voice?.trim() ? [{ type: "text", text: voice.trim() }] : [];
+}
+
 /**
  * One structured-output call. The schema becomes `output_config.format`, so
  * the reply is always JSON of that shape. Sonnet and Opus calls carry the

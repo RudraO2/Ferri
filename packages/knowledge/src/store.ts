@@ -62,7 +62,7 @@ export async function loadLiveKnowledge(
   const allLive = await db
     .select()
     .from(events)
-    .where(and(eq(events.communityId, community.id), ne(events.stage, "wrap")))
+    .where(and(eq(events.communityId, community.id), isNull(events.closedAt)))
     .orderBy(asc(events.startsAt), asc(events.name));
   const liveEvents = scope ? allLive.filter((e) => e.id === scope.eventId) : allLive;
   const eventIds = liveEvents.map((e) => e.id);

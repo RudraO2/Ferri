@@ -12,6 +12,8 @@ import {
   MAX_CHECK_INS,
   addCareNote,
   autoHelp,
+  deskAutoHelp,
+  deskCare,
   builderAllowed,
   careCardTitle,
   careLine,
@@ -103,6 +105,11 @@ export function createCare(deps: CareDeps) {
     if (r.sent || r.failed) log(`care: ${caseRef(c)} push "${title}" to ${r.users} people (${r.sent} sent)`);
   }
 
+  /** The next check-in, from the event's check-in minutes (spec 21), read now. */
+  async function checkInAt(c: Pick<CareCase, "communityId" | "eventId">, stage: string | null): Promise<Date> {
+    return new Date(Date.now() + checkInDelayMs(stage, await loop.settings({ communityId: c.communityId, eventId: c.eventId })));
+  }
+
   async function fresh(id: string): Promise<CareCase | null> {
     const [row] = await db.select().from(careCases).where(eq(careCases.id, id)).limit(1);
     return row ?? null;
@@ -139,6 +146,10 @@ export function createCare(deps: CareDeps) {
     if (seen) return;
     const open = await openCaseFor(db, communityId, p.sender);
     const ev = await eventOf(space.eventId);
+    // Spec 21: care off (community, event) means no reading and no case.
+    if ((await loop.settings({ communityId, eventId: space.eventId, spaceId: space.spaceId })).care === "off") return;
+    // Spec 20: a desk with `care: off` has no care reading.
+    if ((await deskCare(db, config.skillsDir, space.spaceId)) === "off") return;
     const roomName = (await deps.room(input.ev.room_id)).name;
     const { reading, latencyMs } = await readCare({
       choice: config.modelFast,
@@ -162,6 +173,7 @@ export function createCare(deps: CareDeps) {
   async function openNew(input: { ev: MessageEvent; communityId: string; space: ResolvedSpace; reading: CareReading; stage: string | null; roomName: string }): Promise<void> {
     const p = input.ev.payload;
     const { reading, space } = input;
+    const settings = await loop.settings({ communityId: input.communityId, eventId: space.eventId, spaceId: space.spaceId });
     const crew = await loadCrew(db, input.communityId, space.eventId);
     const route = careRoute(crew, reading);
     const kind = reading.signal === "none" ? "confused" : reading.signal;
@@ -184,14 +196,16 @@ export function createCare(deps: CareDeps) {
       ownerName: route.owner?.name ?? null,
       sourceMessageId: p.message_id,
       lastMessageAt: new Date(p.timestamp),
-      checkInAt: new Date(Date.now() + checkInDelayMs(input.stage)),
+      checkInAt: new Date(Date.now() + checkInDelayMs(input.stage, settings)),
     });
     if (!c) return;
     await addCareNote(db, c.id, { kind: "opened", text: c.reason, by: "Ferri", messageId: p.message_id });
     log(`care: ${caseRef(c)} opened (${c.kind}, ${c.severity}${c.technical ? ", technical" : ""}) for ${c.personName}; owner ${c.ownerName ?? "none"}`);
     const paused = await isPaused(db, c.communityId);
     let current = c;
-    if (autoHelp({ technical: c.technical, kind: c.kind, stage: input.stage, mode: space.setting?.mode ?? null, paused })) {
+    // Spec 20: a help desk (`care: help`) sends technical cases to the Builder at any stage.
+    const deskHelp = deskAutoHelp(await deskCare(db, config.skillsDir, space.spaceId), { technical: c.technical, kind: c.kind, mode: space.setting?.mode ?? null, paused });
+    if (deskHelp || autoHelp({ technical: c.technical, kind: c.kind, stage: input.stage, mode: space.setting?.mode ?? null, paused, when: settings.autoHelp })) {
       const r = await sendBuilder(c, "Ferri", null, { auto: true });
       current = (await fresh(c.id)) ?? c;
       log(`care: ${caseRef(c)} ${r.ok ? "went to the Builder during the event" : `could not go to the Builder: ${r.text}`}`);
@@ -223,7 +237,9 @@ export function createCare(deps: CareDeps) {
     const ev = await eventOf(c.eventId);
     if (updated.status === "open" && !c.technical && updated.technical) {
       const paused = await isPaused(db, c.communityId);
-      if (autoHelp({ technical: true, kind, stage: ev?.stage ?? null, mode: space.setting?.mode ?? null, paused })) {
+      const when = (await loop.settings({ communityId: c.communityId, eventId: c.eventId, spaceId: space.spaceId })).autoHelp;
+      const deskHelp = deskAutoHelp(await deskCare(db, config.skillsDir, space.spaceId), { technical: true, kind, mode: space.setting?.mode ?? null, paused });
+      if (deskHelp || autoHelp({ technical: true, kind, stage: ev?.stage ?? null, mode: space.setting?.mode ?? null, paused, when })) {
         const r = await sendBuilder(updated, "Ferri", null, { auto: true });
         if (r.ok) await say(c, r.text);
       }
@@ -246,7 +262,7 @@ export function createCare(deps: CareDeps) {
     const mode = space?.setting?.mode ?? null;
     const room = await deps.room(c.roomId);
     const ev = await eventOf(c.eventId);
-    const times = loop.ladder(ev?.stage ?? null, ev?.endsAt ?? null);
+    const times = await loop.ladderFor(c.communityId, ev);
     const id = randomUUID();
     // Claim the case's card slot first, so two ticks never open two cards.
     const [claimed] = await db
@@ -384,7 +400,7 @@ export function createCare(deps: CareDeps) {
       ownerId: byId ?? c.ownerId,
       ownerName: byId ? by : (c.ownerName ?? by),
       status: c.status === "builder" ? "builder" : "helping",
-      checkInAt: new Date(Date.now() + checkInDelayMs(ev?.stage ?? null)),
+      checkInAt: await checkInAt(c, ev?.stage ?? null),
       checkIns: 0,
     });
     await addCareNote(db, c.id, { kind: "owner", text: `${by} is on it${note ? `: ${note}` : "."}`, by });
@@ -487,7 +503,7 @@ export function createCare(deps: CareDeps) {
       resolution: null,
       ownerId: byId ?? c.ownerId,
       ownerName: byId ? by : c.ownerName,
-      checkInAt: new Date(Date.now() + checkInDelayMs(ev?.stage ?? null)),
+      checkInAt: await checkInAt(c, ev?.stage ?? null),
       checkIns: 0,
     });
     await addCareNote(db, c.id, { kind: "reopened", text: `${by} reopened it.`, by });
@@ -617,7 +633,7 @@ export function createCare(deps: CareDeps) {
         const ev = await eventOf(c.eventId);
         const [claimed] = await db
           .update(careCases)
-          .set({ checkIns: c.checkIns + 1, checkInAt: new Date(Date.now() + checkInDelayMs(ev?.stage ?? null)), updatedAt: new Date() })
+          .set({ checkIns: c.checkIns + 1, checkInAt: await checkInAt(c, ev?.stage ?? null), updatedAt: new Date() })
           .where(and(eq(careCases.id, c.id), eq(careCases.checkIns, c.checkIns)))
           .returning();
         if (!claimed) continue;

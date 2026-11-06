@@ -43,6 +43,11 @@ import type { Plan } from "./plan.ts";
 import type { Outreach } from "./outreach.ts";
 import type { Care } from "./care.ts";
 import type { Guests } from "./guests.ts";
+import type { CrewAsk } from "./crew-ask.ts";
+import type { Desks } from "./desks.ts";
+import type { Prompts } from "./prompts.ts";
+import type { SettingsModule } from "./settings.ts";
+import type { Wrap } from "./wrap.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -60,7 +65,10 @@ export interface FlowDeps {
   outreach: Outreach;
   care: Care;
   guests: Guests;
-  skills: () => string;
+  wrap: Wrap;
+  desks: Desks;
+  settings: SettingsModule;
+  prompts: Prompts;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
 }
@@ -103,7 +111,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, wrap, desks, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
   const builderRe = mentionRegex(builder.name);
@@ -200,11 +208,14 @@ export function createFlow(deps: FlowDeps) {
 
     if (direct && !approve) await agent.setTyping(ev.room_id, true).catch(() => {});
     try {
+      const scope = { communityId: ctx.kb.community.id, eventId: ctx.eventId, spaceId: ctx.space.spaceId };
       const r = await answerQuestion({
         db,
         kb: ctx.kb,
         choice: config.modelMain,
-        skills: deps.skills(),
+        skills: await deps.prompts.skillsFor(scope),
+        // Spec 21: the place's language also names the source line ("स्रोत" in Hindi).
+        ...(await deps.prompts.settings(scope).then((s) => ({ language: s.language, tone: s.tone }))),
         roomName: room.name,
         sender: p.sender_name,
         question: p.body,
@@ -264,7 +275,7 @@ export function createFlow(deps: FlowDeps) {
       );
 
       if (ask && crewRoomId) {
-        await loop.openOrJoin({ questionId: id, kb: ctx.kb, eventId: ctx.eventId, roomName: room.name, askerName: p.sender_name, asked: ask });
+        await loop.openOrJoin({ questionId: id, kb: ctx.kb, eventId: ctx.eventId, roomName: room.name, askerName: p.sender_name, asked: ask, topic: await desks.topicFor(ctx.space.spaceId) });
       }
     } catch (err) {
       await finish(id, { outcome: "error", error: (err as Error).message.slice(0, 1000) });
@@ -462,6 +473,37 @@ export function createFlow(deps: FlowDeps) {
       return;
     }
 
+    // Wrap (spec 19), desks (spec 20) and settings (spec 21): each module answers for itself.
+    if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings")) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: intent.intent,
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      const action = intent.intent === "wrap" ? intent.wrap.action : intent.intent === "desk" ? intent.desk.action : intent.settings.action;
+      log(`crew ${member.name}: ${intent.intent} ${action}`);
+      const ask: CrewAsk = {
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
+        member,
+        messageId: p.message_id,
+        crewRoomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
+        roomId: ev.room_id,
+        body: stripMention(p.body),
+        intent,
+      };
+      const handler = intent.intent === "wrap" ? wrap : intent.intent === "desk" ? desks : deps.settings;
+      const reply = await handler.intent(ask);
+      if (reply) await say(reply);
+      return;
+    }
+
     const facts = (intent?.facts ?? []).filter((f) => f.text.trim());
     const acts = intent?.intent === "answer_card" && card && intent.answer.trim();
     if (acts || (intent?.intent === "remember" && facts.length)) {
@@ -567,9 +609,13 @@ export function createFlow(deps: FlowDeps) {
   async function onCrewChatter(ev: MessageEvent, ctx: Context, member: CrewMember, posting: Posting): Promise<void> {
     const p = ev.payload;
     if (posting === "paused" || !ctx.eventId || p.body.trim().length < 6) return;
+    // Spec 21: the crew can turn either watcher off for the event (read now, so a change applies at once).
+    const watch = await deps.prompts.settings({ communityId: ctx.kb.community.id, eventId: ctx.eventId, spaceId: null });
+    if (!watch.decisionWatcher && !watch.planReader) return;
     await sleep(config.decisionGraceMs);
     const prev = decisionQueue.get(ev.room_id) ?? Promise.resolve();
     const run = prev.then(async () => {
+      if (!watch.decisionWatcher) return;
       const after = rooms.after(ev.room_id, p.message_id).filter((l) => !l.fromFerri);
       const recent = await recentAnnouncements(db, ctx.kb.community.id, ctx.eventId);
       const r = await checkDecision({
@@ -612,6 +658,7 @@ export function createFlow(deps: FlowDeps) {
     });
     // The living plan (spec 08) reads the same message, after the announcement check.
     const withPlan = run.catch((err) => log(`decision check failed: ${(err as Error).message}`)).then(async () => {
+      if (!watch.planReader) return;
       const line = await plan.fromChat({
         communityId: ctx.kb.community.id,
         eventId: ctx.eventId!,
@@ -642,9 +689,11 @@ export function createFlow(deps: FlowDeps) {
     if (!first.triage || !worthAnswering(first.triage)) return;
     // Listen: log it now; there is nobody to wait for, since Ferri never answers there.
     if (posting === "listen") return handleQuestion(ev, ctx, first.triage, false, posting, crewRoom);
-    log(`room question ${p.message_id} (${first.triage.topic}); waiting ${config.roomGraceMs / 1000}s for a person to answer`);
+    // Spec 21: the place's `stepInSeconds` (FERRI_ROOM_GRACE_SECONDS is the base under the crew's settings).
+    const { stepInSeconds } = await deps.prompts.settings({ communityId: ctx.kb.community.id, eventId: ctx.eventId, spaceId: ctx.space.spaceId });
+    log(`room question ${p.message_id} (${first.triage.topic}); waiting ${stepInSeconds}s for a person to answer`);
 
-    await sleep(config.roomGraceMs);
+    await sleep(stepInSeconds * 1000);
     let triage = first.triage;
     const after = rooms.after(ev.room_id, p.message_id).filter((l) => !l.fromFerri);
     if (after.length) {
@@ -766,6 +815,8 @@ export function createFlow(deps: FlowDeps) {
       if (p.addressed && mentioned) log(`ignored a mention from ${p.sender_name} in ${ctx.space.name}: ${decision.reason}`);
       return;
     }
+    // Desks (spec 20): in a desk with a sheet, a sheet entry ("Team Alpha 8 for innovation") is the desk's, not a question.
+    if (!decision.crewRoom && (await desks.onMessage({ ev, communityId: ctx.kb.community.id, space: ctx.space, member, posting: decision.posting }))) return;
     // Care (spec 16): every member message in a members space gets a mood reading, never holding up the answer.
     if (!member && !decision.crewRoom && (decision.act === "direct" || decision.act === "follow_up" || decision.act === "room")) {
       void care.read({ ev, communityId: ctx.kb.community.id, space: ctx.space, history: chat(rooms.before(ev.room_id, p.message_id, 8)) });

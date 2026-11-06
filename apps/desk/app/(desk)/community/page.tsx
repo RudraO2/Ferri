@@ -2,6 +2,7 @@ import { community } from "@/lib/db";
 import { ago, muted } from "@/lib/data";
 import { mutePerson, saveCommunity, unmutePerson } from "../actions";
 import { Empty, Note, PageHead, Section } from "../ui";
+import { SettingsForm } from "../settings-form";
 
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
@@ -31,6 +32,15 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
             {c.deskEditedAt ? <span className="text-[12px] text-zinc-500">Edited in Desk: the seed leaves these settings alone.</span> : null}
           </div>
         </form>
+      </Section>
+
+      {/* Customization (spec 21): how Ferri behaves everywhere, unless an event or a space sets its own. */}
+      <Section title="Settings">
+        <p className="muted mb-3">
+          These apply to every event unless the event (or, for tone and language, a single space) sets its own. The citation check, the approval cards and the pause stay
+          in code: no setting turns them off.
+        </p>
+        <SettingsForm level="community" scope={{ communityId: c.id }} back="/community" />
       </Section>
 
       <Section title={`Mute list · ${people.length}`}>

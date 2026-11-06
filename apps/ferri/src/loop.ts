@@ -24,10 +24,13 @@ import {
   resolveSpace,
   routeCard,
   saveCrewEntry,
+  settingsFor,
+  sourceLabel,
   switchExpiry,
   waitingCount,
   waitingQuestions,
   type CrewMember,
+  type FerriSettings,
   type KnowledgeItem,
   type LiveKnowledge,
   type OpenCard,
@@ -35,6 +38,7 @@ import {
 import { cardNotice, pushToUsers, pushedAboutCard, settledNotice, switchUsersForCrew, type PushKind } from "@ferri/push";
 import type { ApprovalView, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
+import { envSettings } from "./prompts.ts";
 
 export interface RoomInfo {
   name: string;
@@ -45,7 +49,8 @@ export interface RoomInfo {
 export interface LoopDeps {
   db: Db;
   agent: SwitchAgent;
-  skills: () => string;
+  /** The answer prompt's head for one place (specs 20 and 21: edited skills, desk skill, tone and language). */
+  skillsFor: (scope: { communityId: string; eventId: string | null; spaceId: string | null }) => Promise<string>;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
 }
@@ -93,6 +98,8 @@ export function createLoop(deps: LoopDeps) {
   let careHooks: AnnounceHooks | null = null;
   let guestHooks: AnnounceHooks | null = null;
   let spotHooks: AnnounceHooks | null = null;
+  /** Specs 18 to 20: cards settled by their own modules (wrap, desk, social). */
+  const kindHooks = new Map<string, AnnounceHooks>();
 
   /**
    * Every post goes through here. While the master pause is on, nothing is
@@ -196,14 +203,27 @@ export function createLoop(deps: LoopDeps) {
     return findCrewMember(crew, answeredBy)?.name ?? parseSender(answeredBy).username;
   }
 
-  function ladder(stage: string | null, endsAt: Date | null) {
+  /** Spec 21: the settings that apply in one place, read now (env base, then community, event, space). */
+  function settings(scope: { communityId: string; eventId?: string | null; spaceId?: string | null }): Promise<FerriSettings> {
+    return settingsFor(db, scope, envSettings());
+  }
+
+  /** The card ladder. `s` carries the event's own minutes (spec 21); FERRI_NUDGE_SECONDS still wins for tests. */
+  function ladder(stage: string | null, endsAt: Date | null, s?: Pick<FerriSettings, "ladderLiveMinutes" | "ladderBeforeMinutes">) {
     return ladderTimes({
       now: new Date(),
       stage,
       eventEndsAt: endsAt,
       nudgeSeconds: config.nudgeSeconds,
       ttlSeconds: config.cardTtlSeconds,
+      liveMinutes: s?.ladderLiveMinutes,
+      beforeMinutes: s?.ladderBeforeMinutes,
     });
+  }
+
+  /** The ladder for a card of this event, with the event's settings read now. */
+  async function ladderFor(communityId: string, event: { id: string; stage: string | null; endsAt: Date | null } | null | undefined) {
+    return ladder(event?.stage ?? null, event?.endsAt ?? null, await settings({ communityId, eventId: event?.id ?? null }));
   }
 
   // ── Question cards ────────────────────────────────────────────────────
@@ -221,6 +241,8 @@ export function createLoop(deps: LoopDeps) {
     askerName: string;
     /** What the crew should answer (the question, or the missing part of it). */
     asked: string;
+    /** Spec 20: a desk routes its cards to its own topic's owners. */
+    topic?: string | null;
   }): Promise<{ cardId: string; joined: boolean } | null> {
     const { kb } = input;
     const crewRoomId = await crewRoomFor(input.eventId);
@@ -246,9 +268,10 @@ export function createLoop(deps: LoopDeps) {
 
     const event = input.eventId ? kb.events.find((e) => e.id === input.eventId) : undefined;
     const crew = await loadCrew(db, kb.community.id, input.eventId);
-    const route = routeCard(crew, prep.topic);
+    const topic = input.topic || prep.topic;
+    const route = routeCard(crew, topic);
     const { platform } = await deps.room(crewRoomId);
-    const times = ladder(event?.stage ?? null, event?.endsAt ?? null);
+    const times = await ladderFor(kb.community.id, event);
     const id = randomUUID();
     await db.insert(cards).values({
       id,
@@ -257,7 +280,7 @@ export function createLoop(deps: LoopDeps) {
       crewRoomId,
       switchSessionId: CARD_SESSION,
       kind: "question",
-      topic: prep.topic,
+      topic,
       question: prep.question,
       personal: prep.personal,
       ownerIds: route.owners.map((o) => o.id),
@@ -268,7 +291,7 @@ export function createLoop(deps: LoopDeps) {
         request_id: id,
         turn_id: id,
         // Switch escapes @mentions inside a card, so the owners are pinged by a message of Ferri's below.
-        title: cardTitle({ mentions: [], topic: prep.topic, asker: input.askerName, roomName: input.roomName, asked: input.asked }),
+        title: cardTitle({ mentions: [], topic, asker: input.askerName, roomName: input.roomName, asked: input.asked }),
         detail: `Ferri could not find this in the knowledge base. ${prep.personal ? "It is about one person, so the answer goes to them only." : "The answer goes to everyone who asked and is saved for next time."}`,
         questions: [
           {
@@ -293,7 +316,7 @@ export function createLoop(deps: LoopDeps) {
     const who = route.owners.map((o) => mention(o, platform));
     const why =
       route.reason === "owner"
-        ? `a ${prep.topic} question for you`
+        ? `a ${topic} question for you`
         : route.reason === "on_duty"
           ? "you're on duty, a question for you"
           : "a question for the crew";
@@ -327,7 +350,7 @@ export function createLoop(deps: LoopDeps) {
     const crew = await loadCrew(db, input.kb.community.id, input.eventId);
     const route = routeCard(crew, "__reply__");
     const { platform } = await deps.room(crewRoomId);
-    const times = ladder(event?.stage ?? null, event?.endsAt ?? null);
+    const times = await ladderFor(input.kb.community.id, event);
     const id = randomUUID();
     const asked = input.asked.replace(/\s+/g, " ").trim();
     await db.insert(cards).values({
@@ -549,23 +572,27 @@ export function createLoop(deps: LoopDeps) {
         continue;
       }
       let text: string;
+      const scope = { communityId: card.communityId, eventId: card.eventId, spaceId: space.spaceId };
+      const { language, tone } = await settings(scope);
       try {
         const r = await answerQuestion({
           db,
           kb: personalKb ?? kb,
           choice: config.modelMain,
-          skills: deps.skills(),
+          skills: await deps.skillsFor(scope),
           roomName: room.name,
           sender: first.askerName,
           question: first.text,
           history: [],
           addressed: true,
           followUp: true,
+          language,
+          tone,
         });
-        text = r.kind === "answer" ? r.text : fallbackReply(answerText, by);
+        text = r.kind === "answer" ? r.text : fallbackReply(answerText, by, language);
       } catch (err) {
         log(`follow-up answer failed, sending the crew's words: ${(err as Error).message}`);
-        text = fallbackReply(answerText, by);
+        text = fallbackReply(answerText, by, language);
       }
       const reply = `${askerMention(first.askerId, first.askerName)} ${text}`;
       const eventId = await post(card.communityId, first.roomId, reply);
@@ -597,8 +624,8 @@ export function createLoop(deps: LoopDeps) {
     return delivered;
   }
 
-  function fallbackReply(answerText: string, by: string): string {
-    return `The team says: “${answerText}”\n\nSource: answer from ${by} (crew)`;
+  function fallbackReply(answerText: string, by: string, language = ""): string {
+    return `The team says: “${answerText}”\n\n${sourceLabel(language, false)}: answer from ${by} (crew)`;
   }
 
   async function settleQuestions(cardId: string, resolution: "dismissed" | "expired"): Promise<number> {
@@ -660,6 +687,11 @@ export function createLoop(deps: LoopDeps) {
     }
     if (card.kind === "spot") {
       await spotHooks?.expired(card);
+      return true;
+    }
+    const kindHook = kindHooks.get(card.kind);
+    if (kindHook) {
+      await kindHook.expired(card);
       return true;
     }
     if (card.kind === "reply") {
@@ -746,6 +778,10 @@ export function createLoop(deps: LoopDeps) {
         const h = card.kind === "guests" ? guestHooks : spotHooks;
         if (!h) throw new Error("guests are not running yet");
         await h.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
+      } else if (kindHooks.has(card.kind)) {
+        await kindHooks.get(card.kind)!.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
+      } else if (card.kind === "wrap" || card.kind === "desk" || card.kind === "social") {
+        throw new Error(`${card.kind} cards are not running yet`);
       } else if (card.kind === "reply") {
         if (written) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card", answerText: written });
@@ -838,6 +874,8 @@ export function createLoop(deps: LoopDeps) {
             ? `the email to the guests “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
             : card.kind === "spot"
             ? `a free spot is still waiting: “${card.question}” (${minutesSince(card.createdAt)} min). It's on the card above.`
+            : card.kind === "wrap" || card.kind === "desk" || card.kind === "social"
+            ? `“${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
             : card.kind === "reply"
             ? `the reply to “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min.`
             : `still open after ${minutesSince(card.createdAt)} min: “${card.question}”. ${plural(n, "person is", "people are")} waiting. ` +
@@ -876,6 +914,8 @@ export function createLoop(deps: LoopDeps) {
             ? `nobody has approved the email to the guests “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : card.kind === "spot"
             ? `nobody has decided “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please offer the spot or say don't.`
+            : card.kind === "wrap" || card.kind === "desk" || card.kind === "social"
+            ? `nobody has decided “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please answer the card.`
             : card.kind === "reply"
             ? `nobody has approved the reply to “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : `nobody has answered “${card.question}” for ${minutesSince(card.createdAt)} min, and ${plural(n, "person is", "people are")} waiting. Whoever knows, please answer.`;
@@ -936,6 +976,8 @@ export function createLoop(deps: LoopDeps) {
     postMedia,
     crewRoomFor,
     ladder,
+    ladderFor,
+    settings,
     claim,
     crewByIds,
     pocketNotify,
@@ -955,6 +997,10 @@ export function createLoop(deps: LoopDeps) {
     setGuestHooks: (sends: AnnounceHooks, spots: AnnounceHooks) => {
       guestHooks = sends;
       spotHooks = spots;
+    },
+    /** Cards of kind wrap, desk or social are settled by that module. */
+    setKindHooks: (kind: "wrap" | "desk" | "social", h: AnnounceHooks) => {
+      kindHooks.set(kind, h);
     },
     openOrJoin,
     openReplyCard,
