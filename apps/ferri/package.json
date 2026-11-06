@@ -17,6 +17,7 @@
     "@ferri/shield": "workspace:*",
     "@ferri/switch": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "@ferri/email": "workspace:*"
+    "@ferri/email": "workspace:*",
+    "@ferri/social": "workspace:*"
   }
 }

@@ -14,6 +14,7 @@ import { GuestSendActions } from "./guest-actions";
 import { PlanActions } from "./plan-actions";
 import { ReplyActions } from "./reply-actions";
 import { WrapActions } from "./wrap-actions";
+import { SocialActions } from "./social-actions";
 import { DeskActions } from "./desk-actions";
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
@@ -52,6 +53,8 @@ export default async function CardPage({ params, searchParams }: { params: Promi
             ? "Close the event"
           : card.kind === "desk"
             ? "Desks to make"
+          : card.kind === "social"
+            ? "Social post"
           : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   const gc = card.guestCard;
   return (
@@ -203,6 +206,12 @@ export default async function CardPage({ params, searchParams }: { params: Promi
               Don&apos;t offer
             </button>
           </form>
+        </section>
+      ) : null}
+
+      {open && card.kind === "social" ? (
+        <section className="mt-4 px-4">
+          <SocialActions cardId={card.id} />
         </section>
       ) : null}
 

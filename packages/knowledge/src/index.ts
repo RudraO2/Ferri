@@ -22,3 +22,4 @@ export * from "./guests.ts";
 export * from "./wrap.ts";
 export * from "./desks.ts";
 export * from "./settings.ts";
+export * from "./social.ts";

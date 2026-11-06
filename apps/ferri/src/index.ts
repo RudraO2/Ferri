@@ -24,6 +24,7 @@ import { createPrompts } from "./prompts.ts";
 import { createWrap } from "./wrap.ts";
 import { createDesks } from "./desks.ts";
 import { createSettings } from "./settings.ts";
+import { createSocial } from "./social.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
 import { ConnectionStore } from "./state.ts";
@@ -158,7 +159,10 @@ const desks = createDesks({ db, agent, loop, builder, gateway: gateway ?? null, 
 loop.setKindHooks("desk", desks.hooks);
 prompts.setDeskSkill(desks.skillFor);
 const settings = createSettings({ db, prompts, room, log });
-const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, wrap, desks, settings, prompts, room, log });
+const social = createSocial({ db, agent, loop, prompts, room, log });
+loop.setKindHooks("social", social.hooks);
+log(social.enabled ? `social: on (Buffer)${social.mediaEnabled ? ", images on the media host" : ", no media host"}` : "social: off (no BUFFER_API_KEY)");
+const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, wrap, desks, settings, social, prompts, room, log });
 const stopLoop = loop.start();
 const shield = await createShield({ db, loop, log }).start();
 await discover();
@@ -181,6 +185,8 @@ const timers = [
   setInterval(() => void wrap.tick(), config.ladderTickMs),
   // Desks: desks and packs asked for in Desk, sheet documents.
   setInterval(() => void desks.tick(), config.ladderTickMs),
+  // Social: posts Desk asked for, deletes, scheduled posts that went out, images to remove.
+  setInterval(() => void social.tick(), config.ladderTickMs),
 ];
 void launch.tick();
 void watchMirror();

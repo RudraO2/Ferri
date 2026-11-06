@@ -48,6 +48,7 @@ import type { Desks } from "./desks.ts";
 import type { Prompts } from "./prompts.ts";
 import type { SettingsModule } from "./settings.ts";
 import type { Wrap } from "./wrap.ts";
+import type { Social } from "./social.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -68,6 +69,7 @@ export interface FlowDeps {
   wrap: Wrap;
   desks: Desks;
   settings: SettingsModule;
+  social: Social;
   prompts: Prompts;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -474,7 +476,7 @@ export function createFlow(deps: FlowDeps) {
     }
 
     // Wrap (spec 19), desks (spec 20) and settings (spec 21): each module answers for itself.
-    if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings")) {
+    if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings" || intent.intent === "social")) {
       const actionId = await loop.claimCrewAction({
         communityId: ctx.kb.community.id,
         messageId: p.message_id,
@@ -486,7 +488,8 @@ export function createFlow(deps: FlowDeps) {
         text: p.body,
       });
       if (!actionId) return;
-      const action = intent.intent === "wrap" ? intent.wrap.action : intent.intent === "desk" ? intent.desk.action : intent.settings.action;
+      const action =
+        intent.intent === "wrap" ? intent.wrap.action : intent.intent === "desk" ? intent.desk.action : intent.intent === "social" ? intent.social.action : intent.settings.action;
       log(`crew ${member.name}: ${intent.intent} ${action}`);
       const ask: CrewAsk = {
         communityId: ctx.kb.community.id,
@@ -498,7 +501,7 @@ export function createFlow(deps: FlowDeps) {
         body: stripMention(p.body),
         intent,
       };
-      const handler = intent.intent === "wrap" ? wrap : intent.intent === "desk" ? desks : deps.settings;
+      const handler = intent.intent === "wrap" ? wrap : intent.intent === "desk" ? desks : intent.intent === "social" ? deps.social : deps.settings;
       const reply = await handler.intent(ask);
       if (reply) await say(reply);
       return;

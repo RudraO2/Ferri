@@ -1,0 +1,11 @@
+# Ferri media host (spec 18). Deploy: npx wrangler deploy (after `npx wrangler login`).
+# The KV namespace id is filled in by `npx wrangler kv namespace create MEDIA`; the secret by
+# `npx wrangler secret put MEDIA_SECRET` (the same value as FERRI_MEDIA_SECRET in Ferri's .env).
+name = "ferri-media"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "MEDIA"
+id = "b3d5fe9a060f47d18d948937844d7214"

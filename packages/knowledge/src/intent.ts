@@ -8,7 +8,7 @@ import { TOPICS, type ChatLine } from "./triage.ts";
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "guests", "wrap", "desk", "settings", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "guests", "wrap", "desk", "settings", "social", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -23,7 +23,7 @@ export const CrewIntentSchema = z.strictObject({
     .strictObject({
       action: z.enum(["draft", "show", "done", "add", "owner"]),
       ref: z.string().nullable(),
-      kind: z.enum(["decision", "task", "question"]),
+      kind: z.enum(["task", "decision", "question"]),
       what: z.string(),
       owner: z.string().nullable(),
       due: z.string().nullable(),
@@ -102,17 +102,30 @@ export const CrewIntentSchema = z.strictObject({
     key: z.enum(["", ...SETTING_KEYS]),
     value: z.string(),
   }),
+  /** social: posts to LinkedIn, X and Instagram through Buffer (spec 18). */
+  social: z.strictObject({
+    action: z.enum(["none", "post", "status"]),
+    /** post: what the posts should say, in their words. */
+    what: z.string(),
+    /** The networks they named ("linkedin", "x", "instagram"); [] for every connected one. */
+    networks: z.array(z.string()),
+    /** When to post, ISO 8601 with the offset, or "" for as soon as it is approved. */
+    when: z.string(),
+    /** poster: with the event's poster as the image; none: text only. */
+    image: z.enum(["poster", "none"]),
+  }),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
 
 /** The first call's schema: everything but the spec 19 to 21 objects (with them the grammar is too large for the API). */
-export const CrewIntentBaseSchema = CrewIntentSchema.omit({ wrap: true, desk: true, settings: true });
+export const CrewIntentBaseSchema = CrewIntentSchema.omit({ wrap: true, desk: true, settings: true, social: true });
 
 /** The spec 19 to 21 objects when the intent is not theirs. */
-const NO_EXTRA_INTENT = (): Pick<CrewIntent, "wrap" | "desk" | "settings"> => ({
+const NO_EXTRA_INTENT = (): Pick<CrewIntent, "wrap" | "desk" | "settings" | "social"> => ({
   wrap: { action: "none", event: "", from: "", to: "", when: "" },
   desk: { action: "none", kind: "", name: "", members: [], what: "", platform: "" },
   settings: { action: "none", scope: "community", space: "", key: "", value: "" },
+  social: { action: "none", what: "", networks: [], when: "", image: "none" },
 });
 
 const INTENT_SYSTEM = `You read a message that someone on the organizing crew wrote to Ferri, the AI teammate of their community. Ferri holds open question cards: questions from members it could not answer and is waiting on the crew for.
@@ -178,6 +191,7 @@ facts: every fact in the message that is not part of the card answer, each as a 
   - list: what desks there are ("what desks do we have?").
   - sheet: show what a desk has collected ("show the judging scores", "who has checked in so far?", "what's in lost and found?"). desk.kind is that desk's kind.
   desk.platform is a platform they named for the room, else "". Team rooms (rooms for teams of participants) are team_rooms, not desk.
+- social: posts on the community's social media accounts (LinkedIn, X, Instagram), not the chat spaces ("post the poster on LinkedIn, X and Instagram", "share on social that registration is open", "tweet that we have 20 spots left", "put it on Instagram tomorrow at 9"). social.action is post, or status ("what did we post on social?", "is the LinkedIn post out?"). social.what is what the posts should say, in their words, with the instructions to Ferri removed. social.networks lists the networks they named as written ([] when they say social or name none). social.when is ISO 8601 with the offset, or "" for as soon as it is approved. social.image is poster when they mention the poster, an image or a picture, else none. Telling the chat spaces is announce; social is only for social media.
 - settings: how Ferri behaves, for the whole community, this event, or one space. settings.action is set, show ("what are the settings?", "how are you set up for Build Night?") or reset (back to the default). settings.key is one of:
   - tone: how Ferri sounds ("be more playful on Discord", "keep it professional"); value: playful, warm, professional, brief, or their own words.
   - language: the language Ferri replies in ("reply in Hindi in the WhatsApp group"); value: the language name, or "" for each person's own language.
@@ -188,7 +202,7 @@ facts: every fact in the message that is not part of the card answer, each as a 
   - checkInLiveMinutes, checkInBeforeMinutes, guestReminderHours, guestNudgeDays, guestDailyCap, autoWrap (on or off), wrapAfterMinutes, decisionWatcher (on or off: offering announcements from crew decisions), planReader (on or off: keeping the plan from crew chat).
   settings.scope is space when they name a space or platform ("in the WhatsApp group", "on Discord"), with settings.space as written without "in" or "on" ("the WhatsApp group", "Discord"); "in the room" or "in the rooms" without naming one is not a space. scope is event when they name the event or say "for this event"; else community. settings.value is the new value as plain text ("60", "off", "Hindi", "playful"), "" for show and reset. settings.key is "" for show, and "" for a reset of everything ("reset the settings for Build Night"). Undoing one change is reset with that key ("stop replying in Hindi in the WhatsApp group": reset, language; "go back to your normal tone on Discord": reset, tone). Telling Ferri how to behave is settings, not remember: "remember" is for facts members may ask about.
 
-For every intent, announce, remind, plan, build, outreach, care and guests are null unless the intent is that one, and teams is [] unless the intent is team_rooms. wrap.action, desk.action and settings.action are "none" unless the intent is that one (with every other field of that object "" or [], and settings.scope "community"). facts is [] for announce, remind, team_rooms, plan, build, outreach, care, guests, wrap, desk and settings.
+For every intent, announce, remind, plan, build, outreach, care and guests are null unless the intent is that one, and teams is [] unless the intent is team_rooms. wrap.action, desk.action, settings.action and social.action are "none" unless the intent is that one (with every other field of that object "" or [], settings.scope "community" and social.image "none"). facts is [] for announce, remind, team_rooms, plan, build, outreach, care, guests, wrap, desk, settings and social.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
@@ -236,7 +250,7 @@ export async function crewIntent(input: {
   const usage = { ...out.usage };
   let latencyMs = out.latencyMs;
   let intent: CrewIntent | null = out.data ? { ...out.data, ...NO_EXTRA_INTENT() } : null;
-  if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings")) {
+  if (intent && (intent.intent === "wrap" || intent.intent === "desk" || intent.intent === "settings" || intent.intent === "social")) {
     const k = intent.intent;
     const more = await structuredCall({
       choice: input.choice,
@@ -250,14 +264,14 @@ export async function crewIntent(input: {
     usage.cacheRead += more.usage.cacheRead;
     usage.cacheWrite += more.usage.cacheWrite;
     latencyMs += more.latencyMs;
-    const extra = (more.data as Partial<Pick<CrewIntent, "wrap" | "desk" | "settings">> | null)?.[k];
+    const extra = (more.data as Partial<Pick<CrewIntent, "wrap" | "desk" | "settings" | "social">> | null)?.[k];
     if (extra) intent = { ...intent, [k]: extra } as CrewIntent;
     else intent = { ...intent, intent: "other" };
   }
   // "other" or "question" with exactly one intent's details filled in: that intent (Haiku sometimes labels it loosely).
   if (intent && (intent.intent === "other" || intent.intent === "question")) {
     const filled: CrewIntent["intent"][] = (["announce", "remind", "plan", "build", "outreach", "care", "guests"] as const).filter((k) => intent[k] !== null);
-    for (const k of ["wrap", "desk", "settings"] as const) if (intent[k].action !== "none") filled.push(k);
+    for (const k of ["wrap", "desk", "settings", "social"] as const) if (intent[k].action !== "none") filled.push(k);
     if (filled.length === 1) intent.intent = filled[0]!;
   }
   let card =

@@ -1257,3 +1257,50 @@ export const skillRevisions = pgTable(
   },
   (t) => [uniqueIndex("skill_revisions_version").on(t.skillId, t.version)],
 );
+
+// ── Social posting (spec 18): LinkedIn, X and Instagram through Buffer ────
+
+/**
+ * One post to one Buffer channel. The posts of one social card share its
+ * `cardId`; the image they carry lives on Ferri's media host under `imageKey`
+ * until every post using it is out (or deleted), then Ferri removes it.
+ */
+export const socialPosts = pgTable(
+  "social_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    cardId: uuid("card_id"),
+    /** Buffer's service name: "linkedin", "twitter", "instagram", ... */
+    service: text("service").notNull(),
+    channelId: text("channel_id").notNull(),
+    channelName: text("channel_name").notNull(),
+    text: text("text").notNull(),
+    /** The image on the media host (key and public URL), if the post has one. */
+    imageKey: text("image_key"),
+    imageUrl: text("image_url"),
+    /** Null: as soon as it is approved. */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /**
+     * "waiting" (card open), "dismissed", "expired", "draft" (saved in Buffer as a draft),
+     * "scheduled" (in Buffer's queue at dueAt), "sent", "failed", "deleted".
+     */
+    status: text("status").notNull().default("waiting"),
+    bufferPostId: text("buffer_post_id"),
+    error: text("error"),
+    /** What the crew asked for, in their words. */
+    ask: text("ask"),
+    requestedBy: text("requested_by").notNull(),
+    /** "chat" or "desk". */
+    origin: text("origin").notNull(),
+    sourceMessageId: text("source_message_id"),
+    /** Desk asked Ferri to delete it in Buffer. */
+    deleteRequestedAt: timestamp("delete_requested_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("social_posts_card").on(t.cardId), index("social_posts_status").on(t.communityId, t.status)],
+);

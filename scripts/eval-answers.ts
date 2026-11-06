@@ -834,6 +834,39 @@ try {
     }
     spec19Cases += wrapCases.length;
 
+    // Spec 18: social intents (posts to LinkedIn, X and Instagram through Buffer), not announcements.
+    const socialCases: { msg: string; action: string; nets?: string[]; image?: string; when?: boolean }[] = [
+      { msg: "@ferri post the poster on LinkedIn, X and Instagram saying registration is open", action: "post", nets: ["linkedin", "twitter", "instagram"], image: "poster" },
+      { msg: "@ferri tweet that we have 20 spots left", action: "post", nets: ["twitter"], image: "none" },
+      { msg: "@ferri share on social on 1 June 2027 at 10 AM that the next Build Night is coming", action: "post", nets: [], when: true },
+      { msg: "@ferri what did we post on social?", action: "status" },
+    ];
+    const si = await pool(socialCases, 4, async (c) => {
+      const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+      tokensIn += r.usage.input + r.usage.cacheWrite;
+      tokensOut += r.usage.output;
+      cacheRead += r.usage.cacheRead;
+      const s = r.intent?.social;
+      const problems: string[] = [];
+      if (r.intent?.intent !== "social" || !s) problems.push(`intent ${r.intent?.intent}, expected social`);
+      else {
+        if (s.action !== c.action) problems.push(`action ${s.action}, expected ${c.action}`);
+        const got = wrapLib.servicesFrom(s.networks).sort().join(",");
+        if (c.nets && got !== [...c.nets].sort().join(",")) problems.push(`networks ${JSON.stringify(s.networks)}`);
+        if (c.image && s.image !== c.image) problems.push(`image ${s.image}, expected ${c.image}`);
+        if (c.when && !/^2027-06-01T10:00/.test(s.when)) problems.push(`when "${s.when}"`);
+      }
+      return { c, r, problems };
+    });
+    console.log("\nsocial intents (spec 18)");
+    for (const { c, r, problems } of si) {
+      if (problems.length) failed++;
+      console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+      console.log(`      ${JSON.stringify({ intent: r.intent?.intent, social: r.intent?.social })}`);
+      for (const x of problems) console.log(`      -> ${x}`);
+    }
+    spec19Cases += socialCases.length;
+
     // Lessons: grounded, and no number that is not in the stats (checked again here on the guarded output).
     const stats = {
       event: { name: "Lantern Build Night", startsAt: null, endsAt: null },

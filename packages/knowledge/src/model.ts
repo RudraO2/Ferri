@@ -32,6 +32,22 @@ export function anthropic(): Anthropic {
   return shared;
 }
 
+/** Set nested choice fields the model left as "" to their first option. True when something was changed. */
+export function repairEmptyChoices(raw: unknown, issues: readonly { code: string; path: PropertyKey[]; values?: readonly unknown[] }[]): boolean {
+  let changed = false;
+  for (const issue of issues) {
+    if (issue.code !== "invalid_value" || issue.path.length < 2 || !issue.values?.length) continue;
+    let node = raw as Record<PropertyKey, unknown> | null;
+    for (const key of issue.path.slice(0, -1)) node = node && typeof node === "object" ? (node[key] as Record<PropertyKey, unknown>) : null;
+    const last = issue.path[issue.path.length - 1]!;
+    if (node && typeof node === "object" && node[last] === "") {
+      node[last] = issue.values[0];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** The same voice said again at the end of the request: Haiku follows tone and language there (spec 21). */
 export function voiceUser(voice: string | undefined | null): string {
   if (!voice?.trim()) return "";
@@ -83,9 +99,15 @@ export async function structuredCall<S extends z.ZodType>(opts: {
 
   const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
   try {
-    const parsed = opts.schema.safeParse(JSON.parse(text));
+    const raw = JSON.parse(text);
+    let parsed = opts.schema.safeParse(raw);
+    // Haiku sometimes writes "" for a nested choice it does not use ("plan.kind": ""), which voids the whole
+    // answer. Such a field takes the choice's first option (its default), and the answer is read again.
+    if (!parsed.success && repairEmptyChoices(raw, parsed.error.issues)) parsed = opts.schema.safeParse(raw);
+    if (!parsed.success && process.env.FERRI_DEBUG_PARSE) console.error(`[structuredCall] schema mismatch: ${parsed.error.message.slice(0, 600)}\n${text.slice(0, 800)}`);
     return { data: parsed.success ? parsed.data : null, refused: false, ...base };
   } catch {
+    if (process.env.FERRI_DEBUG_PARSE) console.error(`[structuredCall] not JSON:\n${text.slice(0, 800)}`);
     return { data: null, refused: false, ...base };
   }
 }

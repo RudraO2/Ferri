@@ -97,7 +97,7 @@ export async function openCards(user: DeskUser) {
       : r.ownerIds.some((id) => myIds.has(id))
         ? r.kind === "care"
           ? "your case"
-          : r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach" || r.kind === "guests" || r.kind === "spot" || r.kind === "wrap" || r.kind === "desk"
+          : r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach" || r.kind === "guests" || r.kind === "spot" || r.kind === "wrap" || r.kind === "desk" || r.kind === "social"
             ? "your OK"
             : `you own ${r.topic}`
         : r.escalatedAt
