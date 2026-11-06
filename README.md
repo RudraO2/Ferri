@@ -1,10 +1,83 @@
 # Ferri
 
-Ferri is an AI teammate for people who run community events. It answers the community on every platform and asks the organizing team only when it does not know. When the team decides something, Ferri tells everyone.
+**The AI teammate for people who run community events.** Ferri answers your community on every platform, asks your crew only when it does not know, and turns what the crew decides into an update everywhere after one OK.
 
-Built on [Switch](https://github.com/sandbox-quantum/switch), which puts agents and people in the same rooms across Slack, Discord, Telegram, Mattermost and Microsoft Teams.
+Built on [Switch](https://github.com/sandbox-quantum/switch) for the WeMakeDevs "Flip the Switch" hackathon (Track 1, best business workflow). Built by voice with Wispr Flow.
 
-> Work in progress. This README grows with each piece we ship.
+- Demo video: _link coming_
+- Switch fork with our core change: [`RudraO2/switch`, branch `ferri/agent-message-edit`](https://github.com/RudraO2/switch/tree/ferri/agent-message-edit)
+
+## The problem
+
+A hackathon, a meetup or a festival night has members on Discord, Telegram, Slack and a Mattermost or WhatsApp group, and a small crew of volunteers running it. The same three questions arrive forty times on five apps. Answers given in one group never reach the others. The crew decides something in their own chat ("lunch moves to 1:30") and half the members never hear it, or hear the old time. A fake "free nitro" link lands in the busiest channel at the worst moment. Every organizer we know runs this by hand, at night, on their phone.
+
+## What Ferri does: three pillars
+
+Ferri is one agent that works in two directions, with a bridge between them.
+
+**1. Outward: answers on every platform, with sources.** Ferri sits in every group of the event, on every platform. It answers only from the event's knowledge and names the source under every answer. It also notices questions nobody addressed to it ("does anyone know the wifi password?"), waits a moment so a person can answer first, and steps in only when it has a sourced answer. Each space has a mode: Off, Listen, Approve (every reply waits for an organizer) or Auto.
+
+**2. Inward: the crew decides, Ferri learns.** When Ferri does not know, the member hears "I'm checking with the team" at once, and a Switch question card opens in the crew room for the person who owns that topic (food, venue, judging). The owner's phone buzzes through Ferri Pocket. One answer, on the card, from Desk, or from the phone, reaches everyone who was waiting, on their own app, with a real mention. The answer is saved, so the next person gets it instantly. Nobody answers: Ferri nudges the owner, then the whole crew, and never invents an answer.
+
+**3. The bridge: a decision inside becomes an update outside.** "@ferri tell everyone lunch moves to 1:30" drafts an announcement and opens one approval card with the draft and every space it will reach. One OK posts it to every space of the event on every platform and saves it as knowledge. "@ferri change the lunch announcement, it's 1:45 now" and one more OK **edits the post in place** on Mattermost, Slack, Discord and Telegram. Ferri also follows the crew's own chat: when the crew settles something members need to know ("ok let's push judging to 4pm"), it offers the announcement on a card, credited to whoever decided, and never posts without the OK. Announcements can be scheduled; one not approved by its time is not sent, and the crew is told.
+
+Around the pillars:
+
+- **Shield** keeps scam links, link floods and leaked API keys out of every room, on every platform, before anyone sees them. It is our own Switch Trust endpoint and answers in 2 to 9 ms, with no model in the path.
+- **Desk** is the organizers' dashboard: spaces and modes, master pause, cards, events and crew, knowledge with versions, announcements, Shield.
+- **Ferri Pocket** is the crew's phone app (a PWA with Web Push): the cards that need you, Post, Edit, Don't post, who is stuck, and a `+ Announce` button.
+- **Crew helpers**: "@ferri remind me at 5 to order the pizza", and "@ferri make team rooms for Team Alpha with meera and arjun", which makes real private channels on the platform from a Switch template.
+
+## Why Switch is the spine
+
+Ferri does not work without Switch. Every group on every platform is a Switch room, Ferri is one Switch agent in all of them, every approval is a Switch card, and every message passes Switch Trust. We use Switch as deeply as we could find it:
+
+| Switch feature | What Ferri does with it | Where |
+|---|---|---|
+| Rooms bridged to Mattermost, Slack, Discord, Telegram | Every group is a Switch room. One agent connection serves every platform, and one answer fans out to askers on four apps with native mentions. | `apps/ferri/src/flow.ts`, `rooms.ts` |
+| Always-on custom agent protocol | Our own small TypeScript client: event stream with a string cursor, heartbeat, typing, posting, ops, catch-up after a restart. | `packages/switch` |
+| Addressing and `follow_the_conversation` | Ferri tells a real mention from a follow-up, and runs a fast triage model on room chatter it was not addressed in. | `apps/ferri/src/mentions.ts`, `packages/knowledge/src/triage.ts` |
+| Question cards (`/agent-sessions/{sid}/approvals`) | Unknown questions, replies waiting in Approve spaces, and every announcement version are cards. The ladder (nudge, escalate, close) runs on them. Buttons on Mattermost, Slack, Discord and Telegram. | `apps/ferri/src/loop.ts`, `launch.ts` |
+| Answering a card as a person (`/gateway/agent-sessions/.../answer`) | Desk and Pocket answer cards through Switch under the signed-in organizer's name. | `apps/desk/lib/cards.ts` |
+| Switch Trust (`/guardrails/check`) | Shield, our own Trust endpoint inside the Ferri service: blocks scams and floods, redacts secrets, alerts the crew. | `packages/shield`, `apps/ferri/src/shield.ts` |
+| Templates v2 (`create_room_from_yaml`) | "Make team rooms" creates real private channels on the platform with the members, Ferri and a kickoff, attached to the event. | `apps/ferri/src/launch.ts` |
+| Library documents | The live knowledge is mirrored into a Switch library document attached to the event's rooms, so it is visible inside Switch. Every edit updates it. | `packages/knowledge/src/mirror.ts` |
+| Gateway (auth, rooms, agents, collaborations, addressing policy) | Desk and Pocket sign in with Switch accounts. Desk adds Ferri to rooms, discovers spaces, connects Shield. | `apps/desk`, `scripts/` |
+| **Agent message edit (new, in our fork)** | Switch had no way for an agent to edit a message it posted. We added it to Switch core. See below. | [`RudraO2/switch@2711974`](https://github.com/RudraO2/switch/commit/2711974943c2e72540e012cb8171c9e59cfd2511) |
+
+### What we added to Switch: agent message edit
+
+The bridge pillar needs "fix the announcement everywhere". Switch had no op and no route for an agent to edit its own message, though every platform adapter already had `update_message` and every bridge keeps a map from room event to platform post. So we added it to Switch core, in our fork:
+
+- `POST /agents/{agent_id}/messages/{event_id}/edit` with `{room_id, content}`, returning `{ok, edited}`.
+- `AgentCore.edit_message` checks room membership and budget like a post, refuses any message that is not the agent's own (403), and runs the new text through Switch Trust, so Shield checks edits too.
+- `CollaborationCore.handle_outbound_edit` finds the platform post in the bridge's message map and calls the adapter. Telegram writes the agent's name into the body, so its edit keeps "Ferri:" at the top.
+- Switch's own room history keeps the message as first sent.
+
+We run it as a thin image over the published Switch dev image (`deploy/local/ferri/` in the fork), so nothing else in the stack changes. Without that image Ferri still works: an edit falls back to a new post that starts with "Update:".
+
+## How it fits together
+
+```
+ Discord   Slack   Telegram   Mattermost          members and crew, on their own apps
+    \        |        |          /
+     +-------+--------+---------+
+                  |
+          Switch (our fork)       rooms, bridges, cards, templates, library docs,
+                  |               Trust, agent message edit
+        +---------+----------+
+        |                    |
+  Ferri service         Shield (Trust endpoint, same process, 127.0.0.1:3200)
+  apps/ferri            packages/shield: scam links, floods, secrets, 2-9 ms
+  flow, learning loop,
+  announcements,              Claude Haiku 5.5: triage, decision check
+  scheduler, reminders  ----> Claude Sonnet 5.5: answers and drafts
+        |
+  Postgres 16 + pgvector (knowledge with revisions, spaces, events, crew,
+        |                 questions, cards, announcements, shield log)
+        |
+  Desk (Next.js, laptop)  +  Ferri Pocket (PWA at /m, Web Push)
+```
 
 ## Run it locally
 
@@ -154,3 +227,31 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 | `pnpm push:keys` | Write Web Push (VAPID) keys to `.env` once |
 | `pnpm shield:connect` | Point Switch Trust at Shield (`--off`, `--status`) |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |
+
+## How we checked it
+
+- `pnpm test`: 83 unit tests (knowledge, policy, cards, launch, Shield detectors, push notices, the Switch stream parser, flow helpers).
+- `pnpm typecheck`: seven packages.
+- `pnpm eval:answers`: 56 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts and the crew decision check. 56 of 56 pass.
+- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size.
+
+## Repository layout
+
+```
+apps/ferri/          the Ferri agent service: message flow, learning loop, announcements,
+                     scheduler, reminders, team rooms, Shield's HTTP route
+apps/desk/           Desk (Next.js) and Ferri Pocket (the PWA at /m)
+packages/switch/     our client for the Switch agent protocol and Gateway
+packages/knowledge/  seeding, search, prompts, triage, answers with sources, drafts, the Switch mirror
+packages/shield/     Shield's detectors (pure, no network) and its log
+packages/push/       Web Push subscriptions and notices
+packages/db/         Drizzle schema and migrations (Ferri runs them on start)
+seed/                the demo community (Lantern Labs) and event (Lantern Build Night)
+skills/              Ferri's persona and answer rules, in markdown
+scripts/             setup, knowledge CLI, eval, test people, Shield connect
+infra/               Ferri's Postgres (pgvector) for Docker
+```
+
+## License
+
+MIT. Switch itself is licensed by SandboxAQ under its own terms (Apache 2.0 with the Commons Clause); Ferri talks to it over its public HTTP APIs.

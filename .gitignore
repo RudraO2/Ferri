@@ -6,3 +6,6 @@ dist/
 .ferri-state/
 *.log
 .DS_Store
+
+# written by next dev
+apps/desk/AGENTS.md
