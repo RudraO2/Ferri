@@ -780,6 +780,11 @@ export function createFlow(deps: FlowDeps) {
     }
     // A typed answer to a Switch card ("A1 ..."): Switch records it; it is not a question.
     if (looksLikeCardAnswer(p.body)) return;
+    // A photo or file with no words (WhatsApp sends the body "attachment"): nothing to answer or read.
+    if (/^\s*\[?(attachment|image|photo|picture|file|document|sticker|video|audio|voice note|gif)\]?\s*$/i.test(p.body)) {
+      log(`a file with no text from ${p.sender_name} in ${ev.room_id}; nothing to answer`);
+      return;
+    }
     // Someone talking to the Builder directly ("@builder make the header bigger"): it is the Builder's.
     // A member the Builder is helping (spec 16) still gets a mood reading, so "it works now" closes the case.
     if (builderRe.test(p.body) && !mentionRe.test(p.body)) {
