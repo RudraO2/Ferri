@@ -1,20 +1,67 @@
 import Link from "next/link";
+import { JOB_STATUS_LABEL, openCaseList } from "@/lib/care";
+import { CARE_STATUS_LABEL } from "@/lib/ferri";
 import { stuck, waitedFor } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { Empty, Header, Where } from "../bits";
 
 export default async function WhoIsStuck() {
   await requirePocketUser("/m/stuck");
-  const s = await stuck();
+  const [s, cases] = await Promise.all([stuck(), openCaseList()]);
   const total = s.waiting.length + s.replies.length;
+  const sub = [
+    cases.length ? `${cases.length} open ${cases.length === 1 ? "case" : "cases"}` : "",
+    total ? `${total} ${total === 1 ? "person is" : "people are"} waiting on an answer, longest first` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <>
-      <Header
-        title="Who is stuck"
-        sub={total ? `${total} ${total === 1 ? "person is" : "people are"} waiting on the crew, longest first` : "Nobody is waiting on the crew"}
-      />
+      <Header title="Who is stuck" sub={sub || "Nobody is waiting on the crew"} />
+      {cases.length ? (
+        <>
+          <h2 className="mt-5 px-5 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">Open cases · {cases.length}</h2>
+          <ul className="mx-4 mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+            {cases.map((v) => (
+              <li key={v.id}>
+                <Link href={`/m/case/${v.id}`} className="block px-4 py-3 active:bg-zinc-50">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[15px] font-medium">{v.personName}</span>
+                    <span className={`text-[13px] font-medium ${v.status === "open" ? "text-amber-700" : "text-zinc-500"}`}>
+                      {v.status === "open" ? "waiting" : "open for"} {waitedFor(v.createdAt)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="pill bg-rose-100 text-rose-800">
+                      {v.ref} · {v.kind}
+                    </span>
+                    {v.urgent ? <span className="pill bg-red-600 text-white">urgent</span> : null}
+                    {v.job ? (
+                      <span className="pill bg-violet-100 text-violet-800">
+                        Builder {v.job.ref} · {JOB_STATUS_LABEL[v.job.status] ?? v.job.status}
+                      </span>
+                    ) : v.status === "builder" ? (
+                      <span className="pill bg-violet-100 text-violet-800">{CARE_STATUS_LABEL.builder}</span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-[14px] text-zinc-700">{v.reason}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2">
+                    <Where platform={v.platform} space={v.spaceName} />
+                    {v.ownerName ? (
+                      <span className="text-[12.5px] text-zinc-500">· {v.ownerName} is on it</span>
+                    ) : (
+                      <span className="text-[12.5px] font-medium text-amber-700">· nobody on it yet</span>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {total ? <h2 className="mt-7 px-5 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">Waiting on an answer · {total}</h2> : null}
+        </>
+      ) : null}
       {total ? (
-        <ul className="mx-4 mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+        <ul className={`mx-4 ${cases.length ? "mt-2" : "mt-3"} divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white`}>
           {s.waiting.map((w) => (
             <li key={w.questionId}>
               <Link href={`/m/c/${w.cardId}`} className="block px-4 py-3 active:bg-zinc-50">
@@ -48,8 +95,8 @@ export default async function WhoIsStuck() {
             </li>
           ))}
         </ul>
-      ) : (
-        <Empty title="Everyone has an answer">When Ferri cannot answer someone, they show up here until the crew does.</Empty>
+      ) : cases.length ? null : (
+        <Empty title="Everyone has an answer">When Ferri cannot answer someone, or a member needs the crew, they show up here until the crew helps.</Empty>
       )}
 
       {s.expired.length ? (

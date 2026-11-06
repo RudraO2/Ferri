@@ -12,7 +12,7 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
   const [cards, me, builderAsks] = await Promise.all([openCards(user), myCrew(user), builderRequests(user).catch(() => [])]);
   const mine = cards.filter((c) => c.forMe);
   const others = cards.filter((c) => !c.forMe);
-  const waitingPeople = mine.reduce((n, c) => n + (c.kind === "question" ? c.waiting.length : c.kind === "reply" ? 1 : 0), 0);
+  const waitingPeople = mine.reduce((n, c) => n + (c.kind === "question" ? c.waiting.length : c.kind === "reply" || c.kind === "care" ? 1 : 0), 0);
   return (
     <>
       <Header
@@ -65,7 +65,19 @@ function CardRow({ card }: { card: PocketCard }) {
   return (
     <Link href={`/m/c/${card.id}`} className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-xs active:bg-zinc-50">
       <div className="flex items-center gap-2">
-        <span className={card.kind === "announce" ? "pill bg-violet-100 text-violet-800" : card.kind === "plan" ? "pill bg-emerald-100 text-emerald-800" : card.kind === "outreach" ? "pill bg-sky-100 text-sky-800" : "pill"}>
+        <span
+          className={
+            card.kind === "announce"
+              ? "pill bg-violet-100 text-violet-800"
+              : card.kind === "plan"
+                ? "pill bg-emerald-100 text-emerald-800"
+                : card.kind === "outreach"
+                  ? "pill bg-sky-100 text-sky-800"
+                  : card.kind === "care"
+                    ? "pill bg-rose-100 text-rose-800"
+                    : "pill"
+          }
+        >
           {card.kind === "announce"
             ? (card.announcementVersion ?? 1) > 1
               ? "announcement edit"
@@ -78,6 +90,7 @@ function CardRow({ card }: { card: PocketCard }) {
                   ? "email to approve"
                   : card.topic}
         </span>
+        {card.kind === "care" && card.care?.urgent ? <span className="pill bg-red-600 text-white">urgent</span> : null}
         {card.escalatedAt ? (
           <span className="pill bg-amber-100 text-amber-800">escalated</span>
         ) : card.nudgedAt ? (
@@ -97,6 +110,15 @@ function CardRow({ card }: { card: PocketCard }) {
           <span className="text-[12.5px] text-zinc-500">{card.topic} · from the agenda draft</span>
         ) : card.kind === "outreach" ? (
           <span className="text-[12.5px] text-zinc-500">from partners@rudratechie.xyz</span>
+        ) : card.kind === "care" ? (
+          card.care ? (
+            <>
+              <Where platform={card.care.platform} space={card.care.spaceName} />
+              <span className="text-[12.5px] text-zinc-500">{card.care.personName}</span>
+            </>
+          ) : (
+            <span className="text-[12.5px] text-zinc-500">a member needs the crew</span>
+          )
         ) : first ? (
           <>
             <Where platform={first.platform} space={first.spaceName} />

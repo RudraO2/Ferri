@@ -18,6 +18,7 @@ import { createFlow } from "./flow.ts";
 import { createLaunch } from "./launch.ts";
 import { createPlan } from "./plan.ts";
 import { createOutreach } from "./outreach.ts";
+import { createCare } from "./care.ts";
 import { createShield } from "./shield.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
@@ -139,8 +140,11 @@ const builder = createBuilder({ db, agent, loop, gateway: gateway ?? null, log }
 const outreach = createOutreach({ db, agent, loop, room, log });
 loop.setOutreachHooks(outreach.hooks);
 builder.setProspectsHook(outreach.prospectsReady);
+const care = createCare({ db, agent, loop, builder, room, log });
+loop.setCareHooks(care.hooks);
+builder.setHelpHooks(care.helpHooks);
 log(outreach.enabled ? `email: on, from ${outreach.mailbox}` : "email: off (no RESEND_API_KEY)");
-const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, skills, room, log });
+const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, skills, room, log });
 const stopLoop = loop.start();
 const shield = await createShield({ db, loop, log }).start();
 await discover();
@@ -155,6 +159,8 @@ const timers = [
   setInterval(() => void builder.tick(), config.ladderTickMs),
   // Outreach: emails Desk asked for, replies and delivery events from the webhook.
   setInterval(() => void outreach.tick(), config.ladderTickMs),
+  // Care: Desk and Pocket actions on cases, cards held by the pause, check-ins, the Builder's rooms.
+  setInterval(() => void care.tick(), config.ladderTickMs),
 ];
 void launch.tick();
 void watchMirror();

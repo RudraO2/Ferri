@@ -294,8 +294,9 @@ export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed"
  * "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent.
  * "announce": a version of an announcement waits for its one approval (spec 09).
  * "outreach": an email to a partner waits for its one approval (spec 15).
+ * "care": a member needs a person; the card asks who takes the case (spec 16).
  */
-export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach"]);
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach", "care"]);
 
 export const cards = pgTable(
   "cards",
@@ -320,6 +321,8 @@ export const cards = pgTable(
     announcementVersion: integer("announcement_version"),
     /** Outreach cards: the email (a contact message) this card approves. */
     contactMessageId: uuid("contact_message_id"),
+    /** Care cards: the case this card asks the crew to take (spec 16). */
+    careCaseId: uuid("care_case_id"),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),
@@ -831,6 +834,94 @@ export const contactMessages = pgTable(
     ...timestamps,
   },
   (t) => [index("contact_messages_contact").on(t.contactId, t.createdAt), index("contact_messages_status").on(t.status), uniqueIndex("contact_messages_resend").on(t.resendId)],
+);
+
+// ── Care (spec 16): members who need a person, until it is solved ─────────
+
+/** What Desk or Pocket asked Ferri to do with a case once its card is settled. */
+export interface CareRequest {
+  /** "mine", "builder", "solved", "drop", "message", "reopen". */
+  action: string;
+  by: string;
+  byCrewId: string | null;
+  note: string | null;
+  at: string;
+}
+
+/**
+ * One member who is upset, confused, stuck or unsafe (Case 1, Case 2, ... per
+ * community). It has an owner from the crew and stays open until someone
+ * solves it or says it is not a case; its card may expire, the case does not.
+ */
+export const careCases = pgTable(
+  "care_cases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** Short number: Case <number>. */
+    number: integer("number").notNull(),
+    spaceId: uuid("space_id").references(() => spaces.id, { onDelete: "set null" }),
+    roomId: text("room_id").notNull(),
+    /** The member's Switch sender id (`@switch-<platform>-...`) and display name. */
+    personId: text("person_id").notNull(),
+    personName: text("person_name").notNull(),
+    platform: text("platform"),
+    /** "confused", "stuck", "upset" or "unsafe". */
+    kind: text("kind").notNull(),
+    /** A technical problem (code, tools, setup, accounts, the event's own tech). */
+    technical: boolean("technical").notNull().default(false),
+    /** "normal" or "high". */
+    severity: text("severity").notNull().default("normal"),
+    topic: text("topic").notNull().default("other"),
+    /** The case in one plain line the crew reads at a glance (the latest reading). */
+    reason: text("reason").notNull(),
+    /** A short quote from the member. */
+    quote: text("quote"),
+    /** "open" (nobody on it yet), "helping" (a person is on it), "builder" (the Builder is helping), "solved", "dropped". */
+    status: text("status").notNull().default("open"),
+    ownerId: uuid("owner_id").references(() => crewMembers.id, { onDelete: "set null" }),
+    ownerName: text("owner_name"),
+    cardId: uuid("card_id"),
+    builderJobId: uuid("builder_job_id").references(() => builderJobs.id, { onDelete: "set null" }),
+    /** The member message that opened it, so a replay opens nothing twice. */
+    sourceMessageId: text("source_message_id").unique(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Desk or Pocket asked for something after the card was settled; Ferri's tick does it. */
+    request: jsonb("request").$type<CareRequest>(),
+    checkInAt: timestamp("check_in_at", { withTimezone: true }),
+    checkIns: integer("check_ins").notNull().default(0),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedBy: text("closed_by"),
+    /** How it was solved, or why it is not a case. */
+    resolution: text("resolution"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("care_cases_number").on(t.communityId, t.number),
+    index("care_cases_status").on(t.communityId, t.status),
+    index("care_cases_person").on(t.personId, t.status),
+  ],
+);
+
+/** A case's timeline: opened, what the member said, owner, the Builder, notes, solved. */
+export const careNotes = pgTable(
+  "care_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => careCases.id, { onDelete: "cascade" }),
+    /** "opened", "member", "update", "owner", "builder", "crew", "reply", "solved", "dropped", "reopened", "check_in". */
+    kind: text("kind").notNull(),
+    text: text("text").notNull(),
+    by: text("by").notNull(),
+    messageId: text("message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("care_notes_case").on(t.caseId, t.createdAt)],
 );
 
 /** What Resend's webhook delivered (spec 15): received, delivered, bounced, complained. Ferri handles them in its tick. */

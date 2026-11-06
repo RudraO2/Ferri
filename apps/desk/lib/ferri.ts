@@ -46,6 +46,19 @@ export {
   cannotEmail,
   type Contact,
   type ContactMessage,
+  CARE_BUILDER,
+  CARE_DROP,
+  CARE_MINE,
+  CARE_OPEN,
+  CARE_SOLVED,
+  CARE_STATUS_LABEL,
+  builderAllowed,
+  caseNotes,
+  caseRef,
+  closedCases,
+  openCases,
+  type CareCase,
+  type CareNote,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

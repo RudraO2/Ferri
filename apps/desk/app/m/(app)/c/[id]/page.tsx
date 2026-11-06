@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { pocketCard, waitedFor } from "@/lib/pocket";
+import { caseView } from "@/lib/care";
+import { myCrew, pocketCard, waitedFor } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { pocketAnswer, pocketSkip } from "../../../actions";
 import { Toast, Where } from "../../bits";
+import { CareScreen } from "../../care-case";
 import { community } from "@/lib/db";
 import { formatWhen } from "@/lib/ferri";
 import { AnnounceActions } from "./announce-actions";
@@ -18,6 +20,11 @@ export default async function CardPage({ params, searchParams }: { params: Promi
   const user = await requirePocketUser(`/m/c/${id}`);
   const card = await pocketCard(user, id);
   if (!card) notFound();
+  // Care cards (spec 16): the case itself, with its actions (they answer this card while it is open).
+  if (card.kind === "care" && card.careCaseId) {
+    const [v, me] = await Promise.all([caseView(card.careCaseId), myCrew(user)]);
+    if (v) return <CareScreen v={v} title={card.topic} backHref="/m" here={`/m/c/${id}`} done="/m" note={note} myIds={new Set(me.map((m) => m.id))} full={false} />;
+  }
   const open = card.status === "open";
   const a = card.announcement;
   const edit = card.kind === "announce" && (card.announcementVersion ?? 1) > 1;

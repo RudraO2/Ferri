@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
+import { careAction } from "@/lib/care";
 import { community, db } from "@/lib/db";
 import { createAnnouncementRequest, linkCrewAccount, pushToUsers, removePushSubscription, savePushSubscription, vapidFromEnv } from "@/lib/ferri";
 import { myCrew } from "@/lib/pocket";
@@ -150,4 +151,25 @@ export async function pocketConfirmPlan(form: FormData) {
 
 export async function pocketDropPlan(form: FormData) {
   await answer(str(form, "cardId"), skip, "Dropped from the plan.");
+}
+
+// ── Care (spec 16) ───────────────────────────────────────────────────────
+
+/** Only ever send someone back to a Pocket page. */
+const inPocket = (path: string, fallback: string) => (path === "/m" || path.startsWith("/m/") ? path : fallback);
+
+/**
+ * One action on a case from a care card or the case page: the form's `act` is
+ * "mine", "builder", "solved", "drop", "message" or "reopen". careAction
+ * answers the open card through Switch, or leaves the request on the case.
+ */
+export async function pocketCare(form: FormData) {
+  const user = await requirePocketUser();
+  const caseId = str(form, "caseId");
+  const here = inPocket(str(form, "back"), `/m/case/${caseId}`);
+  const r = await careAction(user, caseId, str(form, "act"), str(form, "note") || null);
+  revalidatePath("/m", "layout");
+  revalidatePath("/care");
+  if (!r.ok) go(here, r.note);
+  go(inPocket(str(form, "done"), here), r.note);
 }

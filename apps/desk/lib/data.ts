@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { community, db } from "./db";
-import { cards, crewMembers, eventSpaces, events, knowledgeEntries, mutedPeople, questions, spaces } from "./ferri";
+import { CARE_OPEN, cards, careCases, crewMembers, eventSpaces, events, knowledgeEntries, mutedPeople, questions, spaces } from "./ferri";
 
 export async function liveEvents(communityId: string) {
   return db()
@@ -31,7 +31,7 @@ export async function overview() {
   const c = await community();
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   const n = sql<number>`count(*)::int`;
-  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting] = await Promise.all([
+  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen] = await Promise.all([
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "question")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "reply")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "expired"), eq(cards.kind, "question")))),
@@ -40,6 +40,7 @@ export async function overview() {
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "announce")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "plan")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "outreach")))),
+    count(db().select({ n }).from(careCases).where(and(eq(careCases.communityId, c.id), inArray(careCases.status, [...CARE_OPEN])))),
   ]);
   const recent = await db()
     .select({
@@ -56,7 +57,7 @@ export async function overview() {
     .where(eq(questions.communityId, c.id))
     .orderBy(desc(questions.askedAt))
     .limit(15);
-  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, recent };
+  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen, recent };
 }
 
 export async function cardLists() {

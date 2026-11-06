@@ -16,7 +16,8 @@ export function Tabs({ needsYou, stuck }: { needsYou: number; stuck: number }) {
     <nav className="pocket-tabs fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-white/95 backdrop-blur">
       <div className="mx-auto grid max-w-[520px] grid-cols-3">
         {TABS.map((t) => {
-          const active = t.href === "/m" ? path === "/m" || path.startsWith("/m/c/") : path.startsWith(t.href);
+          const active =
+            t.href === "/m" ? path === "/m" || path.startsWith("/m/c/") : t.href === "/m/stuck" ? path.startsWith(t.href) || path.startsWith("/m/case/") : path.startsWith(t.href);
           return (
             <Link key={t.href} href={t.href} className={`flex h-[60px] flex-col items-center justify-center gap-1 text-[11.5px] font-medium ${active ? "text-zinc-900" : "text-zinc-400"}`}>
               <span className="relative">

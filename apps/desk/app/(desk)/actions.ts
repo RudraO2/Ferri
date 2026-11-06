@@ -36,6 +36,7 @@ import {
 import { answerRequest } from "@/lib/builder";
 import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
+import { careAction } from "@/lib/care";
 import { removeRule, setRule } from "@/lib/shield";
 import { gatewayAs, requireUser } from "@/lib/session";
 
@@ -624,4 +625,19 @@ export async function markContact(form: FormData) {
   await setContactStatus(db(), str(form, "contactId"), status as (typeof CONTACT_STATUSES)[number], { notes: str(form, "notes") || undefined });
   revalidatePath("/contacts");
   back("/contacts", "Saved.");
+}
+
+// ── Care (spec 16) ───────────────────────────────────────────────────────
+
+/**
+ * One action on a case: "mine", "builder", "solved", "drop", "message" or
+ * "reopen" (the form's `act`). careAction answers the case's open card
+ * through Switch, or leaves the request on the case for Ferri's tick.
+ */
+export async function actOnCase(form: FormData) {
+  const user = await requireUser();
+  const r = await careAction(user, str(form, "caseId"), str(form, "act"), str(form, "note") || null);
+  revalidatePath("/care");
+  revalidatePath("/m", "layout");
+  back("/care", r.note);
 }

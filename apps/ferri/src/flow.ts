@@ -3,6 +3,7 @@ import { communities, crewActions, questions, spaces, type Db } from "@ferri/db"
 import {
   answerQuestion,
   briefWithFiles,
+  caseLine,
   mediaFromMessage,
   checkDecision,
   crewIntent,
@@ -40,6 +41,7 @@ import type { Builder } from "./builder.ts";
 import type { Launch } from "./launch.ts";
 import type { Plan } from "./plan.ts";
 import type { Outreach } from "./outreach.ts";
+import type { Care } from "./care.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -55,6 +57,7 @@ export interface FlowDeps {
   plan: Plan;
   builder: Builder;
   outreach: Outreach;
+  care: Care;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -98,7 +101,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, plan, builder, outreach, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, builder, outreach, care, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
   const builderRe = mentionRegex(builder.name);
@@ -289,6 +292,7 @@ export function createFlow(deps: FlowDeps) {
       announcements: await recentAnnouncements(db, ctx.kb.community.id, ctx.eventId),
       now: localNow(ctx.kb.community.timezone),
       plan: await plan.planContext(ctx.kb.community.id, ctx.eventId),
+      cases: (await care.openCases(ctx.kb.community.id)).map(caseLine),
     });
     // Replies to the crew member in this room obey this room's posting rule.
     const say = async (text: string) => (mayPost(posting) ? loop.post(ctx.kb.community.id, ev.room_id, text) : null);
@@ -407,6 +411,25 @@ export function createFlow(deps: FlowDeps) {
             roomId,
           }),
       });
+      if (reply) await say(reply);
+      return;
+    }
+
+    // Care (spec 16): cases about members who need a person.
+    if (intent?.intent === "care" && intent.care) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "care",
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      log(`crew ${member.name}: care ${intent.care.action}${intent.care.case ? ` case ${intent.care.case}` : ""}`);
+      const reply = await care.intent({ communityId: ctx.kb.community.id, eventId: ctx.eventId, member, care: intent.care });
       if (reply) await say(reply);
       return;
     }
@@ -678,7 +701,16 @@ export function createFlow(deps: FlowDeps) {
     // A typed answer to a Switch card ("A1 ..."): Switch records it; it is not a question.
     if (looksLikeCardAnswer(p.body)) return;
     // Someone talking to the Builder directly ("@builder make the header bigger"): it is the Builder's.
-    if (builderRe.test(p.body) && !mentionRe.test(p.body)) return;
+    // A member the Builder is helping (spec 16) still gets a mood reading, so "it works now" closes the case.
+    if (builderRe.test(p.body) && !mentionRe.test(p.body)) {
+      if (await care.builderHelping(ev.room_id, p.sender)) {
+        const ctx = await context(ev.room_id, new Date(p.timestamp));
+        if (ctx?.space.setting && ctx.space.setting.role === "members") {
+          void care.read({ ev, communityId: ctx.kb.community.id, space: ctx.space, history: chat(rooms.before(ev.room_id, p.message_id, 8)) });
+        }
+      }
+      return;
+    }
     // A replay after a restart: skip before spending a model call on it.
     const [seenQuestion] = await db.select({ id: questions.id }).from(questions).where(eq(questions.messageId, p.message_id)).limit(1);
     const [seenAction] = await db.select({ id: crewActions.id }).from(crewActions).where(eq(crewActions.messageId, p.message_id)).limit(1);
@@ -705,6 +737,15 @@ export function createFlow(deps: FlowDeps) {
     if (decision.act === "ignore") {
       if (p.addressed && mentioned) log(`ignored a mention from ${p.sender_name} in ${ctx.space.name}: ${decision.reason}`);
       return;
+    }
+    // Care (spec 16): every member message in a members space gets a mood reading, never holding up the answer.
+    if (!member && !decision.crewRoom && (decision.act === "direct" || decision.act === "follow_up" || decision.act === "room")) {
+      void care.read({ ev, communityId: ctx.kb.community.id, space: ctx.space, history: chat(rooms.before(ev.room_id, p.message_id, 8)) });
+      // While the Builder helps this person here, Ferri leaves their unaddressed messages to it.
+      if (decision.act !== "direct" && (await care.builderHelping(ev.room_id, p.sender))) {
+        log(`the Builder is helping ${p.sender_name} in ${ctx.space.name}; Ferri stays quiet on their message`);
+        return;
+      }
     }
     if (decision.act === "crew_chatter") {
       await onCrewChatter(ev, ctx, member!, decision.posting);

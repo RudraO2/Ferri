@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { announcementList, type AnnouncementView } from "./announce";
+import { casesFor, openCaseCount, type CaseView } from "./care";
 import { community, db } from "./db";
 import { cards, crewForSwitchEmail, crewMembers, events, questions, spaces } from "./ferri";
 import type { DeskUser } from "./session";
@@ -85,15 +86,18 @@ export async function openCards(user: DeskUser) {
     : [];
   const targetBy = new Map(targets.map((t) => [t.roomId, t]));
   const announceBy = await announcementsFor(rows);
+  const careBy = await casesFor(rows.map((r) => r.careCaseId).filter((x): x is string => !!x));
   return rows.map((r) => {
     const owners = r.ownerIds.map((id) => ownerName.get(id) ?? "?");
     const forMe = !myIds.size || r.ownerIds.some((id) => myIds.has(id)) || !!r.escalatedAt || !r.ownerIds.length;
     const why = !myIds.size
       ? "open"
       : r.ownerIds.some((id) => myIds.has(id))
-        ? r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach"
-          ? "your OK"
-          : `you own ${r.topic}`
+        ? r.kind === "care"
+          ? "your case"
+          : r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach"
+            ? "your OK"
+            : `you own ${r.topic}`
         : r.escalatedAt
           ? "escalated to everyone"
           : "for the crew";
@@ -105,6 +109,8 @@ export async function openCards(user: DeskUser) {
       waiting: waiting.get(r.id) ?? [],
       target: r.targetRoomId ? (targetBy.get(r.targetRoomId) ?? null) : null,
       announcement: r.announcementId ? (announceBy.get(r.announcementId) ?? null) : null,
+      /** Care cards (spec 16): the case behind the card. */
+      care: r.careCaseId ? (careBy.get(r.careCaseId) ?? null) : null,
     };
   });
 }
@@ -126,7 +132,8 @@ export async function pocketCard(user: DeskUser, id: string) {
     .leftJoin(spaces, eq(spaces.id, questions.spaceId))
     .where(eq(questions.cardId, id));
   const announcement = row.announcementId ? ((await announcementsFor([row])).get(row.announcementId) ?? null) : null;
-  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null, announcement };
+  const care: CaseView | null = row.careCaseId ? ((await casesFor([row.careCaseId])).get(row.careCaseId) ?? null) : null;
+  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null, announcement, care };
 }
 
 /** Members waiting on the crew right now (longest first), and who never got an answer in the last day. */
@@ -169,9 +176,9 @@ export async function stuck() {
 
 /** Counts for the tab bar. */
 export async function pocketCounts(user: DeskUser) {
-  const all = await openCards(user);
+  const [all, cases] = await Promise.all([openCards(user), openCaseCount()]);
   const people = new Set(all.flatMap((c) => c.waiting.map((w) => `${w.roomId}|${w.askerName}`)));
-  return { needsYou: all.filter((c) => c.forMe).length, stuck: people.size + all.filter((c) => c.kind === "reply").length };
+  return { needsYou: all.filter((c) => c.forMe).length, stuck: people.size + all.filter((c) => c.kind === "reply").length + cases };
 }
 
 export function waitedFor(d: Date): string {

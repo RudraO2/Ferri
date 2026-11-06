@@ -7,7 +7,7 @@ import { TOPICS, type ChatLine } from "./triage.ts";
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -46,6 +46,14 @@ export const CrewIntentSchema = z.strictObject({
       what: z.string(),
     })
     .nullable(),
+  /** care: members who need a person (spec 16). */
+  care: z
+    .strictObject({
+      action: z.enum(["mine", "builder", "solved", "drop", "message", "reopen", "status"]),
+      case: z.number().int().nullable(),
+      note: z.string(),
+    })
+    .nullable(),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
 
@@ -79,7 +87,17 @@ facts: every fact in the message that is not part of the card answer, each as a 
   - email: write to one partner ("email CloudCo about sponsoring", "write to asha@cloudco.example asking if they'd host us", "reply to CloudCo and say Monday works", "follow up with the college"). outreach.who is the organization or person as written; outreach.email is an email address if the message gives one, else null; outreach.what is what the email should say or ask, in their words, with the instructions to Ferri removed.
   - status: they ask how outreach is going ("who have we heard back from?", "any replies from sponsors?", "which partners said yes?"). who is the organization if they name one, else null.
 
-For every intent, announce, remind, plan, build and outreach are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build and outreach.
+- care: a case about a member who needs a person (listed under "Open cases" as Case 1, Case 2, ...; cases are not cards). care.action:
+  - mine: they take a case ("I've got case 3", "I'll handle Meera", "on it, case 2").
+  - builder: they want the Builder to help the member with a technical problem ("send the builder to case 3", "get the builder to help Meera with her git issue").
+  - solved: a case is solved ("case 3 solved, gave her a spare charger", "Meera's sorted"). care.note is how, in their words ("" if they gave nothing).
+  - drop: it is not a case ("case 4 isn't a real problem, they were joking", "drop case 2").
+  - message: they want words passed to the member of a case ("tell Meera in case 3 to come to the help desk"). care.note is what to tell the member, as a standalone message to them.
+  - reopen: a closed case needs attention again ("reopen case 3").
+  - status: they ask who needs help ("who's stuck?", "any open cases?", "how is case 3 going?").
+  care.case is the case number they mean (3 for "case 3"), or the number of the open case about the person they name; null when none fits (and for status about all cases). care.note is "" unless the action says otherwise. Telling everyone something is announce; answering a member's question card is answer_card; care is only about cases.
+
+For every intent, announce, remind, plan, build, outreach and care are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build, outreach and care.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
@@ -95,6 +113,8 @@ export async function crewIntent(input: {
   now?: string;
   /** The event plan with short ids (P1, ...), for "the projector is booked". */
   plan?: { text: string; byShort: Map<string, PlanItem> };
+  /** Open care cases, one line each ("Case 3 [stuck, ...]: ..."), for "case 3 solved". */
+  cases?: string[];
 }): Promise<{
   intent: CrewIntent | null;
   card: OpenCard | null;
@@ -114,6 +134,7 @@ export async function crewIntent(input: {
     user:
       `Now: ${input.now ?? new Date().toISOString()}\n\nOpen cards:\n${text}\n\nRecent announcements:\n${recent.text}\n\n` +
       `Plan:\n${input.plan?.text ?? "(empty)"}\n\n` +
+      `Open cases:\n${input.cases?.length ? input.cases.join("\n") : "(none)"}\n\n` +
       `Recent messages in the room:\n${history}\n\nMessage from ${input.sender} (crew) to Ferri:\n${input.message}`,
     schema: CrewIntentSchema,
     maxTokens: 2500,

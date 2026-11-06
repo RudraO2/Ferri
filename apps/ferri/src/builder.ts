@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
-import { builderJobs, events, siteEvents, type Db } from "@ferri/db";
+import { builderJobs, eventSpaces, events, siteEvents, spaces, type Db } from "@ferri/db";
 import {
   builderName,
+  builderPolicy,
+  helpRooms,
   builderPaths,
   createAnnouncementRequest,
   listingAnnouncement,
@@ -86,6 +88,36 @@ export function createBuilder(deps: BuilderDeps) {
   let cached: { at: number; agent: BuilderAgent | null } = { at: 0, agent: null };
   /** Outreach (spec 15): a find-partners job's prospects go into contacts. */
   let prospectsHook: ((job: BuilderJob) => Promise<void>) | null = null;
+  /** Care (spec 16): the hand-off text of a help job, and what its report means for the case. */
+  let helpHooks: {
+    handoff(job: BuilderJob): Promise<string | null>;
+    report(job: BuilderJob, outcome: "done" | "stuck", text: string): Promise<void>;
+  } | null = null;
+  let policySig = "";
+
+  /**
+   * The Builder's addressing policy: its owner and Ferri everywhere, and anyone
+   * in a crew room or in a room where it is helping someone (spec 16). Written
+   * whole each time (Switch has no read route), only when it changes.
+   */
+  async function syncPolicy(extraRoom?: string): Promise<void> {
+    if (!deps.gateway) return;
+    const b = await builder();
+    if (!b) return;
+    const crewRows = await db
+      .selectDistinct({ room: spaces.switchRoomId })
+      .from(eventSpaces)
+      .innerJoin(spaces, eq(spaces.id, eventSpaces.spaceId))
+      .where(eq(eventSpaces.role, "crew"));
+    const help = await helpRooms(db);
+    const policy = builderPolicy(crewRows.map((r) => r.room), extraRoom ? [...help, extraRoom] : help);
+    const sig = JSON.stringify(policy);
+    if (sig === policySig) return;
+    await deps.gateway.call("PUT", `/gateway/agents/${b.agentId}/addressing-policy`, { policy });
+    policySig = sig;
+    const open = policy.rules[1] as { rooms?: string[] } | undefined;
+    log(`builder: addressing policy now admits people in ${open?.rooms?.length ?? 0} room(s)`);
+  }
 
   /** The Builder's id and state, from Switch's agent management (Ferri may manage its owner's agents). */
   async function builder(fresh = false): Promise<BuilderAgent | null> {
@@ -159,17 +191,22 @@ export function createBuilder(deps: BuilderDeps) {
       .returning();
     if (!claimed) return true;
     try {
+      // A help job (spec 16) works in a member's room: the people there may talk to the Builder while it helps.
+      if (claimed.kind === "help") await syncPolicy(roomId);
       await agent.inviteAgentToRoom(roomId, name).catch((err: Error) => {
         if (!/already/i.test(err.message)) throw err;
       });
       const [ev] = job.eventId ? await db.select({ name: events.name }).from(events).where(eq(events.id, job.eventId)).limit(1) : [];
-      const text = handoffMessage({
-        job: claimed,
-        eventName: ev?.name ?? null,
-        documents: await roomDocuments(roomId),
-        agentName: config.agentName,
-        cover: claimed.kind === "listing" ? await posterCover(claimed.eventId) : null,
-      });
+      const help = claimed.kind === "help" ? await helpHooks?.handoff(claimed) : null;
+      const text =
+        help ??
+        handoffMessage({
+          job: claimed,
+          eventName: ev?.name ?? null,
+          documents: await roomDocuments(roomId),
+          agentName: config.agentName,
+          cover: claimed.kind === "listing" ? await posterCover(claimed.eventId) : null,
+        });
       const sent = await agent.sendTargetedMessage(roomId, text, [name]);
       const reach = sent.target_statuses?.[name];
       await db.update(builderJobs).set({ handoffEventId: sent.event_id, updatedAt: new Date() }).where(eq(builderJobs.id, job.id));
@@ -202,6 +239,21 @@ export function createBuilder(deps: BuilderDeps) {
     sourceMessageId: string | null;
     roomId: string | null;
   }): Promise<string | null> {
+    const r = await startJob(input);
+    if (!r) return null;
+    const { job, handed } = r;
+    const ref = jobRef(job);
+    if (!handed) {
+      const used = await spent();
+      return used
+        ? `I've queued job ${ref} (${job.title}). The Builder has used ${used}, so I'll hand it over then.`
+        : `I've queued job ${ref} (${job.title}), but the Builder's machine is offline. I'll hand it over as soon as it's back.`;
+    }
+    return `Handed to the Builder as job ${ref}: ${job.title}. It works right here, and it asks on a card before anything goes public.`;
+  }
+
+  /** Create a job and hand it over now if the Builder can take it. Null for a replayed message. */
+  async function startJob(input: Parameters<typeof start>[0]): Promise<{ job: BuilderJob; handed: boolean } | null> {
     const job = await createBuilderJob(db, {
       communityId: input.communityId,
       eventId: input.eventId,
@@ -216,15 +268,7 @@ export function createBuilder(deps: BuilderDeps) {
       status: "queued",
     });
     if (!job) return null;
-    const handed = await hand(job);
-    const ref = jobRef(job);
-    if (!handed) {
-      const used = await spent();
-      return used
-        ? `I've queued job ${ref} (${job.title}). The Builder has used ${used}, so I'll hand it over then.`
-        : `I've queued job ${ref} (${job.title}), but the Builder's machine is offline. I'll hand it over as soon as it's back.`;
-    }
-    return `Handed to the Builder as job ${ref}: ${job.title}. It works right here, and it asks on a card before anything goes public.`;
+    return { job, handed: await hand(job) };
   }
 
   /**
@@ -260,6 +304,8 @@ export function createBuilder(deps: BuilderDeps) {
       // A listing the crew allowed: Shield trusts the platform, and the crew gets the "is on Luma" card.
       if (url && job.kind === "listing" && url !== job.url) await listingLive(updated, url);
       if (report.outcome === "done" && job.kind === "outreach" && job.status !== "done") await prospectsHook?.(updated).catch((err: Error) => log(`builder: ${jobRef(job)} prospects failed: ${err.message}`));
+      // Care: the Builder helped a member (or needs the crew); the case follows.
+      if (job.kind === "help") await helpHooks?.report(updated, report.outcome, report.text).catch((err: Error) => log(`builder: ${jobRef(job)} case update failed: ${err.message}`));
       // Posters and cards: the crew decides on a card whether they go outside.
       if (report.outcome === "done" && job.kind === "poster" && job.status !== "done") await posterReady(updated);
       if (job.requestedById) {
@@ -560,12 +606,19 @@ export function createBuilder(deps: BuilderDeps) {
     builder,
     budget,
     start,
+    startJob,
+    spent,
     onAgentMessage,
     tick,
     name,
     setProspectsHook: (h: (job: BuilderJob) => Promise<void>) => {
       prospectsHook = h;
     },
+    setHelpHooks: (h: NonNullable<typeof helpHooks>) => {
+      helpHooks = h;
+    },
+    syncPolicy,
+    ready: async () => ready(await builder()),
   };
 }
 

@@ -19,6 +19,7 @@ import {
   draftAnnouncement,
   draftOutreachEmail,
   readReply,
+  readCare,
   readPlanChat,
   shortPlanIds,
   type CrewMember,
@@ -547,9 +548,86 @@ try {
   console.log(`      ${(mail.draft?.text ?? "").replace(/\n+/g, " | ")}`);
   for (const x of mailProblems) console.log(`      -> ${x}`);
 
+  // ── Spec 16: care ───────────────────────────────────────────────────────
+  const careCases: { msg: string; before?: ChatLine[]; open?: string; signal?: string[]; technical?: boolean; severity?: string; case: string }[] = [
+    { msg: "what time is lunch?", signal: ["none"], case: "none" },
+    { msg: "this bug is killing me lol, coffee anyone?", signal: ["none"], case: "none" },
+    { msg: "yay we finally got the demo working!!", signal: ["none"], case: "none" },
+    { msg: "git push keeps failing with 'Permission denied (publickey)' and I've tried twice, we can't submit anything", signal: ["stuck"], technical: true, case: "new" },
+    { msg: "my CloudCo API key stopped working an hour ago, every call says 401, our whole demo depends on it", signal: ["stuck"], technical: true, case: "new" },
+    { msg: "I've asked three times where we submit and nobody answers. honestly so frustrating", signal: ["upset", "confused"], case: "new" },
+    { msg: "my team just left without telling me, I'm alone now and thinking of going home", signal: ["upset"], severity: "high", case: "new" },
+    { msg: "someone keeps making comments about me near the stage and it's making me really uncomfortable", signal: ["unsafe"], severity: "high", case: "new" },
+    { msg: "I've looked everywhere and still can't find which room team beta is in", signal: ["confused", "stuck"], case: "new" },
+    { msg: "it works now, thanks so much!!", open: "Case 4 [stuck, the Builder is helping]: Meera can't push to GitHub: 'Permission denied (publickey)'", signal: ["none"], case: "solved" },
+    { msg: "my team keeps ignoring every idea I bring up, it's getting pretty annoying", open: "Case 4 [stuck, the Builder is helping]: Meera can't push to GitHub: 'Permission denied (publickey)'", signal: ["upset"], case: "new" },
+    { msg: "still failing, now it says 'repository not found'", open: "Case 4 [stuck, the Builder is helping]: Meera can't push to GitHub: 'Permission denied (publickey)'", signal: ["stuck"], case: "update" },
+    { msg: "anyone know if there's a vegetarian option at dinner?", open: "Case 4 [stuck, the Builder is helping]: Meera can't push to GitHub: 'Permission denied (publickey)'", signal: ["none"], case: "none" },
+  ];
+  const cr = await pool(careCases, 4, async (c) => {
+    const r = await readCare({ choice: models.fast, roomName: "Lantern Labs Discord: build-night", sender: "Meera", message: c.msg, before: c.before ?? [], openCase: c.open ?? null, stage: "live" });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    const x = r.reading;
+    if (!x) problems.push("no reading");
+    else {
+      if (c.signal && !c.signal.includes(x.signal)) problems.push(`signal ${x.signal}, expected ${c.signal.join(" or ")}`);
+      if (x.case !== c.case) problems.push(`case ${x.case}, expected ${c.case}`);
+      if (c.technical !== undefined && x.technical !== c.technical) problems.push(`technical ${x.technical}`);
+      if (c.severity && x.severity !== c.severity) problems.push(`severity ${x.severity}, expected ${c.severity}`);
+      if (c.case === "new" && (!x.reason.trim() || !/meera/i.test(x.reason))) problems.push("a new case needs a reason naming Meera");
+      if (/case|builder/i.test(x.reason)) problems.push("the reason talks about cases or the Builder");
+    }
+    return { c, r, problems };
+  });
+  console.log("\ncare readings");
+  for (const { c, r, problems } of cr) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg.slice(0, 80)}`);
+    console.log(`      ${JSON.stringify(r.reading)}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  const openCaseLines = [
+    "Case 3 [stuck, nobody on it yet]: Meera can't push to GitHub: 'Permission denied (publickey)'",
+    "Case 4 [upset, someone is on it, owner Priya]: Arjun's team left him and he is thinking of going home",
+  ];
+  const careIntentCases: { msg: string; action: string; case?: number | null; note?: RegExp }[] = [
+    { msg: "@ferri I've got case 3", action: "mine", case: 3 },
+    { msg: "@ferri case 4 solved, found him a new team", action: "solved", case: 4, note: /team/i },
+    { msg: "@ferri send the builder to help Meera with her git problem", action: "builder", case: 3 },
+    { msg: "@ferri who's stuck right now?", action: "status", case: null },
+    { msg: "@ferri tell Meera in case 3 to come to the help desk by the stage", action: "message", case: 3, note: /help desk/i },
+  ];
+  const ci = await pool(careIntentCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Priya", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds, cases: openCaseLines });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const k = r.intent?.care;
+    const problems: string[] = [];
+    if (r.intent?.intent !== "care") problems.push(`intent ${r.intent?.intent}, expected care`);
+    else {
+      if (k?.action !== c.action) problems.push(`action ${k?.action}, expected ${c.action}`);
+      if (c.case !== undefined && (k?.case ?? null) !== c.case) problems.push(`case ${k?.case}, expected ${c.case}`);
+      if (c.note && !c.note.test(k?.note ?? "")) problems.push(`note "${k?.note}"`);
+    }
+    return { c, r, problems };
+  });
+  console.log("\ncare intents");
+  for (const { c, r, problems } of ci) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, care: r.intent?.care })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
   const total =
     answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
-    planIntentCases.length + buildCases.length + planChatCases.length + 1 + outreachCases.length + replyCases.length + 1;
+    planIntentCases.length + buildCases.length + planChatCases.length + 1 + outreachCases.length + replyCases.length + 1 +
+    careCases.length + careIntentCases.length;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

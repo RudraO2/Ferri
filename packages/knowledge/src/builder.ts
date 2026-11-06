@@ -7,7 +7,7 @@ import { builderJobs, type Db, type SwitchMedia } from "@ferri/db";
 // ── Ferri Builder (spec 11): a Claude Code agent that Switch runs ─────────
 
 export type BuilderJob = typeof builderJobs.$inferSelect;
-export type BuilderJobKind = "site" | "checklist" | "poster" | "listing" | "outreach" | "other";
+export type BuilderJobKind = "site" | "checklist" | "poster" | "listing" | "outreach" | "help" | "other";
 
 /** Where the Builder lives on this machine: its own folder, Claude home and the controller's env file. */
 export function builderPaths(env: Record<string, string | undefined> = process.env) {
@@ -97,6 +97,8 @@ const KIND_HINT: Record<BuilderJobKind, string> = {
     "Start by calling your list-event skill with the Skill tool, even if you used it before (it may have changed), and follow it. Write listing.json fresh from this room's documents. The platform's form is filled in the Builder's browser, where a person logs in themselves; if it needs a login or a captcha, post the screenshot and ask on a card. Post a screenshot of the filled form here before the submit, which waits on the crew's card.",
   outreach:
     "Start by calling your find-partners skill with the Skill tool, even if you used it before (it may have changed), and follow it. Search the web for organizations that fit and write prospects.json in the job folder; an email address only with the page that publishes it, never a guessed one. Do not email or contact anyone: I add them to contacts, and the crew decides who gets an email, each on its own card.",
+  // Help jobs (spec 16) are handed over in the member's own room with `helpHandoff`, not with this brief.
+  help: "",
   other: "",
 };
 
