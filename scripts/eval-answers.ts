@@ -17,6 +17,8 @@ import {
   crewIntent,
   draftAgenda,
   draftAnnouncement,
+  draftOutreachEmail,
+  readReply,
   readPlanChat,
   shortPlanIds,
   type CrewMember,
@@ -256,7 +258,8 @@ try {
 
   // ── Spec 09: announcements, reminders, team rooms, decisions ──────────
   const tz = kb.community.timezone;
-  const now = new Date();
+  // A fixed morning (10:00 AM in Bengaluru), so "at 5 PM" is always ahead: the cases do not depend on the clock.
+  const now = new Date(process.env.EVAL_NOW ?? "2026-11-06T04:30:00Z");
   const recent = [
     { id: "lunch", title: "Lunch moves to 1:30 PM", text: "Lunch is now at 1:30 PM on Saturday.", status: "sent" },
     { id: "wifi", title: "Wifi is back", text: "The wifi is back on all floors.", status: "sent" },
@@ -461,9 +464,92 @@ try {
   console.log(`${agendaProblems.length ? "FAIL" : "ok  "} ${JSON.stringify({ summary: agenda.draft?.summary, decisions: agenda.draft?.decisions.map((d) => `${d.title}: ${d.proposal}`) })}`);
   for (const x of agendaProblems) console.log(`      -> ${x}`);
 
+  // ── Spec 15: partner outreach ───────────────────────────────────────────
+  const outreachCases: { msg: string; action: string; who?: RegExp; email?: string }[] = [
+    { msg: "@ferri find colleges and companies in Bengaluru that could sponsor or host Build Night", action: "find" },
+    { msg: "@ferri email CloudCo about sponsoring Build Night prizes", action: "email", who: /cloudco/i },
+    { msg: "@ferri write to asha@cloudco.example and ask if CloudCo would host us next time", action: "email", who: /cloudco|asha/i, email: "asha@cloudco.example" },
+    { msg: "@ferri reply to CloudCo and say Monday at 4 works for a call", action: "email", who: /cloudco/i },
+    { msg: "@ferri who have we heard back from among the sponsors?", action: "status" },
+  ];
+  const oi = await pool(outreachCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const o = r.intent?.outreach;
+    const problems: string[] = [];
+    if (r.intent?.intent !== "outreach") problems.push(`intent ${r.intent?.intent}, expected outreach`);
+    else if (o?.action !== c.action) problems.push(`action ${o?.action}, expected ${c.action}`);
+    if (c.who && !c.who.test(o?.who ?? "")) problems.push(`who "${o?.who}"`);
+    if (c.email && o?.email?.toLowerCase() !== c.email) problems.push(`email "${o?.email}"`);
+    if (c.action === "email" && !o?.what.trim()) problems.push("email needs what");
+    return { c, r, problems };
+  });
+  console.log("\noutreach intents");
+  for (const { c, r, problems } of oi) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, outreach: r.intent?.outreach })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  const ours = { subject: "Sponsoring Lantern Build Night, 21-22 Nov in Bengaluru", text: "Hi CloudCo team, we run Lantern Build Night, a 24-hour build event in Bengaluru on 21-22 November. Would CloudCo sponsor the prizes or credits? Could we talk for 15 minutes this week? Rudra, Lantern Labs" };
+  const replyCases: { text: string; want: string }[] = [
+    { text: "Hi Rudra, thanks! Yes, we'd be glad to sponsor credits. Can we do a call on Monday at 4 PM? Asha", want: "interested" },
+    { text: "Thanks for reaching out. How many participants do you expect, and is it open to students?", want: "question" },
+    { text: "Thanks, but we've used our sponsorship budget for this year. Best of luck with the event.", want: "declined" },
+    { text: "no thanks", want: "unsubscribe" },
+    { text: "I am out of the office until 10 November with limited access to email. For urgent matters contact the front desk.", want: "auto_reply" },
+  ];
+  const rr = await pool(replyCases, 4, async (c) => {
+    const r = await readReply({ choice: models.fast, org: "CloudCo", ours, theirs: { subject: `Re: ${ours.subject}`, text: c.text, from: "Asha at CloudCo <asha@cloudco.example>" } });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    if (r.reading?.want !== c.want) problems.push(`want ${r.reading?.want}, expected ${c.want}`);
+    if (!r.reading?.summary.trim() || !r.reading?.next.trim()) problems.push("needs a summary and a next step");
+    return { c, r, problems };
+  });
+  console.log("\nreading partner replies");
+  for (const { c, r, problems } of rr) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.text.slice(0, 70)}`);
+    console.log(`      ${JSON.stringify(r.reading)}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  console.log("\noutreach email draft");
+  const mail = await draftOutreachEmail({
+    choice: models.main,
+    kb,
+    eventId,
+    contact: { org: "CloudCo", person: "Asha", kind: "company", why: "Runs a developer credits program for student hackathons." },
+    ask: "Ask if CloudCo would sponsor cloud credits for the participants.",
+    sender: "Rudra",
+  });
+  tokensIn += mail.usage.input + mail.usage.cacheWrite;
+  tokensOut += mail.usage.output;
+  cacheRead += mail.usage.cacheRead;
+  const words = mail.draft?.text.split(/\s+/).length ?? 0;
+  const mailProblems = [
+    !mail.draft ? "no draft" : null,
+    mail.draft && !/Lantern Build Night/i.test(mail.draft.text + mail.draft.subject) ? "does not name the event" : null,
+    mail.draft && !/Asha/.test(mail.draft.text) ? "does not greet Asha" : null,
+    mail.draft && !/Rudra/.test(mail.draft.text) ? "not signed by Rudra" : null,
+    mail.draft && (words < 50 || words > 230) ? `${words} words` : null,
+    mail.draft && /no thanks|unsubscribe/i.test(mail.draft.text) ? "has its own opt-out line" : null,
+    mail.draft && mail.draft.subject.length > 90 ? "subject too long" : null,
+  ].filter(Boolean);
+  if (mailProblems.length) failed++;
+  console.log(`${mailProblems.length ? "FAIL" : "ok  "} ${JSON.stringify({ subject: mail.draft?.subject, words, missing: mail.draft?.missing })}`);
+  console.log(`      ${(mail.draft?.text ?? "").replace(/\n+/g, " | ")}`);
+  for (const x of mailProblems) console.log(`      -> ${x}`);
+
   const total =
     answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
-    planIntentCases.length + buildCases.length + planChatCases.length + 1;
+    planIntentCases.length + buildCases.length + planChatCases.length + 1 + outreachCases.length + replyCases.length + 1;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

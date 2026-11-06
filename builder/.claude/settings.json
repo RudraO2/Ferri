@@ -31,7 +31,9 @@
       "Bash(npx vercel inspect:*)",
       "Bash(npx vercel project:*)",
       "Bash(npx vercel pull:*)",
-      "Bash(npx vercel build:*)"
+      "Bash(npx vercel build:*)",
+      "WebSearch",
+      "WebFetch"
     ],
     "ask": [
       "Bash(npx vercel deploy:*)",
@@ -58,7 +60,6 @@
       "Bash(scp:*)",
       "Bash(ssh:*)",
       "Bash(rsync:*)",
-      "WebFetch",
       "Bash(node kits/listings/scripts/publish.mjs:*)",
       "Bash(node kits/listings/scripts/takedown.mjs:*)",
       "Bash(node kits/listings/scripts/luma-api.mjs create:*)",

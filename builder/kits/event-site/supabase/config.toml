@@ -1,5 +1,5 @@
-# Only what `supabase link` and `supabase db push` need. The site creates
-# accounts on the server (already confirmed), so no auth emails are sent.
+# Only what `supabase link` and `supabase db push` need. Auth email (SMTP
+# through Resend) is set by scripts/supabase-email.mjs, not from this file.
 project_id = "event-site"
 
 [db]

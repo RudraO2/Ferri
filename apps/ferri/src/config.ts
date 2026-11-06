@@ -54,6 +54,12 @@ export const config = {
   /** Docker Desktop's host.docker.internal reaches the host's loopback, so 127.0.0.1 is enough. */
   shieldHost: process.env.SHIELD_HOST ?? "127.0.0.1",
   shieldPolicyId: process.env.SHIELD_POLICY_ID ?? "ferri-shield",
+  /** Email (spec 15): Resend. Off without a key. */
+  resendApiKey: process.env.RESEND_API_KEY?.trim() || undefined,
+  /** The outreach mailbox; the display name is the community's name unless given here ("Lantern Labs <partners@...>"). */
+  emailFrom: process.env.FERRI_EMAIL_FROM?.trim() || "partners@rudratechie.xyz",
+  /** Outreach emails per 24 hours (Resend's free plan sends 100 a day in all). */
+  emailDailyCap: Number(process.env.FERRI_EMAIL_DAILY_CAP ?? 20),
   outcomePollMs: 2000,
   ladderTickMs: 5000,
   /** How often Ferri asks Switch which rooms it is in (new ones land in Discovered, Off). */

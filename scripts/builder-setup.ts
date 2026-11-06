@@ -105,10 +105,13 @@ const siteSettings = {
   vercel: { scope: env.FERRI_SITE_VERCEL_SCOPE ?? null },
   hook: { url: `${publicUrl}/api/site`, secret: hookSecret },
   admins,
+  // Real email on the site (spec 15): Supabase's SMTP through a Resend key that may only send.
+  email: env.FERRI_SITE_SMTP_PASS ? { from: env.FERRI_SITE_EMAIL_FROM ?? "events@rudratechie.xyz", smtpPass: env.FERRI_SITE_SMTP_PASS } : null,
 };
 fs.mkdirSync(path.join(paths.dir, ".ferri"), { recursive: true });
 fs.writeFileSync(path.join(paths.dir, ".ferri", "site.json"), JSON.stringify(siteSettings, null, 2), { mode: 0o600 });
 if (!siteSettings.supabase.orgId) console.warn("FERRI_SITE_SUPABASE_ORG is not set: the Builder cannot create the event site's database.");
+console.log(`Site email: ${siteSettings.email ? `from ${siteSettings.email.from} through Resend` : "off (no FERRI_SITE_SMTP_PASS)"}.`);
 console.log(`Site settings: Supabase org ${siteSettings.supabase.orgId ?? "unset"} (${siteSettings.supabase.region}), Vercel ${siteSettings.vercel.scope ?? "default scope"}, hook ${siteSettings.hook.url}, ${admins.length} admin(s).`);
 
 // Posters (spec 13): the image model and its limits (the controller passes only provider

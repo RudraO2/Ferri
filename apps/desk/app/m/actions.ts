@@ -45,7 +45,7 @@ export async function pocketSendReply(form: FormData) {
 }
 
 export async function pocketDontSend(form: FormData) {
-  await answer(str(form, "cardId"), skip, "Okay. That reply is not sent.");
+  await answer(str(form, "cardId"), skip, "Okay. Nothing is sent.");
 }
 
 // ── Announcements (spec 09) ──────────────────────────────────────────────

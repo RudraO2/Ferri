@@ -274,6 +274,18 @@ Some event work is making things: the event's one-page site, a day-of checklist,
 - The Builder posts a screenshot of the filled form in the crew room. Submitting is a separate script whose Claude Code permission prompt is the Switch card; it refuses if the form changed since the screenshot. After "Allow once", it reads the listing's address back and posts the live page.
 - Ferri then allows the platform's domain in Shield and opens the "Build Night is on Luma" announcement card. Any other site works without new code: the Builder lists the page's fields with `inspect`, writes a `form.json`, and the same fill, screenshot and card follow.
 
+## Partner outreach by email
+
+Events need sponsors, venues, colleges and other communities. Ferri finds them, writes to them from the community's own address, and keeps track of every reply, in a light CRM.
+
+- `@ferri find colleges and companies in Bengaluru that could sponsor or host Build Night` is a Builder job with the `find-partners` skill. The Builder searches the web and lists organizations that fit, each with an email address only when it is published on a page that names it, and that page as the source. It never guesses an address. Ferri adds them to Contacts as prospects. Nobody is emailed.
+- `@ferri email CloudCo about sponsoring cloud credits` drafts the email from the knowledge (no invented numbers) and puts all of it on a Switch card: To, From, Subject and the body. "Send it" sends it through Resend from `partners@rudratechie.xyz`. "Don't send" sends nothing, and a version written in quotes is sent instead. A cold email ends with one line: reply "no thanks" and we won't write again.
+- Each contact has its own reply-to address (`partners+<code>@...`), so a reply always finds its contact. Resend's webhook reaches Desk's `/api/email`, which checks the Svix signature. Ferri fetches the email, keeps it on the contact's timeline and tells the crew in their room what the partner said and what to do next. For a question or a yes, it drafts the answer on a new card. "no thanks" marks the contact "do not contact", and Ferri refuses to write to them again. A bounce or a spam report does the same.
+- At most 20 outreach emails a day (`FERRI_EMAIL_DAILY_CAP`). Desk's Contacts page lists every contact by status with its timeline, the emails waiting for an OK, "Draft an email" and "Add a contact". Pocket shows the email cards in Needs you.
+- `@ferri who have we heard back from?` answers from the contacts.
+
+The same domain gives the event site real email. Supabase sends its auth emails through Resend's SMTP from `events@rudratechie.xyz` (`scripts/supabase-email.mjs` in the site kit). Registering sends a link that confirms the address and signs in, and the sign-in page offers "Email me a link".
+
 ## Shield: safety on every message
 
 Shield is Ferri's Switch Trust endpoint. Switch sends every message, from people and from agents, to `POST /guardrails/check` before anyone sees it, and Shield answers in a few milliseconds (Switch's limit is 2 seconds; no model call in the path):
@@ -300,6 +312,7 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 | `pnpm crew:account <crew name> <email>` | Create a Switch login for a crew member and link it, for Pocket |
 | `pnpm push:keys` | Write Web Push (VAPID) keys to `.env` once |
 | `pnpm shield:connect` | Point Switch Trust at Shield (`--off`, `--status`) |
+| `pnpm email:setup` | Check the Resend domain, create the webhook to Desk's `/api/email`, save its secret (safe to re-run) |
 | `pnpm builder:setup` | Enroll this machine with Switch, have Ferri create the Builder, set its addressing and budget (safe to re-run) |
 | `pnpm builder:controller` | Run the Switch agent controller that runs the Builder |
 | `node kits/listings/scripts/browser.mjs start` (in `~/.ferri/builder`) | Open the Builder's own browser, to log in to Luma and other platforms (`status` shows where it is logged in) |
@@ -307,11 +320,11 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 
 ## How we checked it
 
-- `pnpm test`: 110 unit tests (knowledge, policy, cards, launch, the plan, the Builder's reports, hand-offs, site events, posters and listings, Shield detectors, push notices, the Switch stream parser, flow helpers).
-- `pnpm typecheck`: seven packages.
-- `pnpm eval:answers`: 79 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, build requests, reading the plan from crew chat and the agenda draft. 79 of 79 pass.
+- `pnpm test`: 124 unit tests (knowledge, policy, cards, launch, the plan, the Builder's reports, hand-offs, site events, posters, listings, outreach and email signatures, Shield detectors, push notices, the Switch stream parser, flow helpers).
+- `pnpm typecheck`: eight packages.
+- `pnpm eval:answers`: 90 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, build requests, reading the plan from crew chat, the agenda draft, outreach intents, reading partner replies and an outreach email. The clock is fixed at 10:00 AM in Bengaluru, so time cases do not depend on when it runs.
 - The Builder's kits check themselves: `node scripts/render.mjs --example` in `builder/kits/posters` (every format, every QR code read back) and `node scripts/check.mjs` in `builder/kits/listings` (times, listing checks, and the Luma API path against a stand-in server).
-- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size; the Builder making the event site, a checklist and a sponsor one-pager from crew requests and Desk, its publish and email cards refused from the room, Desk and Pocket with nothing published, and a spent budget stopping it; the Builder shipping the event site to Vercel and Supabase behind a deploy card, then registration, credit claims, a low-pool alert and a revoke on the live site; the Builder making the poster and cards with one image call and the share card posting them to seven spaces on four platforms; the Builder listing Build Night on Luma from its own browser, "Decline" leaving Luma untouched, "Allow once" publishing it with the poster as the cover, a login card on a platform the browser was not logged in to, and a stray click on Luma's submit blocked during the fill.
+- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size; the Builder making the event site, a checklist and a sponsor one-pager from crew requests and Desk, its publish and email cards refused from the room, Desk and Pocket with nothing published, and a spent budget stopping it; the Builder shipping the event site to Vercel and Supabase behind a deploy card, then registration, credit claims, a low-pool alert and a revoke on the live site; the Builder making the poster and cards with one image call and the share card posting them to seven spaces on four platforms; the Builder listing Build Night on Luma from its own browser, "Decline" leaving Luma untouched, "Allow once" publishing it with the poster as the cover, a login card on a platform the browser was not logged in to, and a stray click on Luma's submit blocked during the fill; the Builder finding four real Bengaluru prospects with their source pages; an outreach email declined, then sent from rudratechie.xyz and delivered, a reply read and answered on a card, and "no thanks" stopping all mail; a magic link from the event site's Supabase arriving through Resend and signing in.
 
 ## Repository layout
 
@@ -323,6 +336,7 @@ packages/switch/     our client for the Switch agent protocol and Gateway
 packages/knowledge/  seeding, search, prompts, triage, answers with sources, drafts, the Switch mirror
 packages/shield/     Shield's detectors (pure, no network) and its log
 packages/push/       Web Push subscriptions and notices
+packages/email/      Resend for sending and receiving, webhook signatures, reply addresses
 packages/db/         Drizzle schema and migrations (Ferri runs them on start)
 seed/                the demo community (Lantern Labs) and event (Lantern Build Night)
 skills/              Ferri's persona and answer rules, in markdown

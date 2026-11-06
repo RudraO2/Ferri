@@ -84,6 +84,8 @@ export function createBuilder(deps: BuilderDeps) {
   const { db, agent, loop, log } = deps;
   const name = builderName();
   let cached: { at: number; agent: BuilderAgent | null } = { at: 0, agent: null };
+  /** Outreach (spec 15): a find-partners job's prospects go into contacts. */
+  let prospectsHook: ((job: BuilderJob) => Promise<void>) | null = null;
 
   /** The Builder's id and state, from Switch's agent management (Ferri may manage its owner's agents). */
   async function builder(fresh = false): Promise<BuilderAgent | null> {
@@ -257,6 +259,7 @@ export function createBuilder(deps: BuilderDeps) {
       if (url && job.kind === "site" && url !== job.url) await siteLive(updated, url);
       // A listing the crew allowed: Shield trusts the platform, and the crew gets the "is on Luma" card.
       if (url && job.kind === "listing" && url !== job.url) await listingLive(updated, url);
+      if (report.outcome === "done" && job.kind === "outreach" && job.status !== "done") await prospectsHook?.(updated).catch((err: Error) => log(`builder: ${jobRef(job)} prospects failed: ${err.message}`));
       // Posters and cards: the crew decides on a card whether they go outside.
       if (report.outcome === "done" && job.kind === "poster" && job.status !== "done") await posterReady(updated);
       if (job.requestedById) {
@@ -553,7 +556,17 @@ export function createBuilder(deps: BuilderDeps) {
     }
   }
 
-  return { builder, budget, start, onAgentMessage, tick, name };
+  return {
+    builder,
+    budget,
+    start,
+    onAgentMessage,
+    tick,
+    name,
+    setProspectsHook: (h: (job: BuilderJob) => Promise<void>) => {
+      prospectsHook = h;
+    },
+  };
 }
 
 export type Builder = ReturnType<typeof createBuilder>;

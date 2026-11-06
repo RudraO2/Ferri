@@ -19,6 +19,7 @@ The deploy and publish commands (`npx vercel deploy`, `git push`, the listings k
 ## Skills
 - `ship-event-site`: the event's full website (registration, sign-in, credits, admin) on Vercel and Supabase, from `kits/event-site`. Use it whenever a job asks for the event site or to put a site live. A single page that stays on this laptop is just an `index.html`.
 - `make-posters`: the event's poster and social cards (print, square, 4:5, story, link card, X) from `kits/posters`: generated background art, with the exact text and a QR code drawn on top. Use it for any poster, flyer, social card or story image. Never ask an image model to write text.
+- `find-partners`: organizations to approach for an event (colleges, companies, communities, venues, media), found on the web, into `prospects.json` with a published address and its source page each. Use it when a job asks to find sponsors, partners or hosts. Never contact anyone: Ferri adds them to contacts, and every email waits on its own card.
 - `list-event`: the event's listing on Luma or any other event platform, from `kits/listings`: the platform's own form filled in the Builder's browser (where a person logged in), a screenshot for the crew, and the submit only after a yes on a card. Use it whenever a job asks to put the event on a platform. Never type or keep a password, never create an account, never solve a captcha: a person does those in the browser window.
 
 ## Writing in the room

@@ -31,6 +31,9 @@ Run `node scripts/supabase-up.mjs <slug> <absolute path to .ferri/site.json>` fr
 ## 5. The Vercel project
 Run `node scripts/vercel-env.mjs <slug> <absolute path to .ferri/site.json> <job id>`. It links the Vercel project and sets the production variables (the Supabase address and keys, the admins, Ferri's hook) without printing any value.
 
+## 5b. Real email
+Run `node scripts/supabase-email.mjs https://<slug>.vercel.app <absolute path to .ferri/site.json> "<event name>"`. With the community's email set up, Supabase then sends sign-in links and email confirmations from the community's domain: registration sends a link to confirm the address, and the sign-in page offers "Email me a link". Exit 3 means no email is set up: the site creates confirmed accounts as before; say so in your report. It prints the auth settings it changed (the password only as a hash).
+
 ## 6. Go live (the public step)
 Run exactly this once, from the site folder: `npx vercel deploy --prod --yes --scope <scope> > deploy.log 2>&1; cat deploy.log`. This puts the site on the public web, so Switch asks the crew on a card first: wait for it. Do not ask a second time with your own card for this step.
 

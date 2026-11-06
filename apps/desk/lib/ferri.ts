@@ -36,6 +36,16 @@ export {
   listBuilderJobs,
   type BuilderJob,
   type BuilderJobKind,
+  CONTACT_KINDS,
+  CONTACT_STATUSES,
+  STATUS_LABEL as CONTACT_STATUS_LABEL,
+  contactTimeline,
+  listContacts,
+  setContactStatus,
+  upsertContact,
+  cannotEmail,
+  type Contact,
+  type ContactMessage,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

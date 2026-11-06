@@ -138,6 +138,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
               <option value="checklist">Checklist</option>
               <option value="poster">Poster</option>
               <option value="listing">Listing (Luma, ...)</option>
+              <option value="outreach">Find partners</option>
               <option value="other">Other</option>
             </select>
           </div>

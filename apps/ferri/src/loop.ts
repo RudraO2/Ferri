@@ -89,6 +89,7 @@ export function createLoop(deps: LoopDeps) {
   const { db, agent, log } = deps;
   let announceHooks: AnnounceHooks | null = null;
   let planHooks: AnnounceHooks | null = null;
+  let outreachHooks: AnnounceHooks | null = null;
 
   /**
    * Every post goes through here. While the master pause is on, nothing is
@@ -131,7 +132,7 @@ export function createLoop(deps: LoopDeps) {
   // ── Ferri Pocket pushes (spec 06): next to the crew-room post, never instead of it ──
 
   function pocketNotify(
-    kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield" | "builder">,
+    kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield" | "builder" | "email">,
     card: CardRow,
     crewIds: string[],
     extra: { waiting?: number; askerName?: string; roomName?: string } = {},
@@ -642,6 +643,10 @@ export function createLoop(deps: LoopDeps) {
       await planHooks?.expired(card);
       return true;
     }
+    if (card.kind === "outreach") {
+      await outreachHooks?.expired(card);
+      return true;
+    }
     if (card.kind === "reply") {
       if (card.targetQuestionId) {
         await db
@@ -716,6 +721,9 @@ export function createLoop(deps: LoopDeps) {
       } else if (card.kind === "plan") {
         if (!planHooks) throw new Error("the plan is not running yet");
         await planHooks.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
+      } else if (card.kind === "outreach") {
+        if (!outreachHooks) throw new Error("outreach is not running yet");
+        await outreachHooks.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
       } else if (card.kind === "reply") {
         if (written) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card", answerText: written });
@@ -800,6 +808,8 @@ export function createLoop(deps: LoopDeps) {
             ? `the announcement “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
             : card.kind === "plan"
             ? `the plan decision “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
+            : card.kind === "outreach"
+            ? `the email “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
             : card.kind === "reply"
             ? `the reply to “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min.`
             : `still open after ${minutesSince(card.createdAt)} min: “${card.question}”. ${plural(n, "person is", "people are")} waiting. ` +
@@ -830,6 +840,8 @@ export function createLoop(deps: LoopDeps) {
             ? `nobody has approved the announcement “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please post it or say don't post.`
             : card.kind === "plan"
             ? `nobody has confirmed the plan decision “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please confirm or drop it.`
+            : card.kind === "outreach"
+            ? `nobody has approved the email “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : card.kind === "reply"
             ? `nobody has approved the reply to “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : `nobody has answered “${card.question}” for ${minutesSince(card.createdAt)} min, and ${plural(n, "person is", "people are")} waiting. Whoever knows, please answer.`;
@@ -899,6 +911,9 @@ export function createLoop(deps: LoopDeps) {
     },
     setPlanHooks: (h: AnnounceHooks) => {
       planHooks = h;
+    },
+    setOutreachHooks: (h: AnnounceHooks) => {
+      outreachHooks = h;
     },
     openOrJoin,
     openReplyCard,

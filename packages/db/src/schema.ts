@@ -293,8 +293,9 @@ export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed"
 /**
  * "question": the crew is asked for an answer (spec 03). "reply": an Approve-space reply waits to be sent.
  * "announce": a version of an announcement waits for its one approval (spec 09).
+ * "outreach": an email to a partner waits for its one approval (spec 15).
  */
-export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan"]);
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach"]);
 
 export const cards = pgTable(
   "cards",
@@ -317,6 +318,8 @@ export const cards = pgTable(
     /** Announce cards: the announcement and the version this card approves. */
     announcementId: uuid("announcement_id"),
     announcementVersion: integer("announcement_version"),
+    /** Outreach cards: the email (a contact message) this card approves. */
+    contactMessageId: uuid("contact_message_id"),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),
@@ -692,7 +695,7 @@ export const builderJobs = pgTable(
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     /** Short number: job B<number>. */
     number: integer("number").notNull(),
-    /** "site", "checklist", "poster", "listing", "other". */
+    /** "site", "checklist", "poster", "listing", "outreach", "other". */
     kind: text("kind").notNull().default("other"),
     /** Short label ("Event one-page site"). */
     title: text("title").notNull(),
@@ -743,4 +746,105 @@ export const siteEvents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_events_open").on(t.handledAt, t.createdAt)],
+);
+
+// ── Partners and outreach email (spec 15): a light CRM ─────────────────────
+
+/**
+ * An organization or person the community works with or wants to: colleges,
+ * companies, communities, venues, media. Its `code` goes in the reply-to of
+ * every email to it (partners+<code>@domain), so replies find it.
+ */
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** The event this contact was found or written to for, if any. */
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    code: text("code").notNull(),
+    org: text("org").notNull(),
+    person: text("person"),
+    /** Lowercased. Null for a prospect with no published address. */
+    email: text("email"),
+    /** "college", "company", "community", "venue", "media", "sponsor", "other". */
+    kind: text("kind").notNull().default("other"),
+    /** "prospect", "drafted", "emailed", "replied", "interested", "declined", "partner", "bounced", "do_not_contact". */
+    status: text("status").notNull().default("prospect"),
+    website: text("website"),
+    /** Where the address came from (a page that publishes it), or "given by <name>". */
+    source: text("source"),
+    /** Why it fits the event, one line. */
+    why: text("why"),
+    notes: text("notes"),
+    addedBy: text("added_by").notNull(),
+    /** The Builder job that found it, if any. */
+    jobId: uuid("job_id").references(() => builderJobs.id, { onDelete: "set null" }),
+    lastEmailAt: timestamp("last_email_at", { withTimezone: true }),
+    lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("contacts_code").on(t.code), uniqueIndex("contacts_email").on(t.communityId, t.email), index("contacts_status").on(t.communityId, t.status)],
+);
+
+/** One email on a contact's timeline: out (drafted, approved on a card, sent) or in (a reply). */
+export const contactMessages = pgTable(
+  "contact_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** "out" or "in". */
+    direction: text("direction").notNull(),
+    /**
+     * Out: "requested" (to draft), "waiting" (card open), "sent", "delivered", "bounced", "complained",
+     * "dismissed", "expired", "failed", "refused". In: "received".
+     */
+    status: text("status").notNull(),
+    /** What the crew asked the email to say (out). */
+    ask: text("ask"),
+    subject: text("subject"),
+    text: text("text"),
+    fromAddress: text("from_address"),
+    toAddress: text("to_address"),
+    replyTo: text("reply_to"),
+    /** Resend's id for the email (sent or received). */
+    resendId: text("resend_id"),
+    cardId: uuid("card_id"),
+    /** The received message this one answers (out), or the sent one it replies to (in). */
+    inReplyToId: uuid("in_reply_to_id"),
+    /** In: how Ferri read the reply. */
+    reading: jsonb("reading").$type<{ summary: string; want: string; next: string; messageId?: string | null }>(),
+    requestedBy: text("requested_by"),
+    requestedById: uuid("requested_by_id").references(() => crewMembers.id, { onDelete: "set null" }),
+    /** The crew message that asked, so a replay drafts nothing twice. */
+    sourceMessageId: text("source_message_id").unique(),
+    error: text("error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("contact_messages_contact").on(t.contactId, t.createdAt), index("contact_messages_status").on(t.status), uniqueIndex("contact_messages_resend").on(t.resendId)],
+);
+
+/** What Resend's webhook delivered (spec 15): received, delivered, bounced, complained. Ferri handles them in its tick. */
+export const emailEvents = pgTable(
+  "email_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The webhook message id (svix-id): a retried delivery is stored once. */
+    deliveryId: text("delivery_id").notNull().unique(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("email_events_open").on(t.handledAt, t.createdAt)],
 );

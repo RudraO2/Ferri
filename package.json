@@ -26,7 +26,8 @@
     "shield:connect": "tsx --env-file-if-exists=.env scripts/shield-connect.ts",
     "builder:setup": "tsx --env-file-if-exists=.env scripts/builder-setup.ts",
     "builder:controller": "tsx scripts/builder-controller.ts",
-    "whatsapp:pair": "tsx --env-file-if-exists=.env scripts/whatsapp-pair.ts"
+    "whatsapp:pair": "tsx --env-file-if-exists=.env scripts/whatsapp-pair.ts",
+    "email:setup": "tsx --env-file-if-exists=.env scripts/email-setup.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -37,7 +38,8 @@
     "@ferri/db": "workspace:*",
     "@ferri/knowledge": "workspace:*",
     "@ferri/push": "workspace:*",
-    "@ferri/switch": "workspace:*"
+    "@ferri/switch": "workspace:*",
+    "@ferri/email": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

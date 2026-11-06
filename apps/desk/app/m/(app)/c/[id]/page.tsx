@@ -31,6 +31,8 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         ? "Reply waiting for your OK"
         : card.kind === "plan"
           ? "Plan decision"
+          : card.kind === "outreach"
+            ? "Email waiting for your OK"
           : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   return (
     <>
@@ -129,6 +131,15 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         </section>
       ) : null}
 
+      {open && card.kind === "outreach" ? (
+        <section className="mt-4 px-4">
+          <p className="px-1 text-[13px] text-zinc-500">
+            Goes out from partners@rudratechie.xyz as soon as you send it. Their reply comes back to Ferri, which tells the crew.
+          </p>
+          <ReplyActions cardId={card.id} draft={card.draftText ?? ""} />
+        </section>
+      ) : null}
+
       {open && card.kind === "reply" ? (
         <section className="mt-4 px-4">
           <div className="px-1">
@@ -159,9 +170,9 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                       ? "Not approved in time"
                       : "Replaced by a newer version"
                 : card.status === "answered"
-                ? `${card.kind === "reply" ? "Reply sent" : "Answered"}${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
+                ? `${card.kind === "reply" ? "Reply sent" : card.kind === "outreach" ? "Email sent" : "Answered"}${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
                 : card.status === "dismissed"
-                  ? `${card.kind === "reply" ? "Not sent" : "Not answered"}${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                  ? `${card.kind === "reply" || card.kind === "outreach" ? "Not sent" : "Not answered"}${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
                   : card.status === "expired"
                     ? "Expired without an answer"
                     : "Closed"}
@@ -184,6 +195,8 @@ export default async function CardPage({ params, searchParams }: { params: Promi
               </>
             ) : card.kind === "reply" ? (
               card.sentText ? <div className="mt-1 text-zinc-700">{card.sentText}</div> : null
+            ) : card.kind === "outreach" ? (
+              <div className="mt-1 whitespace-pre-wrap text-zinc-700">{card.answerText ?? card.draftText}</div>
             ) : card.answerText ? (
               <div className="mt-1 text-zinc-700">{card.answerText}</div>
             ) : null}

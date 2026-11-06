@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { community, db } from "@/lib/db";
@@ -26,6 +26,12 @@ import {
   builderJobs,
   createBuilderJob,
   type BuilderJobKind,
+  CONTACT_STATUSES,
+  cannotEmail,
+  contactMessages,
+  contacts,
+  setContactStatus,
+  upsertContact,
 } from "@/lib/ferri";
 import { answerRequest } from "@/lib/builder";
 import { announceAnswer, zonedTime } from "@/lib/announce";
@@ -473,7 +479,7 @@ export async function addPlanItem(form: FormData) {
 
 // ── Ferri Builder (spec 11) ──────────────────────────────────────────────
 
-const BUILD_KINDS: BuilderJobKind[] = ["site", "checklist", "poster", "listing", "other"];
+const BUILD_KINDS: BuilderJobKind[] = ["site", "checklist", "poster", "listing", "outreach", "other"];
 
 /** A job for the Builder from Desk. Ferri hands it over in the crew room within seconds. */
 export async function queueBuilderJob(form: FormData) {
@@ -536,4 +542,86 @@ export async function answerBuilderRequest(form: FormData) {
         });
   revalidatePath(to);
   back(to, r.note);
+}
+
+// ── Contacts and outreach email (spec 15) ────────────────────────────────
+
+async function crewWho(user: { email: string; name: string }, communityId: string) {
+  return (await crewForSwitchEmail(db(), communityId, user.email))[0] ?? null;
+}
+
+/** Add a partner by hand (an address the crew knows). */
+export async function addContact(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const org = str(form, "org");
+  const email = str(form, "email").toLowerCase();
+  if (!org) back("/contacts", "Give the organization's name.");
+  if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) back("/contacts", `“${email}” doesn't look like an email address.`);
+  const who = await crewWho(user, c.id);
+  const { created } = await upsertContact(db(), {
+    communityId: c.id,
+    eventId: str(form, "eventId") || null,
+    org,
+    person: str(form, "person") || null,
+    email: email || null,
+    kind: str(form, "kind") || "other",
+    website: str(form, "website") || null,
+    source: email ? `given by ${who?.name ?? user.name}` : null,
+    why: str(form, "why") || null,
+    addedBy: who?.name ?? user.name,
+  });
+  revalidatePath("/contacts");
+  back("/contacts", created ? `Added ${org}.` : `${org} was already in contacts; filled in what was missing.`);
+}
+
+/** Ask Ferri to draft an email to a contact. It opens a card in the crew room within seconds. */
+export async function requestEmail(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const contactId = str(form, "contactId");
+  const ask = str(form, "ask");
+  if (!ask) back("/contacts", "Say what the email should ask or tell them.");
+  const [contact] = await db().select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
+  if (!contact) back("/contacts", "That contact is gone.");
+  const why = cannotEmail(contact!);
+  if (why) back("/contacts", why);
+  const who = await crewWho(user, c.id);
+  const [lastIn] = await db()
+    .select({ id: contactMessages.id })
+    .from(contactMessages)
+    .where(and(eq(contactMessages.contactId, contactId), eq(contactMessages.direction, "in")))
+    .orderBy(desc(contactMessages.createdAt))
+    .limit(1);
+  await db().insert(contactMessages).values({
+    communityId: c.id,
+    contactId,
+    eventId: str(form, "eventId") || contact!.eventId,
+    direction: "out",
+    status: "requested",
+    ask,
+    requestedBy: who?.name ?? user.name,
+    requestedById: who?.id ?? null,
+    inReplyToId: lastIn?.id ?? null,
+  });
+  revalidatePath("/contacts");
+  back("/contacts", `Ferri is drafting the email to ${contact!.org}. It shows here and in the crew room for an OK.`);
+}
+
+export async function sendOutreach(form: FormData) {
+  const cardId = str(form, "cardId");
+  await answer(cardId, await replyAnswer(cardId, str(form, "text")), "/contacts");
+}
+
+export async function dropOutreach(form: FormData) {
+  await answer(str(form, "cardId"), skip, "/contacts");
+}
+
+export async function markContact(form: FormData) {
+  await requireUser();
+  const status = str(form, "status");
+  if (!(CONTACT_STATUSES as readonly string[]).includes(status)) back("/contacts", "Unknown status.");
+  await setContactStatus(db(), str(form, "contactId"), status as (typeof CONTACT_STATUSES)[number], { notes: str(form, "notes") || undefined });
+  revalidatePath("/contacts");
+  back("/contacts", "Saved.");
 }

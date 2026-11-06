@@ -39,6 +39,7 @@ import { config } from "./config.ts";
 import type { Builder } from "./builder.ts";
 import type { Launch } from "./launch.ts";
 import type { Plan } from "./plan.ts";
+import type { Outreach } from "./outreach.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -53,6 +54,7 @@ export interface FlowDeps {
   launch: Launch;
   plan: Plan;
   builder: Builder;
+  outreach: Outreach;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -96,7 +98,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, plan, builder, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, builder, outreach, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
   const builderRe = mentionRegex(builder.name);
@@ -363,6 +365,47 @@ export function createFlow(deps: FlowDeps) {
         origin: "chat",
         sourceMessageId: p.message_id,
         roomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
+      });
+      if (reply) await say(reply);
+      return;
+    }
+
+    // Outreach (spec 15): find partners (a Builder job), email one (a card per email), or how it is going.
+    if (intent?.intent === "outreach" && intent.outreach) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "outreach",
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      log(`crew ${member.name}: outreach ${intent.outreach.action}${intent.outreach.who ? ` "${intent.outreach.who}"` : ""}`);
+      const roomId = crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId);
+      const reply = await outreach.intent({
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
+        member,
+        messageId: p.message_id,
+        roomId,
+        outreach: intent.outreach,
+        body: stripMention(p.body),
+        startBuild: (b) =>
+          builder.start({
+            communityId: ctx.kb.community.id,
+            eventId: ctx.eventId,
+            kind: b.kind,
+            title: b.title,
+            brief: b.brief,
+            requestedBy: member.name,
+            requestedById: member.id,
+            origin: "chat",
+            sourceMessageId: p.message_id,
+            roomId,
+          }),
       });
       if (reply) await say(reply);
       return;

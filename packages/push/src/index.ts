@@ -9,7 +9,7 @@ import { crewMembers, deskUsers, pushLog, pushSubscriptions, type Db } from "@fe
  * that gets settled can replace the notifications it caused.
  */
 
-export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test" | "reminder" | "shield" | "builder";
+export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test" | "reminder" | "shield" | "builder" | "email";
 
 export interface PushPayload {
   kind: PushKind;
@@ -158,7 +158,7 @@ export function topicFor(tag: string): string {
 export interface CardFacts {
   id: string;
   /** "announce": `question` is the announcement's title and `roomName` where it goes. */
-  kind: "question" | "reply" | "announce" | "plan";
+  kind: "question" | "reply" | "announce" | "plan" | "outreach";
   question: string;
   topic: string;
   /** People waiting on the answer. */
@@ -171,7 +171,7 @@ export interface CardFacts {
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const people = (n: number) => `${n} ${n === 1 ? "person is" : "people are"} waiting`;
 
-export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield" | "builder">, card: CardFacts): PushPayload {
+export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield" | "builder" | "email">, card: CardFacts): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
   const from = card.askerName && card.roomName ? `${card.askerName} in ${card.roomName}` : null;
   const base = { kind, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: true, cardId: card.id };
@@ -186,6 +186,18 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
         return { ...base, title: "Anyone: an announcement needs an OK", body: `${q} has waited ${card.minutesOpen ?? "?"} min.` };
       case "expire":
         return { ...base, renotify: false, title: "Announcement not posted", body: `Nobody approved ${q} in time.` };
+    }
+  }
+  if (card.kind === "outreach") {
+    switch (kind) {
+      case "open":
+        return { ...base, title: "An email needs your OK", body: `${q}. Send, edit or drop Ferri's draft.` };
+      case "nudge":
+        return { ...base, title: "Email still waiting for your OK", body: `${q} · ${card.minutesOpen ?? "?"} min` };
+      case "escalate":
+        return { ...base, title: "Anyone: an email needs an OK", body: `${q} has waited ${card.minutesOpen ?? "?"} min.` };
+      case "expire":
+        return { ...base, renotify: false, title: "Email not sent", body: `Nobody approved ${q} in time.` };
     }
   }
   if (card.kind === "plan") {
@@ -224,8 +236,12 @@ export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminde
   }
 }
 
-export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" | "plan" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
+export function settledNotice(card: { id: string; question: string; kind: "question" | "reply" | "announce" | "plan" | "outreach" }, how: "answered" | "dismissed" | "expired", by: string | null, reached?: number): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
+  if (card.kind === "outreach") {
+    const title = how === "answered" ? `Email sent${by ? ` · ${by}` : ""}` : how === "dismissed" ? `Email not sent${by ? ` · ${by}` : ""}` : "Email not sent";
+    return { kind: "settled", title, body: q, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };
+  }
   if (card.kind === "plan") {
     const title = how === "answered" ? `Confirmed${by ? ` by ${by}` : ""}` : how === "dismissed" ? `Dropped${by ? ` · ${by}` : ""}` : "Plan decision not confirmed";
     return { kind: "settled", title, body: q, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: false, cardId: card.id };

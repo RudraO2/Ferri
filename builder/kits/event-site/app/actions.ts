@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { tellFerri } from "@/lib/ferri";
@@ -11,12 +12,38 @@ const str = (f: FormData, k: string, max = 500) =>
     .slice(0, max);
 const go = (path: string, msg: string): never => redirect(`${path}?msg=${encodeURIComponent(msg)}`);
 
+/** Real email (spec 15): Supabase sends sign-in links and confirmations through the community's SMTP. */
+const emailOn = () => process.env.SITE_EMAIL === "on";
+
+/** This site's own address, for the links in emails. */
+async function origin(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+/** Email a sign-in link to someone who already has an account. */
+async function sendLink(email: string): Promise<string | null> {
+  const { error } = await (await userClient()).auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: `${await origin()}/auth/confirm?next=/me` },
+  });
+  if (error) console.error(`sign-in link for ${email}: ${error.message}`);
+  return error ? error.message : null;
+}
+
 const ROLES = ["student", "professional", "designer", "other"];
 const TEAM = ["have_team", "looking", "solo"];
 
 // ── Participants ─────────────────────────────────────────────────────────
 
-/** Create the account (already confirmed: no email is sent) and the registration, then sign in. */
+/**
+ * Create the account and the registration. With email on, the account waits
+ * for its email to be confirmed: a link goes to the address, and opening it
+ * signs the person in. Without email, the account is confirmed at once.
+ */
 export async function register(form: FormData) {
   const name = str(form, "name", 120);
   const email = str(form, "email", 200).toLowerCase();
@@ -35,10 +62,21 @@ export async function register(form: FormData) {
   if (!user) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) go("/register", "That email does not look right.");
     if (password.length < 8) go("/register", "Use a password of at least 8 characters.");
-    const created = await adminClient().auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } });
+    const created = await adminClient().auth.admin.createUser({ email, password, email_confirm: !emailOn(), user_metadata: { name } });
     if (created.error) {
       const taken = /already|registered|exists/i.test(created.error.message);
       go(taken ? "/login" : "/register", taken ? "You already have an account. Sign in to finish." : created.error.message);
+    }
+    if (emailOn()) {
+      const row = { user_id: created.data.user!.id, name, email, role, team_status: teamStatus, team_name: teamStatus === "have_team" ? teamName : null, dietary, consent };
+      const saved = await adminClient().from("registrations").upsert(row);
+      if (saved.error) go("/register", `Could not save your registration: ${saved.error.message}`);
+      const { count } = await adminClient().from("registrations").select("*", { count: "exact", head: true });
+      await tellFerri({ type: "registration", count: count ?? 0, name });
+      const failed = await sendLink(email);
+      if (!failed) go("/login", `You're registered. We sent a link to ${email}: open it to confirm your email and sign in.`);
+      // The email did not go out: confirm the account here, so nobody is stuck.
+      await adminClient().auth.admin.updateUserById(created.data.user!.id, { email_confirm: true });
     }
     const signed = await (await userClient()).auth.signInWithPassword({ email, password });
     if (signed.error) go("/login", "Your account is ready. Sign in to finish registering.");
@@ -72,8 +110,23 @@ export async function signIn(form: FormData) {
   const email = str(form, "email", 200).toLowerCase();
   const password = String(form.get("password") ?? "");
   const { error } = await (await userClient()).auth.signInWithPassword({ email, password });
+  if (error && /not confirmed/i.test(error.message)) {
+    const failed = await sendLink(email);
+    go("/login", failed ? "Confirm your email first; the link could not be sent just now. Try again in a minute." : `Confirm your email first: we sent a new link to ${email}.`);
+  }
   if (error) go("/login", "That email and password do not match.");
   redirect("/me");
+}
+
+/** Sign in without a password: a link by email (only for people who have an account). */
+export async function magicLink(form: FormData) {
+  const email = str(form, "email", 200).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) go("/login", "That email does not look right.");
+  if (!emailOn()) go("/login", "Sign in with your password.");
+  const failed = await sendLink(email);
+  // The same answer whether or not there is an account, so the form tells nobody who registered.
+  if (failed && !/not found|signups not allowed|no user/i.test(failed)) go("/login", "The link could not be sent just now. Try again in a minute.");
+  go("/login", `If ${email} is registered, a sign-in link is on its way.`);
 }
 
 export async function signOut() {

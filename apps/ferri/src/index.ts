@@ -17,6 +17,7 @@ import { createBuilder } from "./builder.ts";
 import { createFlow } from "./flow.ts";
 import { createLaunch } from "./launch.ts";
 import { createPlan } from "./plan.ts";
+import { createOutreach } from "./outreach.ts";
 import { createShield } from "./shield.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
@@ -135,7 +136,11 @@ loop.setAnnounceHooks(launch.hooks);
 const plan = createPlan({ db, agent, loop, gateway: gateway ?? null, room, log });
 loop.setPlanHooks(plan.hooks);
 const builder = createBuilder({ db, agent, loop, gateway: gateway ?? null, log });
-const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, skills, room, log });
+const outreach = createOutreach({ db, agent, loop, room, log });
+loop.setOutreachHooks(outreach.hooks);
+builder.setProspectsHook(outreach.prospectsReady);
+log(outreach.enabled ? `email: on, from ${outreach.mailbox}` : "email: off (no RESEND_API_KEY)");
+const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, skills, room, log });
 const stopLoop = loop.start();
 const shield = await createShield({ db, loop, log }).start();
 await discover();
@@ -148,6 +153,8 @@ const timers = [
   setInterval(() => void plan.tick(), config.ladderTickMs),
   // Builder: jobs queued in Desk (or waiting for the machine), cancellations.
   setInterval(() => void builder.tick(), config.ladderTickMs),
+  // Outreach: emails Desk asked for, replies and delivery events from the webhook.
+  setInterval(() => void outreach.tick(), config.ladderTickMs),
 ];
 void launch.tick();
 void watchMirror();

@@ -7,7 +7,7 @@ import { TOPICS, type ChatLine } from "./triage.ts";
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -37,6 +37,15 @@ export const CrewIntentSchema = z.strictObject({
       what: z.string(),
     })
     .nullable(),
+  /** outreach: partners by email (spec 15). */
+  outreach: z
+    .strictObject({
+      action: z.enum(["find", "email", "status"]),
+      who: z.string().nullable(),
+      email: z.string().nullable(),
+      what: z.string(),
+    })
+    .nullable(),
 });
 export type CrewIntent = z.infer<typeof CrewIntentSchema>;
 
@@ -51,7 +60,7 @@ Decide what the crew member wants:
 facts: every fact in the message that is not part of the card answer, each as a standalone statement in their words (text) with a 2 to 6 word title (heading, for example "Quiet room closing time"). For remember, facts holds everything to keep. For answer_card, it holds only the extra facts beside the answer, often none. Never drop a fact the crew member stated.
 
 - announce: they want the members (participants, the community outside the crew) told something on the event's spaces ("tell everyone lunch moves to 1:30", "announce at 6 PM that submissions close at 7", "let people know the wifi is back", "post that judging starts at 4"), or they want an earlier announcement changed ("change the lunch announcement, it's 1:45 now", "fix the announcement: room 3, not room 2"). announce.what is what the members should be told, as a standalone statement in their words, with the instructions to Ferri removed. announce.when is the time they want it posted, as ISO 8601 with the offset (use "Now" below to resolve "at 6", "tomorrow 9 AM", "in 30 minutes"); null to post as soon as it is approved. announce.revises is the id (A1, A2, ...) of the recent announcement they want changed, else null. Set it only when they ask to change, fix, update or correct an earlier announcement; news on the same topic without that ask ("let people know lunch moves to 2 PM") is a new announcement, revises null. A time inside the news itself ("lunch moves to 1:30") is not announce.when.
-- remind: they want a reminder for the crew themselves, not the members ("remind me at 5 to order pizza", "remind the crew at 9 PM to stack the chairs"). remind.text is the reminder as a short standalone line ("Order the pizza"), remind.when is ISO 8601 with the offset, remind.who is "me" or "crew".
+- remind: they want a reminder for the crew themselves, not the members ("remind me at 5 to order pizza", "remind the crew at 9 PM to stack the chairs"). remind.text is the reminder as a short standalone line ("Order the pizza"), remind.when is ISO 8601 with the offset, remind.who is "me" or "crew". For announce.when and remind.when, a time of day with no date that has already passed today ("at 5 PM" said at 6 PM) means that time tomorrow; a time still ahead today means today.
 - team_rooms: they want rooms or channels made for teams ("make team rooms for Team Alpha with meera and arjun, and Team Beta with priya"). teams lists each team with its name and its members' usernames as written, without the @.
 
 - plan: they are working on the event plan with Ferri (what is decided, who owns what, tasks and deadlines, the agenda). plan.action:
@@ -63,9 +72,14 @@ facts: every fact in the message that is not part of the card answer, each as a 
   plan.owner is a person's name as written (the sender's own name for "me"), else null. plan.due is ISO 8601 with the offset ("by Friday" means Friday 6 PM), else null. plan.topic is the closest of: ${TOPICS.join(", ")}. plan.ref is null except for done; plan.kind is "task" unless add says otherwise.
   "remember X" is for facts members may ask about; a task, an owner or an agenda request is plan.
 
-- build: they want something made: a page or site, a checklist, a poster, a file, a document ("get the builder to make a one-page site for Build Night", "can you make us a day-of checklist?", "make a poster for the meetup", "have the builder put together a sponsor one-pager", "put Build Night on Luma", "list the meetup on Meetup"). Ferri Builder, Ferri's teammate that makes things, does it. build.kind is site (a web page or site), checklist, poster, listing (putting the event on an event platform such as Luma, Meetup, Commudle, Devfolio or Eventbrite), or other. build.title is a 2 to 6 word label ("Event one-page site", "Day-of checklist"). build.what is what they asked for as a standalone request in their words, with the instructions to Ferri removed, keeping every detail they gave. Writing a plan or agenda is plan, not build; telling members something is announce, not build.
+- build: they want something made: a page or site, a checklist, a poster, a file, a document ("get the builder to make a one-page site for Build Night", "can you make us a day-of checklist?", "make a poster for the meetup", "have the builder put together a sponsor one-pager", "put Build Night on Luma", "list the meetup on Meetup"). Ferri Builder, Ferri's teammate that makes things, does it. build.kind is site (a web page or site), checklist, poster, listing (putting the event on an event platform such as Luma, Meetup, Commudle, Devfolio or Eventbrite), or other. build.title is a 2 to 6 word label ("Event one-page site", "Day-of checklist"). build.what is what they asked for as a standalone request in their words, with the instructions to Ferri removed, keeping every detail they gave. Writing a plan or agenda is plan, not build; telling members something is announce, not build; finding or emailing partners is outreach, not build.
 
-For every intent, announce, remind, plan and build are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan and build.
+- outreach: partners, sponsors, colleges, venues, other communities or the media, by email. outreach.action:
+  - find: look for organizations to approach ("find colleges and companies in Bengaluru that could sponsor Build Night", "who could host us?", "look for communities to partner with"). outreach.what is the request in their words (where, what kind, for what); who and email are null.
+  - email: write to one partner ("email CloudCo about sponsoring", "write to asha@cloudco.example asking if they'd host us", "reply to CloudCo and say Monday works", "follow up with the college"). outreach.who is the organization or person as written; outreach.email is an email address if the message gives one, else null; outreach.what is what the email should say or ask, in their words, with the instructions to Ferri removed.
+  - status: they ask how outreach is going ("who have we heard back from?", "any replies from sponsors?", "which partners said yes?"). who is the organization if they name one, else null.
+
+For every intent, announce, remind, plan, build and outreach are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build and outreach.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 

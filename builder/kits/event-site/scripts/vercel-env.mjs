@@ -50,6 +50,9 @@ const vars = {
   FERRI_HOOK_URL: settings.hook?.url ?? "",
   FERRI_HOOK_SECRET: settings.hook?.secret ?? "",
   FERRI_SITE_ID: jobId,
+  // Real email (spec 15): sign-in links and confirmations, once supabase-email.mjs set up SMTP.
+  SITE_EMAIL: settings.email?.smtpPass ? "on" : "",
+  NEXT_PUBLIC_SITE_URL: `https://${slug}.vercel.app`,
 };
 for (const [name, value] of Object.entries(vars)) {
   if (!value) {

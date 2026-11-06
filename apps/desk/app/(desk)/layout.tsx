@@ -32,6 +32,7 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
             "/announcements": o.announcementsWaiting,
             "/plan": o.planWaiting,
             "/builder": waiting.length,
+            "/contacts": o.emailsWaiting,
             "/spaces": o.discovered,
           }}
         />

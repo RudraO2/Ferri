@@ -31,7 +31,7 @@ export async function overview() {
   const c = await community();
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   const n = sql<number>`count(*)::int`;
-  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting] = await Promise.all([
+  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting] = await Promise.all([
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "question")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "reply")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "expired"), eq(cards.kind, "question")))),
@@ -39,6 +39,7 @@ export async function overview() {
     count(db().select({ n }).from(knowledgeEntries).where(and(eq(knowledgeEntries.communityId, c.id), isNull(knowledgeEntries.archivedAt)))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "announce")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "plan")))),
+    count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "outreach")))),
   ]);
   const recent = await db()
     .select({
@@ -55,7 +56,7 @@ export async function overview() {
     .where(eq(questions.communityId, c.id))
     .orderBy(desc(questions.askedAt))
     .limit(15);
-  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, recent };
+  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, recent };
 }
 
 export async function cardLists() {

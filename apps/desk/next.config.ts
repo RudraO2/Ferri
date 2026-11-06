@@ -17,7 +17,7 @@ const tunnelOrigins = (process.env.POCKET_ALLOWED_ORIGINS ?? "*.trycloudflare.co
 
 const nextConfig: NextConfig = {
   // Our workspace packages ship TypeScript sources.
-  transpilePackages: ["@ferri/db", "@ferri/knowledge", "@ferri/push", "@ferri/shield", "@ferri/switch"],
+  transpilePackages: ["@ferri/db", "@ferri/email", "@ferri/knowledge", "@ferri/push", "@ferri/shield", "@ferri/switch"],
   serverExternalPackages: ["postgres", "web-push"],
   allowedDevOrigins: tunnelOrigins,
   experimental: {
