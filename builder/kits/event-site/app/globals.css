@@ -54,6 +54,13 @@ section.block { padding: 48px 0; border-bottom: 1px solid var(--line); }
 .btn.small { padding: 6px 12px; font-size: 0.9rem; color: #fff !important; }
 .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.danger { background: var(--bad); }
+/* A two-step button: the summary opens the question, the form inside answers it. */
+details.confirm { border: 0; padding: 0; margin-top: 16px; }
+details.confirm summary { list-style: none; display: inline-block; }
+details.confirm summary::-webkit-details-marker { display: none; }
+details.confirm[open] summary { opacity: 0.7; }
+.confirm-body { margin-top: 12px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--line)); border-radius: 10px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .day { margin-bottom: 24px; }
@@ -66,7 +73,7 @@ label { display: grid; gap: 6px; font-weight: 600; font-size: 0.95rem; }
 label.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; }
 label.check input { width: auto; margin-top: 4px; }
-input:focus, select:focus, textarea:focus, .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus, .btn:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .msg { margin: 20px 0; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); }
 .muted { color: var(--muted); }
 .ph { background: color-mix(in srgb, var(--warn) 18%, transparent); border-radius: 4px; padding: 0 4px; }

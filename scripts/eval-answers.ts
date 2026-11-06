@@ -20,6 +20,8 @@ import {
   draftOutreachEmail,
   readReply,
   readCare,
+  readGuestReply,
+  draftGuestEmail,
   readPlanChat,
   shortPlanIds,
   type CrewMember,
@@ -611,7 +613,7 @@ try {
     if (r.intent?.intent !== "care") problems.push(`intent ${r.intent?.intent}, expected care`);
     else {
       if (k?.action !== c.action) problems.push(`action ${k?.action}, expected ${c.action}`);
-      if (c.case !== undefined && (k?.case ?? null) !== c.case) problems.push(`case ${k?.case}, expected ${c.case}`);
+      if (c.case !== undefined && (k?.case || null) !== c.case) problems.push(`case ${k?.case}, expected ${c.case}`);
       if (c.note && !c.note.test(k?.note ?? "")) problems.push(`note "${k?.note}"`);
     }
     return { c, r, problems };
@@ -624,10 +626,83 @@ try {
     for (const x of problems) console.log(`      -> ${x}`);
   }
 
+  // ── Spec 17: RSVP ───────────────────────────────────────────────────────
+  const guestIntentCases: { msg: string; intent: string; action?: string; when?: boolean; audience?: string }[] = [
+    { msg: "@ferri remind the guests tomorrow at 9 AM to bring their laptops and a photo ID", intent: "guests", action: "remind", when: true },
+    { msg: "@ferri email everyone who registered that doors open at 9", intent: "guests", action: "remind" },
+    { msg: "@ferri ask everyone who can't come to free their spot", intent: "guests", action: "nudge" },
+    { msg: "@ferri how many people are coming? who's on the waitlist?", intent: "guests", action: "status" },
+    { msg: "@ferri sync the guest list from Luma", intent: "guests", action: "sync" },
+    { msg: "@ferri remind me at 5 PM to order the pizza", intent: "remind" },
+    { msg: "@ferri tell everyone in the groups that lunch moves to 1:30", intent: "announce" },
+  ];
+  const gi = await pool(guestIntentCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    if (r.intent?.intent !== c.intent) problems.push(`intent ${r.intent?.intent}, expected ${c.intent}`);
+    else if (c.action && r.intent.guests?.action !== c.action) problems.push(`action ${r.intent.guests?.action}, expected ${c.action}`);
+    if (c.when && !parseWhen(r.intent?.guests?.when, now)) problems.push(`when ${r.intent?.guests?.when}, expected a time`);
+    if (c.action === "remind" && !r.intent?.guests?.what.trim()) problems.push("remind needs what");
+    return { c, r, problems };
+  });
+  console.log("\nguest intents");
+  for (const { c, r, problems } of gi) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, guests: r.intent?.guests })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  const guestReplyCases: { text: string; want: string }[] = [
+    { text: "Hi, so sorry, something came up and I can't make it any more. Please give my spot to someone else.", want: "not_coming" },
+    { text: "Yes I'll be there, see you Saturday!", want: "coming" },
+    { text: "Is there parking for two-wheelers near the venue?", want: "question" },
+    { text: "Thanks!", want: "other" },
+  ];
+  const gr = await pool(guestReplyCases, 4, async (c) => {
+    const r = await readGuestReply({ choice: models.fast, eventName: "Lantern Build Night", ours: "Hi Asha, Build Night is tomorrow at 9 AM at Koramangala Makerspace. Bring your laptop.", theirs: c.text, name: "Asha Guest" });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    if (r.reading?.want !== c.want) problems.push(`want ${r.reading?.want}, expected ${c.want}`);
+    if (!r.reading?.summary.trim()) problems.push("needs a summary");
+    return { c, r, problems };
+  });
+  console.log("\nreading guest replies");
+  for (const { c, r, problems } of gr) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.text.slice(0, 70)}`);
+    console.log(`      ${JSON.stringify(r.reading)}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
+  console.log("\nguest reminder draft");
+  const gd = await draftGuestEmail({ choice: models.main, kb, eventId, kind: "reminder", ask: "Bring your laptop, charger and a photo ID. Doors open at 9 AM.", now: localNow(tz, now) });
+  tokensIn += gd.usage.input + gd.usage.cacheWrite;
+  tokensOut += gd.usage.output;
+  cacheRead += gd.usage.cacheRead;
+  const gwords = gd.draft?.text.split(/\s+/).length ?? 0;
+  const gdProblems = [
+    !gd.draft ? "no draft" : null,
+    gd.draft && !/^Hi \{first\},/.test(gd.draft.text.trim()) ? "does not start with Hi {first}," : null,
+    gd.draft && !/Build Night/i.test(gd.draft.subject) ? "subject does not name the event" : null,
+    gd.draft && /https?:\/\//.test(gd.draft.text) ? "has its own link" : null,
+    gd.draft && !/laptop/i.test(gd.draft.text) ? "drops the laptop" : null,
+    gd.draft && (gwords < 20 || gwords > 170) ? `${gwords} words` : null,
+  ].filter(Boolean);
+  if (gdProblems.length) failed++;
+  console.log(`${gdProblems.length ? "FAIL" : "ok  "} ${JSON.stringify({ subject: gd.draft?.subject, words: gwords, missing: gd.draft?.missing })}`);
+  console.log(`      ${(gd.draft?.text ?? "").replace(/\n+/g, " | ")}`);
+  for (const x of gdProblems) console.log(`      -> ${x}`);
+
   const total =
     answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
     planIntentCases.length + buildCases.length + planChatCases.length + 1 + outreachCases.length + replyCases.length + 1 +
-    careCases.length + careIntentCases.length;
+    careCases.length + careIntentCases.length + guestIntentCases.length + guestReplyCases.length + 1;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

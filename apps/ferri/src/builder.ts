@@ -94,6 +94,8 @@ export function createBuilder(deps: BuilderDeps) {
     report(job: BuilderJob, outcome: "done" | "stuck", text: string): Promise<void>;
   } | null = null;
   let policySig = "";
+  /** RSVP (spec 17): what the shipped site says about one guest goes into the guest list. */
+  let siteGuestHook: ((e: { communityId: string; type: string; payload: Record<string, unknown>; eventId: string | null }) => Promise<void>) | null = null;
 
   /**
    * The Builder's addressing policy: its owner and Ferri everywhere, and anyone
@@ -388,6 +390,9 @@ export function createBuilder(deps: BuilderDeps) {
       log(`builder: could not allow ${url} in Shield: ${(err as Error).message}`);
     }
     if (!job.eventId) return;
+    // The guest sync (spec 17) reads this listing's Guests tab: keep its Luma event id.
+    const evt = lumaEventIdFor(job);
+    if (evt) await db.update(events).set({ lumaEventId: evt }).where(eq(events.id, job.eventId));
     const [ev] = await db.select({ name: events.name }).from(events).where(eq(events.id, job.eventId)).limit(1);
     const post = listingAnnouncement({ eventName: ev?.name ?? "The event", url, site: await siteUrl(job.eventId) });
     await createAnnouncementRequest(db, {
@@ -402,6 +407,19 @@ export function createBuilder(deps: BuilderDeps) {
       reason: `the Builder listed the event (${jobRef(job)})`,
     });
     log(`builder: ${jobRef(job)} "${post.title}" announcement requested`);
+  }
+
+  /** `evt-...` of a Luma listing job, from its result.json (manage URL) on this machine. */
+  function lumaEventIdFor(job: BuilderJob): string | null {
+    if (!job.folder) return null;
+    const file = path.join(builderPaths().dir, "jobs", job.folder, "result.json");
+    try {
+      const r = JSON.parse(fs.readFileSync(file, "utf8")) as { platform?: string; id?: string; manageUrl?: string };
+      if (r.platform && r.platform !== "luma") return null;
+      return /evt-[A-Za-z0-9]+/.exec(`${r.id ?? ""} ${r.manageUrl ?? ""}`)?.[0] ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** The event's latest poster square card on this machine, as a path from the Builder's folder (a listing's cover). */
@@ -554,6 +572,7 @@ export function createBuilder(deps: BuilderDeps) {
           .limit(1);
         if (seen) continue;
       }
+      await siteGuestHook?.({ communityId: e.communityId, type: e.type, payload: e.payload, eventId: job?.eventId ?? null }).catch((err: Error) => log(`site ${e.site}: guest update failed: ${err.message}`));
       const line = siteEventLine(e.type, e.payload);
       if (!line) continue;
       const roomId = await loop.crewRoomFor(job?.eventId ?? null);
@@ -616,6 +635,9 @@ export function createBuilder(deps: BuilderDeps) {
     },
     setHelpHooks: (h: NonNullable<typeof helpHooks>) => {
       helpHooks = h;
+    },
+    setSiteGuestHook: (h: NonNullable<typeof siteGuestHook>) => {
+      siteGuestHook = h;
     },
     syncPolicy,
     ready: async () => ready(await builder()),

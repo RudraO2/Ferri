@@ -8,6 +8,7 @@ import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { careAction } from "@/lib/care";
 import { community, db } from "@/lib/db";
 import { createAnnouncementRequest, linkCrewAccount, pushToUsers, removePushSubscription, savePushSubscription, vapidFromEnv } from "@/lib/ferri";
+import { SPOT_OFFER_OPTION, approvedNote, requestSend } from "@/lib/guests";
 import { myCrew } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 
@@ -172,4 +173,35 @@ export async function pocketCare(form: FormData) {
   revalidatePath("/care");
   if (!r.ok) go(here, r.note);
   go(inPocket(str(form, "done"), here), r.note);
+}
+
+// ── Guests (spec 17) ─────────────────────────────────────────────────────
+
+/** A guests card: unchanged text sends Ferri's draft, an edited one sends that version. */
+export async function pocketSendGuests(form: FormData) {
+  const cardId = str(form, "cardId");
+  const a = await replyAnswer(cardId, str(form, "text"));
+  await answer(cardId, a, await approvedNote(cardId, !!a.text));
+}
+
+export async function pocketDontSendGuests(form: FormData) {
+  await answer(str(form, "cardId"), skip, "Okay. Nothing goes to the guests.");
+}
+
+export async function pocketOfferSpot(form: FormData) {
+  await answer(str(form, "cardId"), { selected: [SPOT_OFFER_OPTION], text: null }, "Offered. Ferri emails them the spot now.");
+}
+
+export async function pocketDontOffer(form: FormData) {
+  await answer(str(form, "cardId"), skip, "Okay. The spot is not offered.");
+}
+
+/** A reminder or a free-your-spot nudge from the phone. It still needs one OK (yours counts). */
+export async function pocketRequestGuestSend(form: FormData) {
+  const user = await requirePocketUser();
+  const r = await requestSend(user, { eventId: str(form, "eventId"), what: str(form, "what"), ask: str(form, "ask"), when: str(form, "when"), origin: "pocket" });
+  revalidatePath("/m", "layout");
+  revalidatePath("/guests");
+  if (!r.ok) go("/m/guests", r.note);
+  go("/m", r.note);
 }

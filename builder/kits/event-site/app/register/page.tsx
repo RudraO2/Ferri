@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { event } from "@/lib/event";
+import { capacity, event } from "@/lib/event";
+import { isFull } from "@/lib/rsvp";
 import { currentUser, userClient } from "@/lib/supabase";
 import { register } from "../actions";
 import { Msg } from "../msg";
@@ -20,12 +21,21 @@ export default async function Register({ searchParams }: { searchParams: Promise
       </div>
     );
   }
+  // Unknown (the database did not answer): register as usual; the server decides the status.
+  const full = await isFull().catch(() => false);
   return (
     <div className="wrap page">
       <h1>Register for {event.name}</h1>
       <p className="muted">
         {event.dates} · {event.venue.name}. {event.registration.closes ? `Registration closes ${event.registration.closes}.` : ""}
       </p>
+      {full ? (
+        <p className="msg" role="status">
+          Every spot is taken right now. Register to join the waitlist, and we&apos;ll email you if a spot opens.
+        </p>
+      ) : capacity !== null ? (
+        <p className="muted">There are {capacity} spots. When they are gone, new registrations join a waitlist.</p>
+      ) : null}
       <Msg msg={msg} />
       <form action={register} className="stack">
         <label>
@@ -81,7 +91,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
           <input type="checkbox" name="consent" required />
           <span>I agree to the event rules and the code of conduct, and that the organizers may contact me about this event.</span>
         </label>
-        <button className="btn">Register</button>
+        <button className="btn">{full ? "Join the waitlist" : "Register"}</button>
         {!user ? (
           <p className="muted">
             Already have an account? <Link href="/login">Sign in</Link>.

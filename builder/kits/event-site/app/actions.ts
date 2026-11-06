@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { event } from "@/lib/event";
 import { tellFerri } from "@/lib/ferri";
+import { cancel, countOf, type Profile, rejoin, saveRegistration, type Status, waitlistNumber } from "@/lib/rsvp";
 import { adminClient, currentUser, isAdmin, userClient } from "@/lib/supabase";
 
 const str = (f: FormData, k: string, max = 500) =>
@@ -37,6 +39,34 @@ async function sendLink(email: string): Promise<string | null> {
 const ROLES = ["student", "professional", "designer", "other"];
 const TEAM = ["have_team", "looking", "solo"];
 
+/** One plain sentence on where someone stands after registering. */
+async function standing(userId: string, status: Status): Promise<string> {
+  if (status === "going") return "You're registered. See you there!";
+  if (status === "waitlist") {
+    const n = await waitlistNumber(userId);
+    return `The event is full, so you're on the waitlist${n ? ` (number ${n})` : ""}. We'll email you if a spot opens.`;
+  }
+  return "Your details are saved. You freed your spot earlier: you can register again on your page.";
+}
+
+/** Save the registration on the server and tell Ferri about a new one. */
+async function join(userId: string, profile: Profile): Promise<Status> {
+  let saved: { status: Status; created: boolean } | null = null;
+  let failed = "";
+  try {
+    saved = await saveRegistration(userId, profile);
+  } catch (err) {
+    failed = (err as Error).message;
+  }
+  if (!saved) return go("/register", `Could not save your registration: ${failed}`);
+  // A new registration only: an edit (or a second click) tells the crew nothing.
+  if (saved.created) {
+    const count = await countOf().catch(() => 0);
+    await tellFerri({ type: "registration", id: userId, email: profile.email, name: profile.name, status: saved.status, count });
+  }
+  return saved.status;
+}
+
 // ── Participants ─────────────────────────────────────────────────────────
 
 /**
@@ -53,6 +83,15 @@ export async function register(form: FormData) {
   const teamName = str(form, "team_name", 80) || null;
   const dietary = str(form, "dietary", 200) || null;
   const consent = form.get("consent") === "on";
+  const profile = (address: string): Profile => ({
+    name,
+    email: address,
+    role,
+    team_status: teamStatus,
+    team_name: teamStatus === "have_team" ? teamName : null,
+    dietary,
+    consent,
+  });
   let user = await currentUser();
 
   if (!name) go("/register", "Tell us your name.");
@@ -68,13 +107,10 @@ export async function register(form: FormData) {
       go(taken ? "/login" : "/register", taken ? "You already have an account. Sign in to finish." : created.error.message);
     }
     if (emailOn()) {
-      const row = { user_id: created.data.user!.id, name, email, role, team_status: teamStatus, team_name: teamStatus === "have_team" ? teamName : null, dietary, consent };
-      const saved = await adminClient().from("registrations").upsert(row);
-      if (saved.error) go("/register", `Could not save your registration: ${saved.error.message}`);
-      const { count } = await adminClient().from("registrations").select("*", { count: "exact", head: true });
-      await tellFerri({ type: "registration", count: count ?? 0, name });
+      const id = created.data.user!.id;
+      const status = await join(id, profile(email));
       const failed = await sendLink(email);
-      if (!failed) go("/login", `You're registered. We sent a link to ${email}: open it to confirm your email and sign in.`);
+      if (!failed) go("/login", `${await standing(id, status)} We sent a link to ${email}: open it to confirm your email and sign in.`);
       // The email did not go out: confirm the account here, so nobody is stuck.
       await adminClient().auth.admin.updateUserById(created.data.user!.id, { email_confirm: true });
     }
@@ -83,27 +119,48 @@ export async function register(form: FormData) {
     user = signed.data.user;
   }
 
-  const db = await userClient();
-  const { data: before } = await db.from("registrations").select("user_id").eq("user_id", user!.id).maybeSingle();
-  const { error } = await db.from("registrations").upsert({
-    user_id: user!.id,
-    name,
-    email: user!.email ?? email,
-    role,
-    team_status: teamStatus,
-    team_name: teamStatus === "have_team" ? teamName : null,
-    dietary,
-    consent,
-  });
-  if (error) go("/register", `Could not save your registration: ${error.message}`);
-
-  // A new registration only: an edit (or a second click) tells the crew nothing.
-  if (!before) {
-    const { count } = await adminClient().from("registrations").select("*", { count: "exact", head: true });
-    await tellFerri({ type: "registration", count: count ?? 0, name });
-  }
+  // The server writes the row with the secret key, for the signed-in person only.
+  const status = await join(user!.id, profile(user!.email ?? email));
   revalidatePath("/me");
-  go("/me", "You're registered. See you there!");
+  go("/me", await standing(user!.id, status));
+}
+
+/** Free my spot (or leave the waitlist). The spot goes back to the crew and Ferri. */
+export async function freeSpot() {
+  const user = await currentUser();
+  if (!user) return go("/login", "Sign in first.");
+  let done: Awaited<ReturnType<typeof cancel>> = null;
+  let failed = "";
+  try {
+    done = await cancel(user.id);
+  } catch (err) {
+    failed = (err as Error).message;
+  }
+  if (failed) go("/me", `That did not work just now: ${failed}`);
+  if (!done) go("/me", "There was no spot to free.");
+  const count = await countOf("going").catch(() => 0);
+  await tellFerri({ type: "cancelled", id: user.id, email: done!.email, name: done!.name, count });
+  revalidatePath("/me");
+  go("/me", done!.was === "waitlist" ? "You left the waitlist." : "Done. Your spot is free for someone else. Thanks for telling us.");
+}
+
+/** Someone who freed their spot registers again: a spot if there is room, else the waitlist. */
+export async function registerAgain() {
+  const user = await currentUser();
+  if (!user) return go("/login", "Sign in first.");
+  if (!event.registration.open) go("/me", "Registration is closed.");
+  let back: Awaited<ReturnType<typeof rejoin>> = null;
+  let failed = "";
+  try {
+    back = await rejoin(user.id);
+  } catch (err) {
+    failed = (err as Error).message;
+  }
+  if (failed) go("/me", `That did not work just now: ${failed}`);
+  if (!back) go("/me", "You are already on the list.");
+  await tellFerri({ type: "status", id: user.id, email: back!.email, name: back!.name, status: back!.status });
+  revalidatePath("/me");
+  go("/me", back!.status === "going" ? "You're going again. See you there!" : await standing(user.id, back!.status));
 }
 
 export async function signIn(form: FormData) {

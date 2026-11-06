@@ -4,6 +4,7 @@ import { announcementList, type AnnouncementView } from "./announce";
 import { casesFor, openCaseCount, type CaseView } from "./care";
 import { community, db } from "./db";
 import { cards, crewForSwitchEmail, crewMembers, events, questions, spaces } from "./ferri";
+import { guestCardInfo } from "./guests";
 import type { DeskUser } from "./session";
 
 /** The crew rows linked to this Switch account (by `handles.switch`). Empty: not linked yet. */
@@ -87,6 +88,7 @@ export async function openCards(user: DeskUser) {
   const targetBy = new Map(targets.map((t) => [t.roomId, t]));
   const announceBy = await announcementsFor(rows);
   const careBy = await casesFor(rows.map((r) => r.careCaseId).filter((x): x is string => !!x));
+  const guestBy = await guestCardInfo(rows);
   return rows.map((r) => {
     const owners = r.ownerIds.map((id) => ownerName.get(id) ?? "?");
     const forMe = !myIds.size || r.ownerIds.some((id) => myIds.has(id)) || !!r.escalatedAt || !r.ownerIds.length;
@@ -95,7 +97,7 @@ export async function openCards(user: DeskUser) {
       : r.ownerIds.some((id) => myIds.has(id))
         ? r.kind === "care"
           ? "your case"
-          : r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach"
+          : r.kind === "reply" || r.kind === "announce" || r.kind === "plan" || r.kind === "outreach" || r.kind === "guests" || r.kind === "spot"
             ? "your OK"
             : `you own ${r.topic}`
         : r.escalatedAt
@@ -111,6 +113,8 @@ export async function openCards(user: DeskUser) {
       announcement: r.announcementId ? (announceBy.get(r.announcementId) ?? null) : null,
       /** Care cards (spec 16): the case behind the card. */
       care: r.careCaseId ? (careBy.get(r.careCaseId) ?? null) : null,
+      /** Guests and spot cards (spec 17): the send or the waitlisted guest behind the card. */
+      guestCard: guestBy.get(r.id) ?? null,
     };
   });
 }
@@ -133,7 +137,8 @@ export async function pocketCard(user: DeskUser, id: string) {
     .where(eq(questions.cardId, id));
   const announcement = row.announcementId ? ((await announcementsFor([row])).get(row.announcementId) ?? null) : null;
   const care: CaseView | null = row.careCaseId ? ((await casesFor([row.careCaseId])).get(row.careCaseId) ?? null) : null;
-  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null, announcement, care };
+  const guestCard = (await guestCardInfo([row])).get(row.id) ?? null;
+  return { ...row, owners: [] as string[], forMe: false, why: row.status, waiting: [] as Waiting[], asked, target: null, announcement, care, guestCard };
 }
 
 /** Members waiting on the crew right now (longest first), and who never got an answer in the last day. */

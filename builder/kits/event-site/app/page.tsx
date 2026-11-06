@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { event, isPlaceholder } from "@/lib/event";
+import { capacity, event, isPlaceholder } from "@/lib/event";
 
 /** A fact, with a placeholder the Builder could not fill shown as such. */
 function T({ v }: { v: string }) {
@@ -46,6 +46,7 @@ export default function Home() {
               <b>Registration</b>
               {e.registration.open ? "Open" : "Closed"}
               {e.registration.closes ? <div className="muted">Closes <T v={e.registration.closes} /></div> : null}
+              {capacity !== null ? <div className="muted">{capacity} spots, then a waitlist</div> : null}
             </div>
           </div>
           {e.registration.open ? (

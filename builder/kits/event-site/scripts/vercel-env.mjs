@@ -33,7 +33,8 @@ const scopeArgs = scope ? ["--scope", scope] : [];
 // The project's keys, read straight into memory.
 const keys = run("supabase", ["projects", "api-keys", "--project-ref", ref, "-o", "json"]);
 if (!keys.ok) throw new Error(`supabase projects api-keys failed:\n${keys.out.slice(-800)}`);
-const list = JSON.parse(keys.out.slice(keys.out.indexOf("[")));
+// The CLI may print notices ("A new version of Supabase CLI is available") around the JSON: keep only the array.
+const list = JSON.parse(keys.out.slice(keys.out.indexOf("["), keys.out.lastIndexOf("]") + 1));
 const pick = (...names) => list.find((k) => names.includes(k.name) || names.includes(k.type))?.api_key;
 const anon = pick("anon", "publishable");
 const service = pick("service_role", "secret");

@@ -1,8 +1,14 @@
 import "server-only";
 import { event } from "./event";
+import type { Status } from "./rsvp";
 
 export type FerriEvent =
-  | { type: "registration"; count: number; name: string }
+  /** A new registration. `id` is the person's user id; `count` is every registration so far. */
+  | { type: "registration"; id: string; email: string; name: string; status: Status; count: number }
+  /** Someone freed their spot or left the waitlist. `count` is how many are going after it. */
+  | { type: "cancelled"; id: string; email: string; name: string; count: number }
+  /** Any other status change (a cancelled person registered again). */
+  | { type: "status"; id: string; email: string; name: string; status: Status }
   | { type: "pool_low"; sponsor: string; left: number; lowAt: number }
   | { type: "pool_refilled"; sponsor: string; left: number };
 

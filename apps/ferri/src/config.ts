@@ -60,6 +60,19 @@ export const config = {
   emailFrom: process.env.FERRI_EMAIL_FROM?.trim() || "partners@rudratechie.xyz",
   /** Outreach emails per 24 hours (Resend's free plan sends 100 a day in all). */
   emailDailyCap: Number(process.env.FERRI_EMAIL_DAILY_CAP ?? 20),
+  /** RSVP (spec 17): the guests' mailbox (the display name is the event's name), and guest emails per 24 hours. */
+  guestEmailFrom: process.env.FERRI_GUEST_EMAIL_FROM?.trim() || "events@rudratechie.xyz",
+  guestDailyCap: Number(process.env.FERRI_GUEST_EMAIL_DAILY_CAP ?? 80),
+  /** Tests and rehearsals: email only guests at these domains (comma-separated); others are skipped and noted. */
+  guestEmailAllow: (process.env.FERRI_GUEST_EMAIL_ALLOW ?? "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean),
+  /** Desk's public address (the tunnel): guests' RSVP links. */
+  publicUrl: process.env.FERRI_PUBLIC_URL?.trim() || "http://localhost:3100",
+  /** The event site's shared secret (its hook to Desk, and its guest route for Ferri). */
+  siteHookSecret: process.env.FERRI_SITE_HOOK_SECRET?.trim() || undefined,
+  /** Tests: read the site's guests from here instead of the address the Builder reported. */
+  siteUrlOverride: process.env.FERRI_SITE_URL?.trim() || undefined,
+  /** How often each live event's guests are synced from Luma and the site. */
+  guestSyncMs: Number(process.env.FERRI_GUEST_SYNC_SECONDS ?? 600) * 1000,
   outcomePollMs: 2000,
   ladderTickMs: 5000,
   /** How often Ferri asks Switch which rooms it is in (new ones land in Discovered, Off). */

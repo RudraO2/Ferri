@@ -19,6 +19,7 @@ import { createLaunch } from "./launch.ts";
 import { createPlan } from "./plan.ts";
 import { createOutreach } from "./outreach.ts";
 import { createCare } from "./care.ts";
+import { createGuests } from "./guests.ts";
 import { createShield } from "./shield.ts";
 import { createLoop, type RoomInfo } from "./loop.ts";
 import { RoomHistory, type RoomLine } from "./rooms.ts";
@@ -143,8 +144,12 @@ builder.setProspectsHook(outreach.prospectsReady);
 const care = createCare({ db, agent, loop, builder, room, log });
 loop.setCareHooks(care.hooks);
 builder.setHelpHooks(care.helpHooks);
+const guests = createGuests({ db, agent, loop, room, log });
+loop.setGuestHooks(guests.sendHooks, guests.spotHooks);
+outreach.setGuestsHook(guests);
+builder.setSiteGuestHook(guests.siteEvent);
 log(outreach.enabled ? `email: on, from ${outreach.mailbox}` : "email: off (no RESEND_API_KEY)");
-const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, skills, room, log });
+const onMessage = createFlow({ db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, skills, room, log });
 const stopLoop = loop.start();
 const shield = await createShield({ db, loop, log }).start();
 await discover();
@@ -161,6 +166,8 @@ const timers = [
   setInterval(() => void outreach.tick(), config.ladderTickMs),
   // Care: Desk and Pocket actions on cases, cards held by the pause, check-ins, the Builder's rooms.
   setInterval(() => void care.tick(), config.ladderTickMs),
+  // RSVP: guest syncs (Luma, the site), RSVP answers, the waitlist, sends to guests, Ferri's own proposals.
+  setInterval(() => void guests.tick(), config.ladderTickMs),
 ];
 void launch.tick();
 void watchMirror();

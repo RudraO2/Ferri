@@ -16,6 +16,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Pocket's sign-in, service worker, manifest and icons load without a session.
-  matcher: ["/((?!login|api/site|api/email|m/login|m/sw\.js|m/manifest\.webmanifest|m/icon|_next/|favicon.ico).*)"],
+  // Pocket's sign-in, service worker, manifest and icons load without a session,
+  // and so do guests' own RSVP pages (/rsvp/<code>, spec 17).
+  matcher: ["/((?!login|api/site|api/email|rsvp/|m/login|m/sw\.js|m/manifest\.webmanifest|m/icon|_next/|favicon.ico).*)"],
 };

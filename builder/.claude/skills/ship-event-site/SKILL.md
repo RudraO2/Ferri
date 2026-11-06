@@ -5,7 +5,7 @@ description: Build and ship a community event's full website (landing, registrat
 
 # Ship the event site
 
-You ship the event's site from the kit in `kits/event-site` (Next.js, Supabase, plain CSS). The kit already does registration, sign-in, "my registration", sponsor credit claiming (atomic, one code per person per sponsor, audit log, revoke) and an admin view. Your work: fill in the event's facts, create its database, deploy it, and report. Work through the steps in order. Keep the crew informed with one short message when you start and one when it is live; nothing in between unless something needs them.
+You ship the event's site from the kit in `kits/event-site` (Next.js, Supabase, plain CSS). The kit already does registration, sign-in, "my registration", sponsor credit claiming (atomic, one code per person per sponsor, audit log, revoke), a guest list with a waitlist (each registration is going, waitlist or cancelled; people free their spot or register again on "my registration"; Ferri reads and moves guests through `/api/ferri/guests`) and an admin view. Your work: fill in the event's facts, create its database, deploy it, and report. Work through the steps in order. Keep the crew informed with one short message when you start and one when it is live; nothing in between unless something needs them.
 
 Never write a key, a password or a secret into the room, a report or a file outside the job folder.
 
@@ -19,14 +19,15 @@ Copy `kits/event-site` (everything except `node_modules`, `.next`, `.vercel`) to
 
 ## 2. The event's facts
 Read the room's documents with `load_internal_documents` (Ferri's knowledge and the event plan). Write `content/event.json` with exactly the shape of `EventContent` in `lib/event.ts`:
-- name, tagline (one line), community, dates, timeLine, venue (name, address, mapUrl only if the documents give a link, notes), about (2 or 3 short paragraphs), whoCanJoin, schedule (days with time and what), faq (the members' common questions with their answers), sponsors (name and what participants get), rules, contact, registration (closes, note, open), accent (a CSS colour that suits the event).
+- name, tagline (one line), community, dates, timeLine, venue (name, address, mapUrl only if the documents give a link, notes), about (2 or 3 short paragraphs), whoCanJoin, schedule (days with time and what), faq (the members' common questions with their answers), sponsors (name and what participants get), rules, contact, registration (closes, note, open), capacity, accent (a CSS colour that suits the event).
+- capacity: how many people the room holds, as a number, only when the documents give one (a venue limit, "100 seats"). Once that many are going, new registrations join the waitlist. No number in the documents: `null` (no limit, everyone is going, no waitlist). Never guess it, and never leave it as a placeholder.
 - Use only what the documents say. Decided items in the plan win over older knowledge. A fact you cannot find stays a placeholder in square brackets (`"[venue address]"`), which the page shows highlighted; list every placeholder in your report.
 
 ## 3. Check it builds
 `npm ci` then `npm run build`. Fix anything you broke in `content/event.json`. Do not change the kit's code unless the build fails because of it.
 
 ## 4. The database (Supabase)
-Run `node scripts/supabase-up.mjs <slug> <absolute path to .ferri/site.json>` from the site folder. It creates the Supabase project (or reuses the one with the slug's name), waits until it is up, and applies the schema. The database password stays in `.env.local`; it prints nothing secret. A brand-new project takes 2 to 4 minutes; let the script wait. If it fails, read its message, fix what it says, and run it again (it is safe to repeat). On a second job for the same event, copy `.env.local` from the earlier job's site folder first.
+Run `node scripts/supabase-up.mjs <slug> <absolute path to .ferri/site.json>` from the site folder. It creates the Supabase project (or reuses the one with the slug's name), waits until it is up, and applies the schema: every file in `supabase/migrations`, the guest list (RSVP) migration included. The database password stays in `.env.local`; it prints nothing secret. A brand-new project takes 2 to 4 minutes; let the script wait. If it fails, read its message, fix what it says, and run it again (it is safe to repeat). On a second job for the same event, copy `.env.local` from the earlier job's site folder first.
 
 ## 5. The Vercel project
 Run `node scripts/vercel-env.mjs <slug> <absolute path to .ferri/site.json> <job id>`. It links the Vercel project and sets the production variables (the Supabase address and keys, the admins, Ferri's hook) without printing any value.

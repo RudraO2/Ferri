@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { event } from "@/lib/event";
+import { capacity, event } from "@/lib/event";
+import { counts, waitlistOrder } from "@/lib/rsvp";
 import { adminClient, currentUser, isAdmin } from "@/lib/supabase";
 import { addCodes, addSponsor, revoke, setLowAt } from "../actions";
 import { Msg } from "../msg";
@@ -12,6 +13,7 @@ interface Reg {
   team_status: string;
   team_name: string | null;
   dietary: string | null;
+  status: "going" | "waitlist" | "cancelled";
   created_at: string;
 }
 interface Code {
@@ -30,16 +32,19 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   const user = await currentUser();
   if (!isAdmin(user)) redirect("/login?msg=" + encodeURIComponent("Sign in with an organizer account."));
   const db = adminClient();
-  const [{ data: regs }, { data: sponsors }, { data: codes }, { data: log }] = await Promise.all([
+  const [{ data: regs }, { data: sponsors }, { data: codes }, { data: log }, tally, queue] = await Promise.all([
     db.from("registrations").select("*").order("created_at", { ascending: false }).limit(1000),
     db.from("sponsors").select("*").order("name"),
     db.from("sponsor_codes").select("*").limit(10000),
     db.from("claim_log").select("*").order("at", { ascending: false }).limit(30),
+    counts(),
+    waitlistOrder(),
   ]);
   const people = new Map((regs as Reg[] | null ?? []).map((r) => [r.user_id, r]));
   const all = (codes as Code[] | null) ?? [];
   const byRole = (regs as Reg[] | null ?? []).reduce<Record<string, number>>((m, r) => ((m[r.role] = (m[r.role] ?? 0) + 1), m), {});
-  const looking = (regs as Reg[] | null ?? []).filter((r) => r.team_status === "looking").length;
+  const looking = (regs as Reg[] | null ?? []).filter((r) => r.team_status === "looking" && r.status !== "cancelled").length;
+  const place = new Map(queue.map((id, i) => [id, i + 1]));
 
   return (
     <div className="wrap page">
@@ -49,7 +54,13 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
 
       <div className="stats">
         <div className="card">
-          <b>{regs?.length ?? 0}</b>registered
+          <b>{tally.going}</b>going{capacity !== null ? ` of ${capacity} spots` : ""}
+        </div>
+        <div className="card">
+          <b>{tally.waitlist}</b>on the waitlist
+        </div>
+        <div className="card">
+          <b>{tally.cancelled}</b>freed their spot
         </div>
         <div className="card">
           <b>{looking}</b>looking for a team
@@ -149,12 +160,16 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
       <h2 style={{ marginTop: 40 }}>
         Registrations <a href="/admin/export" className="link" style={{ fontSize: "0.9rem", marginLeft: 12 }}>Download CSV</a>
       </h2>
-      <p className="muted">{Object.entries(byRole).map(([r, n]) => `${n} ${r}`).join(" · ")}</p>
+      <p className="muted">
+        {capacity !== null ? `Capacity ${capacity} · ${Math.max(0, capacity - tally.going)} spots open · ` : "No capacity set: everyone is going · "}
+        {Object.entries(byRole).map(([r, n]) => `${n} ${r}`).join(" · ")}
+      </p>
       <div className="card" style={{ overflowX: "auto" }}>
         <table>
           <thead>
             <tr>
               <th>Name</th>
+              <th>Status</th>
               <th>Email</th>
               <th>Role</th>
               <th>Team</th>
@@ -166,6 +181,15 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
             {(regs as Reg[] | null ?? []).map((r) => (
               <tr key={r.user_id}>
                 <td>{r.name}</td>
+                <td>
+                  {r.status === "waitlist" ? (
+                    <span className="pill warn">waitlist{place.get(r.user_id) ? ` #${place.get(r.user_id)}` : ""}</span>
+                  ) : r.status === "cancelled" ? (
+                    <span className="pill">cancelled</span>
+                  ) : (
+                    <span className="pill ok">going</span>
+                  )}
+                </td>
                 <td>{r.email}</td>
                 <td>{r.role}</td>
                 <td>{r.team_status === "have_team" ? r.team_name ?? "has a team" : r.team_status.replace("_", " ")}</td>

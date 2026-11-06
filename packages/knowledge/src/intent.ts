@@ -7,7 +7,7 @@ import { TOPICS, type ChatLine } from "./triage.ts";
 // ── What a crew member means when they talk to Ferri ─────────────────────
 
 export const CrewIntentSchema = z.strictObject({
-  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "question", "other"]),
+  intent: z.enum(["answer_card", "remember", "announce", "remind", "team_rooms", "plan", "build", "outreach", "care", "guests", "question", "other"]),
   card: z.string().nullable(),
   answer: z.string(),
   facts: z.array(z.strictObject({ heading: z.string(), text: z.string() })),
@@ -46,11 +46,22 @@ export const CrewIntentSchema = z.strictObject({
       what: z.string(),
     })
     .nullable(),
+  /** guests: the people registered for the event, by email (spec 17). */
+  guests: z
+    .strictObject({
+      action: z.enum(["remind", "nudge", "status", "sync"]),
+      audience: z.enum(["going", "waitlist"]),
+      what: z.string(),
+      /** ISO 8601, or "" for as soon as it is approved (not nullable: the schema allows 16 unions at most). */
+      when: z.string(),
+    })
+    .nullable(),
   /** care: members who need a person (spec 16). */
   care: z
     .strictObject({
       action: z.enum(["mine", "builder", "solved", "drop", "message", "reopen", "status"]),
-      case: z.number().int().nullable(),
+      /** The case number, 0 for none (not nullable: the schema allows 16 unions at most). */
+      case: z.number().int(),
       note: z.string(),
     })
     .nullable(),
@@ -95,9 +106,17 @@ facts: every fact in the message that is not part of the card answer, each as a 
   - message: they want words passed to the member of a case ("tell Meera in case 3 to come to the help desk"). care.note is what to tell the member, as a standalone message to them.
   - reopen: a closed case needs attention again ("reopen case 3").
   - status: they ask who needs help ("who's stuck?", "any open cases?", "how is case 3 going?").
-  care.case is the case number they mean (3 for "case 3"), or the number of the open case about the person they name; null when none fits (and for status about all cases). care.note is "" unless the action says otherwise. Telling everyone something is announce; answering a member's question card is answer_card; care is only about cases.
+  care.case is the case number they mean (3 for "case 3"), or the number of the open case about the person they name; 0 when none fits (and for status about all cases). care.note is "" unless the action says otherwise. Telling everyone something is announce; answering a member's question card is answer_card; care is only about cases.
 
-For every intent, announce, remind, plan, build, outreach and care are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build, outreach and care.
+- guests: the people registered for the event (its guest list from the event site, Luma or an import), by email. guests.action:
+  - remind: email the registered guests a reminder ("remind the guests tomorrow at 9 AM to bring their laptops and ID", "email everyone who registered that doors open at 9", "send the attendees a reminder about the venue"). guests.what is what it should say, in their words; guests.when is when to send it, ISO 8601 with the offset, or "" for as soon as it is approved.
+  - nudge: ask the registered guests to confirm they are still coming or free their spot for the waitlist ("ask everyone who can't come to free their spot", "nudge the guests to confirm").
+  - status: how many are coming, who is on the waitlist ("how many people are coming?", "who's on the waitlist?", "how many registered?").
+  - sync: refresh the guest list from Luma and the site now ("sync the guest list", "pull the Luma guests").
+  guests.audience is "waitlist" only when they ask to write to the people on the waitlist, else "going". what and when are "" for status and sync.
+  Telling the members in the chat spaces is announce; a reminder for the crew themselves is remind; emailing the registered guests is guests.
+
+For every intent, announce, remind, plan, build, outreach, care and guests are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan, build, outreach, care and guests.
 
 "remember X" only teaches Ferri; "tell everyone X" is announce. A statement that answers an open card is answer_card even when it starts with "remember". When several cards fit, pick the one it answers best.`;
 
@@ -140,6 +159,11 @@ export async function crewIntent(input: {
     maxTokens: 2500,
   });
   const intent = out.data;
+  // "other" or "question" with exactly one intent's details filled in: that intent (Haiku sometimes labels it loosely).
+  if (intent && (intent.intent === "other" || intent.intent === "question")) {
+    const filled = (["announce", "remind", "plan", "build", "outreach", "care", "guests"] as const).filter((k) => intent[k] !== null);
+    if (filled.length === 1) intent.intent = filled[0]!;
+  }
   let card =
     intent?.intent === "answer_card" && intent.card ? (byShort.get(intent.card.trim().toUpperCase()) ?? null) : null;
   // "answer_card" with no usable id but exactly one card open: that one.

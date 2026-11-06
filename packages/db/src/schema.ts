@@ -66,6 +66,14 @@ export const events = pgTable(
     deskEditedAt: timestamp("desk_edited_at", { withTimezone: true }),
     /** This event's crew is managed in Desk; the seed leaves it alone. */
     crewFromDesk: boolean("crew_from_desk").notNull().default(false),
+    /** How many people can come (spec 17); beyond it, registrations wait on the waitlist. */
+    capacity: integer("capacity"),
+    /** The event's Luma listing (`evt-...`), from the Builder's listing job, for the guest sync. */
+    lumaEventId: text("luma_event_id"),
+    /** Desk's "Sync now": Ferri syncs every source of this event's guests at its next tick. */
+    guestSyncRequestedAt: timestamp("guest_sync_requested_at", { withTimezone: true }),
+    /** Per source ("site", "luma"): the last sync, its result and any error. */
+    guestSync: jsonb("guest_sync").$type<Record<string, { at: string; ok: boolean; count: number; error?: string | null }>>(),
     ...timestamps,
   },
   (t) => [uniqueIndex("events_community_slug").on(t.communityId, t.slug)],
@@ -295,8 +303,10 @@ export const cardStatus = pgEnum("card_status", ["open", "answered", "dismissed"
  * "announce": a version of an announcement waits for its one approval (spec 09).
  * "outreach": an email to a partner waits for its one approval (spec 15).
  * "care": a member needs a person; the card asks who takes the case (spec 16).
+ * "guests": an email to the event's guests (reminder, nudge) waits for its one approval (spec 17).
+ * "spot": a freed spot waits to be offered to the next person on the waitlist (spec 17).
  */
-export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach", "care"]);
+export const cardKind = pgEnum("card_kind", ["question", "reply", "announce", "plan", "outreach", "care", "guests", "spot"]);
 
 export const cards = pgTable(
   "cards",
@@ -323,6 +333,9 @@ export const cards = pgTable(
     contactMessageId: uuid("contact_message_id"),
     /** Care cards: the case this card asks the crew to take (spec 16). */
     careCaseId: uuid("care_case_id"),
+    /** Guest cards (spec 17): the send this card approves, or the waitlisted guest a spot card offers to. */
+    guestSendId: uuid("guest_send_id"),
+    guestId: uuid("guest_id"),
     topic: text("topic").notNull(),
     /** Short canonical English form of the question, used for matching and as the saved heading. */
     question: text("question").notNull(),
@@ -922,6 +935,125 @@ export const careNotes = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("care_notes_case").on(t.caseId, t.createdAt)],
+);
+
+// ── RSVP (spec 17): the guest list, sends to guests, the waitlist ──────────
+
+/**
+ * One person registered for an event, from wherever they registered (the
+ * event site, Luma, an imported list, Desk). One row per email per event.
+ * `code` is their private RSVP link (/rsvp/<code>) and reply address
+ * (events+<code>@domain).
+ */
+export const guests = pgTable(
+  "guests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    /** Where they registered: "site", "luma", "import", "desk". */
+    sources: text("sources").array().notNull().default(sql`'{}'::text[]`),
+    /** Their id on the event site (Supabase user id) and on Luma (`gst-...`). */
+    siteId: text("site_id"),
+    lumaId: text("luma_id"),
+    /** "going", "waitlist", "pending" (waits for the host's approval), "not_going". */
+    status: text("status").notNull().default("going"),
+    /** The status each source last reported ("approved", "waitlist", "cancelled", ...). */
+    lumaStatus: text("luma_status"),
+    siteStatus: text("site_status"),
+    team: text("team"),
+    code: text("code").notNull().unique(),
+    registeredAt: timestamp("registered_at", { withTimezone: true }),
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+    /** Said "I'm coming" on their RSVP link or in a reply. */
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    /** Freed their spot (RSVP link, reply, the site's button, or a source showing them not going). */
+    freedAt: timestamp("freed_at", { withTimezone: true }),
+    /** Ferri dealt with the freed spot (offered it, or nobody was waiting). */
+    spotHandledAt: timestamp("spot_handled_at", { withTimezone: true }),
+    /** A spot was offered to them (waitlist), until when. */
+    offeredAt: timestamp("offered_at", { withTimezone: true }),
+    offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }),
+    /** The guest's answer on their RSVP page ("yes", "no", "take"), recorded by Desk and applied by Ferri's tick. */
+    rsvpAnswer: text("rsvp_answer"),
+    rsvpAt: timestamp("rsvp_at", { withTimezone: true }),
+    rsvpHandledAt: timestamp("rsvp_handled_at", { withTimezone: true }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("guests_event_email").on(t.eventId, t.email), index("guests_event_status").on(t.eventId, t.status)],
+);
+
+/** One email to many guests (a reminder, a free-your-spot nudge) or to one (a spot offer), approved on one card. */
+export const guestSends = pgTable(
+  "guest_sends",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    /** "reminder", "nudge" or "offer". */
+    kind: text("kind").notNull(),
+    /** "going", "waitlist", or "listed" (exactly `guestIds`). */
+    audience: text("audience").notNull().default("going"),
+    guestIds: uuid("guest_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** What the crew asked it to say. */
+    ask: text("ask"),
+    subject: text("subject"),
+    /** The body, with {first} for the guest's first name; the RSVP lines are added per guest. */
+    text: text("text"),
+    /** "requested" (to draft), "drafting", "waiting" (card open), "scheduled", "sending", "sent", "dismissed", "expired", "failed". */
+    status: text("status").notNull().default("requested"),
+    cardId: uuid("card_id"),
+    /** Null: as soon as it is approved. */
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    total: integer("total").notNull().default(0),
+    sent: integer("sent").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    requestedBy: text("requested_by").notNull(),
+    requestedById: uuid("requested_by_id").references(() => crewMembers.id, { onDelete: "set null" }),
+    /** "chat", "desk", "pocket" or "ferri" (Ferri proposed it). */
+    origin: text("origin").notNull(),
+    sourceMessageId: text("source_message_id").unique(),
+    /** Ferri's own proposals ("reminder:<event id>"), so each is offered once. */
+    autoKey: text("auto_key").unique(),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [index("guest_sends_status").on(t.status)],
+);
+
+/** One guest's copy of a send. */
+export const guestMails = pgTable(
+  "guest_mails",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sendId: uuid("send_id")
+      .notNull()
+      .references(() => guestSends.id, { onDelete: "cascade" }),
+    guestId: uuid("guest_id")
+      .notNull()
+      .references(() => guests.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    resendId: text("resend_id").unique(),
+    /** "queued", "sent", "delivered", "bounced", "complained", "failed". */
+    status: text("status").notNull().default("queued"),
+    error: text("error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("guest_mails_send_guest").on(t.sendId, t.guestId), index("guest_mails_status").on(t.status, t.sentAt)],
 );
 
 /** What Resend's webhook delivered (spec 15): received, delivered, bounced, complained. Ferri handles them in its tick. */

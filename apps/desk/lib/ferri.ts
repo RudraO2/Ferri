@@ -59,6 +59,22 @@ export {
   openCases,
   type CareCase,
   type CareNote,
+  GUEST_SOURCES,
+  GUEST_STATUSES,
+  GUEST_STATUS_LABEL,
+  SEND_KINDS,
+  SEND_KIND_LABEL,
+  countsLine,
+  firstName as guestFirstName,
+  guestCounts,
+  listGuests,
+  parseGuestCsv,
+  recentSends,
+  rsvpUrl,
+  upsertGuest,
+  type Guest,
+  type GuestMail,
+  type GuestSend,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

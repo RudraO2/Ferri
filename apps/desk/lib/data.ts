@@ -31,7 +31,7 @@ export async function overview() {
   const c = await community();
   const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
   const n = sql<number>`count(*)::int`;
-  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen] = await Promise.all([
+  const [openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen, guestsWaiting] = await Promise.all([
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "question")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "reply")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "expired"), eq(cards.kind, "question")))),
@@ -41,6 +41,8 @@ export async function overview() {
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "plan")))),
     count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), eq(cards.kind, "outreach")))),
     count(db().select({ n }).from(careCases).where(and(eq(careCases.communityId, c.id), inArray(careCases.status, [...CARE_OPEN])))),
+    // Spec 17: emails to guests and freed spots waiting for an OK.
+    count(db().select({ n }).from(cards).where(and(eq(cards.communityId, c.id), eq(cards.status, "open"), inArray(cards.kind, ["guests", "spot"])))),
   ]);
   const recent = await db()
     .select({
@@ -57,7 +59,7 @@ export async function overview() {
     .where(eq(questions.communityId, c.id))
     .orderBy(desc(questions.askedAt))
     .limit(15);
-  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen, recent };
+  return { community: c, openQuestions, repliesWaiting, unanswered, discovered, entries, announcementsWaiting, planWaiting, emailsWaiting, casesOpen, guestsWaiting, recent };
 }
 
 export async function cardLists() {

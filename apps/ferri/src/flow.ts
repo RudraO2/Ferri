@@ -42,6 +42,7 @@ import type { Launch } from "./launch.ts";
 import type { Plan } from "./plan.ts";
 import type { Outreach } from "./outreach.ts";
 import type { Care } from "./care.ts";
+import type { Guests } from "./guests.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
 import { mentionRegex } from "./mentions.ts";
 import type { RoomHistory, RoomLine } from "./rooms.ts";
@@ -58,6 +59,7 @@ export interface FlowDeps {
   builder: Builder;
   outreach: Outreach;
   care: Care;
+  guests: Guests;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -101,7 +103,7 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, plan, builder, outreach, care, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, builder, outreach, care, guests, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
   const builderRe = mentionRegex(builder.name);
@@ -410,6 +412,32 @@ export function createFlow(deps: FlowDeps) {
             sourceMessageId: p.message_id,
             roomId,
           }),
+      });
+      if (reply) await say(reply);
+      return;
+    }
+
+    // RSVP (spec 17): the registered guests: emails to them, how many are coming, a sync.
+    if (intent?.intent === "guests" && intent.guests) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "guests",
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      log(`crew ${member.name}: guests ${intent.guests.action}`);
+      const reply = await guests.intent({
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
+        member,
+        messageId: p.message_id,
+        roomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
+        guests: intent.guests,
       });
       if (reply) await say(reply);
       return;

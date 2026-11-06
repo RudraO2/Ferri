@@ -70,6 +70,11 @@ export function createOutreach(deps: OutreachDeps) {
   const { db, agent, loop, log } = deps;
   const mail = deps.mail !== undefined ? deps.mail : config.resendApiKey ? resend({ apiKey: config.resendApiKey }) : null;
   const mailbox = parseAddress(config.emailFrom)?.email ?? "partners@rudratechie.xyz";
+  /** RSVP (spec 17): mail to the guests' mailbox, and delivery events for guest mail. */
+  let guestsHook: {
+    onEmail(email: Awaited<ReturnType<Resend["received"]>>, to: string[]): Promise<boolean>;
+    onDelivery(resendId: string, status: "delivered" | "bounced" | "complained"): Promise<boolean>;
+  } | null = null;
 
   async function fromLine(communityId: string): Promise<string> {
     const named = parseAddress(config.emailFrom);
@@ -464,7 +469,10 @@ export function createOutreach(deps: OutreachDeps) {
     const status = type === "email.delivered" ? "delivered" : type === "email.bounced" ? "bounced" : type === "email.complained" ? "complained" : null;
     if (!status) return;
     const [m] = await db.select().from(contactMessages).where(eq(contactMessages.resendId, emailId)).limit(1);
-    if (!m) return;
+    if (!m) {
+      await guestsHook?.onDelivery(emailId, status);
+      return;
+    }
     // A later event never moves "delivered" back to "sent".
     await db.update(contactMessages).set({ status, updatedAt: new Date() }).where(eq(contactMessages.id, m.id));
     if (status === "delivered") return;
@@ -494,6 +502,7 @@ export function createOutreach(deps: OutreachDeps) {
       const e = parseAddress(a)?.email ?? "";
       return e === mailbox || e.startsWith(`${mailbox.split("@")[0]}+`) && e.endsWith(`@${mailbox.split("@")[1]}`);
     });
+    if (!forUs && sender && guestsHook && (await guestsHook.onEmail(email, to))) return;
     if (!forUs || !sender || sender.email === mailbox) {
       log(`outreach: email ${emailId} to ${to.join(", ")} is not for the partners mailbox; skipped`);
       return;
@@ -594,7 +603,18 @@ export function createOutreach(deps: OutreachDeps) {
     }
   }
 
-  return { intent, hooks, tick, prospectsReady, draftAndOpen, enabled: !!mail, mailbox };
+  return {
+    intent,
+    hooks,
+    tick,
+    prospectsReady,
+    draftAndOpen,
+    enabled: !!mail,
+    mailbox,
+    setGuestsHook: (h: NonNullable<typeof guestsHook>) => {
+      guestsHook = h;
+    },
+  };
 }
 
 export type Outreach = ReturnType<typeof createOutreach>;

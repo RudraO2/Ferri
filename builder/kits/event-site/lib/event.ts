@@ -18,11 +18,17 @@ export interface EventContent {
   rules: string[];
   contact: { text: string; email: string | null };
   registration: { closes: string | null; note: string | null; open: boolean };
+  /** How many people the room holds. Once that many are going, new registrations join the waitlist. Null: no limit. */
+  capacity?: number | null;
   /** Theme accent, a CSS color. */
   accent: string;
 }
 
 export const event = raw as EventContent;
+
+/** The capacity as a whole number of spots, or null for no limit (everyone is going). */
+export const capacity: number | null =
+  typeof event.capacity === "number" && Number.isFinite(event.capacity) && event.capacity >= 0 ? Math.floor(event.capacity) : null;
 
 /** A value the Builder could not find in the knowledge ("[venue address]"). Shown, never hidden. */
 export const isPlaceholder = (s: string | null | undefined) => !!s && /^\[.*\]$/.test(s.trim());

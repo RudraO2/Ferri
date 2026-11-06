@@ -13,5 +13,6 @@
   "rules": [],
   "contact": { "text": "[how to reach the organizers]", "email": null },
   "registration": { "closes": null, "note": null, "open": true },
+  "capacity": null,
   "accent": "#2563eb"
 }

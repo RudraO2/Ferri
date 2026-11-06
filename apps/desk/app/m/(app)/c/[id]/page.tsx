@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { caseView } from "@/lib/care";
 import { myCrew, pocketCard, waitedFor } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
-import { pocketAnswer, pocketSkip } from "../../../actions";
+import { pocketAnswer, pocketDontOffer, pocketOfferSpot, pocketSkip } from "../../../actions";
 import { Toast, Where } from "../../bits";
 import { CareScreen } from "../../care-case";
 import { community } from "@/lib/db";
-import { formatWhen } from "@/lib/ferri";
+import { SEND_KIND_LABEL, formatWhen } from "@/lib/ferri";
+import { audienceLine } from "@/lib/guests";
 import { AnnounceActions } from "./announce-actions";
+import { GuestSendActions } from "./guest-actions";
 import { PlanActions } from "./plan-actions";
 import { ReplyActions } from "./reply-actions";
 
@@ -40,7 +42,12 @@ export default async function CardPage({ params, searchParams }: { params: Promi
           ? "Plan decision"
           : card.kind === "outreach"
             ? "Email waiting for your OK"
+          : card.kind === "guests"
+            ? "Email to guests"
+          : card.kind === "spot"
+            ? "Spot to offer"
           : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
+  const gc = card.guestCard;
   return (
     <>
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
@@ -147,6 +154,45 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         </section>
       ) : null}
 
+      {open && card.kind === "guests" ? (
+        <section className="mt-4 px-4">
+          <p className="px-1 text-[13px] text-zinc-500">
+            {gc?.send ? `A ${SEND_KIND_LABEL[gc.send.kind] ?? gc.send.kind} to ` : "Goes to "}
+            {audienceLine(gc?.send?.audience ?? "going", gc?.count ?? null)}
+            {gc?.eventName ? ` of ${gc.eventName}` : ""}.{" "}
+            {gc?.send?.scheduledAt ? `It goes out at ${formatWhen(gc.send.scheduledAt, tz)}.` : "It goes out as soon as you send it."} Each guest gets their own copy with their
+            first name and their RSVP link.
+            {gc?.send ? (gc.send.origin === "ferri" ? " Ferri suggested it." : ` Asked by ${gc.send.requestedBy}.`) : ""}
+          </p>
+          {gc?.send?.subject ? (
+            <div className="mt-3 px-1 text-[14px]">
+              <span className="text-zinc-500">Subject: </span>
+              <span className="font-medium">{gc.send.subject}</span>
+            </div>
+          ) : null}
+          <GuestSendActions cardId={card.id} draft={card.draftText ?? ""} />
+        </section>
+      ) : null}
+
+      {open && card.kind === "spot" ? (
+        <section className="mt-4 px-4">
+          {gc?.guest ? (
+            <div className="px-1 text-[13px] text-zinc-500">
+              {gc.guest.name} · {gc.guest.email}
+              {gc.eventName ? ` · ${gc.eventName}` : ""}
+            </div>
+          ) : null}
+          {card.draftText ? <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{card.draftText}</div> : null}
+          <form action={pocketOfferSpot} className="mt-3 space-y-3">
+            <input type="hidden" name="cardId" value={card.id} />
+            <button className="btn-lg-primary w-full">Offer it</button>
+            <button className="btn-lg w-full" formAction={pocketDontOffer}>
+              Don&apos;t offer
+            </button>
+          </form>
+        </section>
+      ) : null}
+
       {open && card.kind === "reply" ? (
         <section className="mt-4 px-4">
           <div className="px-1">
@@ -176,6 +222,22 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                     : card.status === "expired"
                       ? "Not approved in time"
                       : "Replaced by a newer version"
+                : card.kind === "guests"
+                ? card.status === "answered"
+                  ? `Approved${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Not sent${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Not approved in time"
+                      : "Closed"
+                : card.kind === "spot"
+                ? card.status === "answered"
+                  ? `Offered${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
+                  : card.status === "dismissed"
+                    ? `Not offered${card.answeredBy ? ` · ${card.answeredBy}` : ""}`
+                    : card.status === "expired"
+                      ? "Not answered in time"
+                      : "Closed"
                 : card.status === "answered"
                 ? `${card.kind === "reply" ? "Reply sent" : card.kind === "outreach" ? "Email sent" : "Answered"}${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
                 : card.status === "dismissed"
@@ -202,9 +264,9 @@ export default async function CardPage({ params, searchParams }: { params: Promi
               </>
             ) : card.kind === "reply" ? (
               card.sentText ? <div className="mt-1 text-zinc-700">{card.sentText}</div> : null
-            ) : card.kind === "outreach" ? (
+            ) : card.kind === "outreach" || card.kind === "guests" ? (
               <div className="mt-1 whitespace-pre-wrap text-zinc-700">{card.answerText ?? card.draftText}</div>
-            ) : card.answerText ? (
+            ) : card.kind === "spot" ? null : card.answerText ? (
               <div className="mt-1 text-zinc-700">{card.answerText}</div>
             ) : null}
             {"asked" in card && card.asked.length ? (

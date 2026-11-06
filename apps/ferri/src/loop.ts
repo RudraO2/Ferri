@@ -91,6 +91,8 @@ export function createLoop(deps: LoopDeps) {
   let planHooks: AnnounceHooks | null = null;
   let outreachHooks: AnnounceHooks | null = null;
   let careHooks: AnnounceHooks | null = null;
+  let guestHooks: AnnounceHooks | null = null;
+  let spotHooks: AnnounceHooks | null = null;
 
   /**
    * Every post goes through here. While the master pause is on, nothing is
@@ -652,6 +654,14 @@ export function createLoop(deps: LoopDeps) {
       await careHooks?.expired(card);
       return true;
     }
+    if (card.kind === "guests") {
+      await guestHooks?.expired(card);
+      return true;
+    }
+    if (card.kind === "spot") {
+      await spotHooks?.expired(card);
+      return true;
+    }
     if (card.kind === "reply") {
       if (card.targetQuestionId) {
         await db
@@ -732,6 +742,10 @@ export function createLoop(deps: LoopDeps) {
       } else if (card.kind === "care") {
         if (!careHooks) throw new Error("care is not running yet");
         await careHooks.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
+      } else if (card.kind === "guests" || card.kind === "spot") {
+        const h = card.kind === "guests" ? guestHooks : spotHooks;
+        if (!h) throw new Error("guests are not running yet");
+        await h.outcome(card, { written: written || null, selected: a?.selected_option_ids ?? [] }, by);
       } else if (card.kind === "reply") {
         if (written) {
           const claimed = await claim(card.id, { status: "answered", answeredAt: new Date(), answeredBy: by, answeredVia: "card", answerText: written });
@@ -820,6 +834,10 @@ export function createLoop(deps: LoopDeps) {
             ? `the email “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
             : card.kind === "care"
             ? `${card.topic} still has nobody on it after ${minutesSince(card.createdAt)} min: ${card.question} Take it on the card above.`
+            : card.kind === "guests"
+            ? `the email to the guests “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min. It's on the card above.`
+            : card.kind === "spot"
+            ? `a free spot is still waiting: “${card.question}” (${minutesSince(card.createdAt)} min). It's on the card above.`
             : card.kind === "reply"
             ? `the reply to “${card.question}” is still waiting for your OK after ${minutesSince(card.createdAt)} min.`
             : `still open after ${minutesSince(card.createdAt)} min: “${card.question}”. ${plural(n, "person is", "people are")} waiting. ` +
@@ -854,6 +872,10 @@ export function createLoop(deps: LoopDeps) {
             ? `nobody has approved the email “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : card.kind === "care"
             ? `nobody has taken ${card.topic} for ${minutesSince(card.createdAt)} min: ${card.question} Whoever can, please take it.`
+            : card.kind === "guests"
+            ? `nobody has approved the email to the guests “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
+            : card.kind === "spot"
+            ? `nobody has decided “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please offer the spot or say don't.`
             : card.kind === "reply"
             ? `nobody has approved the reply to “${card.question}” for ${minutesSince(card.createdAt)} min. Whoever can, please send it or say don't send.`
             : `nobody has answered “${card.question}” for ${minutesSince(card.createdAt)} min, and ${plural(n, "person is", "people are")} waiting. Whoever knows, please answer.`;
@@ -929,6 +951,10 @@ export function createLoop(deps: LoopDeps) {
     },
     setCareHooks: (h: AnnounceHooks) => {
       careHooks = h;
+    },
+    setGuestHooks: (sends: AnnounceHooks, spots: AnnounceHooks) => {
+      guestHooks = sends;
+      spotHooks = spots;
     },
     openOrJoin,
     openReplyCard,

@@ -32,8 +32,13 @@ import {
   contacts,
   setContactStatus,
   upsertContact,
+  GUEST_STATUSES,
+  GUEST_STATUS_LABEL,
+  parseGuestCsv,
+  upsertGuest,
 } from "@/lib/ferri";
 import { answerRequest } from "@/lib/builder";
+import { SPOT_OFFER_OPTION, approvedNote, lumaEventIdFrom, requestSend } from "@/lib/guests";
 import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { careAction } from "@/lib/care";
@@ -640,4 +645,125 @@ export async function actOnCase(form: FormData) {
   revalidatePath("/care");
   revalidatePath("/m", "layout");
   back("/care", r.note);
+}
+
+// ── Guests and RSVP (spec 17) ────────────────────────────────────────────
+
+const guestsPath = (form: FormData) => `/guests${str(form, "eventSlug") ? `?event=${encodeURIComponent(str(form, "eventSlug"))}` : ""}`;
+
+/** Answer a guests or spot card; on success, say what happens next. */
+async function answerGuestCard(form: FormData, a: CardAnswer, done: string) {
+  const user = await requireUser();
+  const r = await answerAs(user, str(form, "cardId"), a);
+  revalidatePath("/guests");
+  revalidatePath("/m", "layout");
+  back(guestsPath(form), r.ok ? done : r.note);
+}
+
+/** Unchanged (or empty) text sends Ferri's draft; anything else sends the organizer's version. */
+export async function sendGuestEmail(form: FormData) {
+  const cardId = str(form, "cardId");
+  const a = await replyAnswer(cardId, str(form, "text"));
+  await answerGuestCard(form, a, await approvedNote(cardId, !!a.text));
+}
+
+export async function dropGuestEmail(form: FormData) {
+  await answerGuestCard(form, skip, "Okay. Nothing goes to the guests.");
+}
+
+export async function offerSpot(form: FormData) {
+  await answerGuestCard(form, { selected: [SPOT_OFFER_OPTION], text: null }, "Offered. Ferri emails them the spot now.");
+}
+
+export async function dropSpot(form: FormData) {
+  await answerGuestCard(form, skip, "Okay. The spot is not offered.");
+}
+
+/** Ask Ferri for a reminder or a free-your-spot nudge. Its card opens within seconds. */
+export async function requestGuestSend(form: FormData) {
+  const user = await requireUser();
+  const r = await requestSend(user, { eventId: str(form, "eventId"), what: str(form, "what"), ask: str(form, "ask"), when: str(form, "when"), origin: "desk" });
+  revalidatePath("/guests");
+  revalidatePath("/m", "layout");
+  back(guestsPath(form), r.note);
+}
+
+/** How many people can come, and the event's Luma listing (only its `evt-...` id is kept). */
+export async function saveGuestSettings(form: FormData) {
+  await requireUser();
+  const path = guestsPath(form);
+  const raw = str(form, "capacity");
+  const capacity = raw ? Number(raw) : null;
+  if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1)) return back(path, "Capacity is a whole number of people. Leave it empty for no limit.");
+  const luma = lumaEventIdFrom(str(form, "luma"));
+  await db().update(events).set({ capacity, lumaEventId: luma, updatedAt: new Date() }).where(eq(events.id, str(form, "eventId")));
+  revalidatePath("/guests");
+  back(
+    path,
+    luma && !luma.startsWith("evt-")
+      ? "Saved. That Luma address has no evt-... id in it, so the sync may not find the event. Paste the address of its Manage page on Luma instead."
+      : "Saved.",
+  );
+}
+
+/** Ferri syncs every source of the event's guests at its next tick. */
+export async function syncGuestsNow(form: FormData) {
+  await requireUser();
+  await db().update(events).set({ guestSyncRequestedAt: new Date() }).where(eq(events.id, str(form, "eventId")));
+  revalidatePath("/guests");
+  back(guestsPath(form), "Ferri syncs the guest list from every source in a few seconds.");
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** A pasted or uploaded CSV (Luma's export, a form's, a sheet): every row with an email is added or updated. */
+export async function importGuests(form: FormData) {
+  await requireUser();
+  const c = await community();
+  const path = guestsPath(form);
+  const eventId = str(form, "eventId");
+  if (!eventId) return back(path, "Pick the event first.");
+  const file = form.get("file");
+  const text = file instanceof File && file.size > 0 ? await file.text() : str(form, "csv");
+  if (!text.trim()) return back(path, "Paste the list or choose a CSV file first.");
+  const { rows, skipped } = parseGuestCsv(text);
+  if (!rows.length) return back(path, `Nothing was imported. ${skipped[0] ?? "No row has an email address."}`);
+  let added = 0;
+  let updated = 0;
+  let failed = 0;
+  for (const r of rows) {
+    try {
+      const { created } = await upsertGuest(db(), { communityId: c.id, eventId, email: r.email, name: r.name, source: "import", status: r.status, team: r.team });
+      if (created) added++;
+      else updated++;
+    } catch {
+      failed++;
+    }
+  }
+  revalidatePath("/guests");
+  const left = skipped.length + failed;
+  back(
+    path,
+    `Added ${plural(added, "new guest")} and updated ${plural(updated, "guest")} already on the list.` +
+      (left ? ` Skipped ${plural(left, "row")} without a valid email address.` : ""),
+  );
+}
+
+/** One guest by hand (source "desk"). */
+export async function addGuest(form: FormData) {
+  await requireUser();
+  const c = await community();
+  const path = guestsPath(form);
+  const status = str(form, "status") as (typeof GUEST_STATUSES)[number];
+  if (!GUEST_STATUSES.includes(status)) return back(path, "Pick a status.");
+  const email = str(form, "email").toLowerCase();
+  let result: Awaited<ReturnType<typeof upsertGuest>> | null = null;
+  try {
+    result = await upsertGuest(db(), { communityId: c.id, eventId: str(form, "eventId"), email, name: str(form, "name"), source: "desk", status });
+  } catch {
+    result = null;
+  }
+  if (!result) return back(path, `“${email}” doesn't look like an email address.`);
+  revalidatePath("/guests");
+  back(path, result.created ? `Added ${result.guest.name}.` : `${result.guest.name} was already on the list. They are ${GUEST_STATUS_LABEL[result.guest.status] ?? result.guest.status} now.`);
 }

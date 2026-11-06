@@ -5,6 +5,8 @@ import { Empty, Header, Toast, Where } from "./bits";
 import { PushNudge } from "./push";
 import { BuilderCards } from "./builder-cards";
 import { builderRequests } from "@/lib/builder";
+import { SEND_KIND_LABEL } from "@/lib/ferri";
+import { audienceLine } from "@/lib/guests";
 
 export default async function NeedsYou({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
@@ -30,7 +32,10 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
         </Link>
       ) : null}
       <PushNudge />
-      <div className="mx-4 mt-3 flex justify-end">
+      <div className="mx-4 mt-3 flex justify-end gap-2">
+        <Link href="/m/guests" className="btn-lg h-9 px-3 text-[14px]">
+          + Email guests
+        </Link>
         <Link href="/m/new" className="btn-lg h-9 px-3 text-[14px]">
           + Announce
         </Link>
@@ -75,7 +80,11 @@ function CardRow({ card }: { card: PocketCard }) {
                   ? "pill bg-sky-100 text-sky-800"
                   : card.kind === "care"
                     ? "pill bg-rose-100 text-rose-800"
-                    : "pill"
+                    : card.kind === "guests"
+                      ? "pill bg-indigo-100 text-indigo-800"
+                      : card.kind === "spot"
+                        ? "pill bg-teal-100 text-teal-800"
+                        : "pill"
           }
         >
           {card.kind === "announce"
@@ -88,7 +97,11 @@ function CardRow({ card }: { card: PocketCard }) {
                 ? "plan decision"
                 : card.kind === "outreach"
                   ? "email to approve"
-                  : card.topic}
+                  : card.kind === "guests"
+                    ? "email to guests"
+                    : card.kind === "spot"
+                      ? "spot to offer"
+                      : card.topic}
         </span>
         {card.kind === "care" && card.care?.urgent ? <span className="pill bg-red-600 text-white">urgent</span> : null}
         {card.escalatedAt ? (
@@ -110,6 +123,12 @@ function CardRow({ card }: { card: PocketCard }) {
           <span className="text-[12.5px] text-zinc-500">{card.topic} · from the agenda draft</span>
         ) : card.kind === "outreach" ? (
           <span className="text-[12.5px] text-zinc-500">from partners@rudratechie.xyz</span>
+        ) : card.kind === "guests" ? (
+          <span className="text-[12.5px] text-zinc-500">
+            {card.guestCard?.send ? `${SEND_KIND_LABEL[card.guestCard.send.kind] ?? card.guestCard.send.kind} · ` : ""}to {audienceLine(card.guestCard?.send?.audience ?? "going", card.guestCard?.count ?? null)}
+          </span>
+        ) : card.kind === "spot" ? (
+          <span className="text-[12.5px] text-zinc-500">{card.guestCard?.guest ? `for ${card.guestCard.guest.name}, on the waitlist` : "for the next person on the waitlist"}</span>
         ) : card.kind === "care" ? (
           card.care ? (
             <>
