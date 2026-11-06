@@ -655,3 +655,54 @@ export const shieldRules = pgTable(
   },
   (t) => [uniqueIndex("shield_rules_domain").on(t.communityId, t.domain)],
 );
+
+// ── Ferri Builder: jobs handed to the Claude Code agent Switch runs (spec 11) ─
+
+export const builderJobStatus = pgEnum("builder_job_status", [
+  "queued",
+  "handed",
+  "working",
+  "done",
+  "stuck",
+  "failed",
+  "cancelled",
+]);
+
+/** One piece of work handed to Ferri Builder (B1, B2, ... per community). */
+export const builderJobs = pgTable(
+  "builder_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** Short number: job B<number>. */
+    number: integer("number").notNull(),
+    /** "site", "checklist", "poster", "other". */
+    kind: text("kind").notNull().default("other"),
+    /** Short label ("Event one-page site"). */
+    title: text("title").notNull(),
+    /** What the crew asked for, in their words. */
+    brief: text("brief").notNull(),
+    status: builderJobStatus("status").notNull().default("queued"),
+    /** Who asked: a crew member's name, or "Desk". */
+    requestedBy: text("requested_by").notNull(),
+    requestedById: uuid("requested_by_id").references(() => crewMembers.id, { onDelete: "set null" }),
+    /** "chat" or "desk". */
+    origin: text("origin").notNull(),
+    /** The crew message that asked, so a replay starts nothing twice. */
+    sourceMessageId: text("source_message_id").unique(),
+    roomId: text("room_id"),
+    /** Ferri's hand-off message (send_targeted_message). */
+    handoffEventId: text("handoff_event_id"),
+    /** The Builder's last report ("Job B1 done: ..."). */
+    report: text("report"),
+    /** The Builder's folder for this job, relative to its working folder. */
+    folder: text("folder"),
+    handedAt: timestamp("handed_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("builder_jobs_number").on(t.communityId, t.number), index("builder_jobs_status").on(t.status)],
+);

@@ -9,7 +9,7 @@ import { crewMembers, deskUsers, pushLog, pushSubscriptions, type Db } from "@fe
  * that gets settled can replace the notifications it caused.
  */
 
-export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test" | "reminder" | "shield";
+export type PushKind = "open" | "nudge" | "escalate" | "expire" | "settled" | "test" | "reminder" | "shield" | "builder";
 
 export interface PushPayload {
   kind: PushKind;
@@ -171,7 +171,7 @@ export interface CardFacts {
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const people = (n: number) => `${n} ${n === 1 ? "person is" : "people are"} waiting`;
 
-export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield">, card: CardFacts): PushPayload {
+export function cardNotice(kind: Exclude<PushKind, "settled" | "test" | "reminder" | "shield" | "builder">, card: CardFacts): PushPayload {
   const q = `“${clip(card.question, 140)}”`;
   const from = card.askerName && card.roomName ? `${card.askerName} in ${card.roomName}` : null;
   const base = { kind, url: `/m/c/${card.id}`, tag: `card-${card.id}`, renotify: true, cardId: card.id };

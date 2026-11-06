@@ -386,6 +386,34 @@ try {
     for (const x of problems) console.log(`      -> ${x}`);
   }
 
+  // ── Spec 11: work for Ferri Builder ─────────────────────────────────────
+  const buildCases: { msg: string; intent: string; kind?: string }[] = [
+    { msg: "@ferri get the builder to make a one-page site for Build Night", intent: "build", kind: "site" },
+    { msg: "@ferri can you make us a day-of checklist for Build Night, with owners from the plan?", intent: "build", kind: "checklist" },
+    { msg: "@ferri make a poster for the meetup with the date and the venue", intent: "build", kind: "poster" },
+    { msg: "@ferri have the builder put together a one-page sponsor pitch document", intent: "build", kind: "other" },
+    { msg: "@ferri tell everyone the event site is live", intent: "announce" },
+    { msg: "@ferri draft the run of show for Saturday", intent: "plan" },
+  ];
+  const bi = await pool(buildCases, 4, async (c) => {
+    const r = await crewIntent({ choice: models.fast, sender: "Rudra", message: c.msg, open: [], history: [], announcements: [], now: localNow(tz, now), plan: planIds });
+    tokensIn += r.usage.input + r.usage.cacheWrite;
+    tokensOut += r.usage.output;
+    cacheRead += r.usage.cacheRead;
+    const problems: string[] = [];
+    if (r.intent?.intent !== c.intent) problems.push(`intent ${r.intent?.intent}, expected ${c.intent}`);
+    else if (c.kind && r.intent.build?.kind !== c.kind) problems.push(`kind ${r.intent.build?.kind}, expected ${c.kind}`);
+    if (c.intent === "build" && !(r.intent?.build?.title.trim() && r.intent.build.what.trim())) problems.push("build needs a title and what");
+    return { c, r, problems };
+  });
+  console.log("\nbuild intents");
+  for (const { c, r, problems } of bi) {
+    if (problems.length) failed++;
+    console.log(`${problems.length ? "FAIL" : "ok  "} ${c.msg}`);
+    console.log(`      ${JSON.stringify({ intent: r.intent?.intent, build: r.intent?.build })}`);
+    for (const x of problems) console.log(`      -> ${x}`);
+  }
+
   const planChatCases: { before: ChatLine[]; msg: string; after: ChatLine[]; kinds: string[]; owner?: string; due?: boolean; done?: string; noDone?: boolean }[] = [
     { before: [], msg: "ok so we're doing it at the Koramangala makerspace, teams of up to 4", after: [], kinds: ["decision", "decision"] },
     { before: [], msg: "Priya will handle food and Arjun takes care of registration", after: [], kinds: ["owner", "owner"] },
@@ -432,7 +460,7 @@ try {
 
   const total =
     answers.length + room.length + prepCases.length + intentCases.length + coverCases.length + launchCases.length + decisionCases.length + 1 +
-    planIntentCases.length + planChatCases.length + 1;
+    planIntentCases.length + buildCases.length + planChatCases.length + 1;
   console.log(
     `\n${total - failed}/${total} passed. tokens: ${tokensIn} in, ${tokensOut} out, ${cacheRead} read from cache.`,
   );

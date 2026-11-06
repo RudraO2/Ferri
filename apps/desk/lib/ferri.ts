@@ -28,6 +28,14 @@ export {
   sortPlan,
   type CrewMember,
   type PlanItem,
+  builderName,
+  builderPaths,
+  createBuilderJob,
+  jobFiles,
+  jobRef,
+  listBuilderJobs,
+  type BuilderJob,
+  type BuilderJobKind,
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";

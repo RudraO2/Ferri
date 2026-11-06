@@ -3,11 +3,13 @@ import { PLATFORM_LABEL, myCrew, openCards, waitedFor, type PocketCard } from "@
 import { requirePocketUser } from "@/lib/session";
 import { Empty, Header, Toast, Where } from "./bits";
 import { PushNudge } from "./push";
+import { BuilderCards } from "./builder-cards";
+import { builderRequests } from "@/lib/builder";
 
 export default async function NeedsYou({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
   const user = await requirePocketUser("/m");
-  const [cards, me] = await Promise.all([openCards(user), myCrew(user)]);
+  const [cards, me, builderAsks] = await Promise.all([openCards(user), myCrew(user), builderRequests(user).catch(() => [])]);
   const mine = cards.filter((c) => c.forMe);
   const others = cards.filter((c) => !c.forMe);
   const waitingPeople = mine.reduce((n, c) => n + (c.kind === "question" ? c.waiting.length : c.kind === "reply" ? 1 : 0), 0);
@@ -16,8 +18,8 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
       <Header
         title="Needs you"
         sub={
-          mine.length
-            ? `${mine.length} card${mine.length === 1 ? "" : "s"}${waitingPeople ? ` · ${waitingPeople} ${waitingPeople === 1 ? "person" : "people"} waiting` : ""}`
+          mine.length + builderAsks.length
+            ? `${mine.length + builderAsks.length} card${mine.length + builderAsks.length === 1 ? "" : "s"}${waitingPeople ? ` · ${waitingPeople} ${waitingPeople === 1 ? "person" : "people"} waiting` : ""}`
             : `Hi ${me[0]?.name ?? user.name}`
         }
       />
@@ -33,13 +35,14 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
           + Announce
         </Link>
       </div>
+      <BuilderCards requests={builderAsks} />
       {mine.length ? (
         <div className="mt-3 space-y-3 px-4">
           {mine.map((c) => (
             <CardRow key={c.id} card={c} />
           ))}
         </div>
-      ) : (
+      ) : builderAsks.length ? null : (
         <Empty title="Nothing needs you">Ferri knows the answers so far. New questions for you buzz this phone.</Empty>
       )}
       {others.length ? (

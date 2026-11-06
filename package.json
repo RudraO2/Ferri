@@ -23,7 +23,9 @@
     "card:preview": "tsx --env-file-if-exists=.env scripts/card-preview.ts",
     "push:keys": "tsx scripts/push-keys.ts",
     "crew:account": "tsx --env-file-if-exists=.env scripts/crew-account.ts",
-    "shield:connect": "tsx --env-file-if-exists=.env scripts/shield-connect.ts"
+    "shield:connect": "tsx --env-file-if-exists=.env scripts/shield-connect.ts",
+    "builder:setup": "tsx --env-file-if-exists=.env scripts/builder-setup.ts",
+    "builder:controller": "tsx scripts/builder-controller.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

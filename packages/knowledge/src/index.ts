@@ -15,3 +15,4 @@ export * from "./spaces.ts";
 export * from "./edit.ts";
 export * from "./launch.ts";
 export * from "./plan.ts";
+export * from "./builder.ts";

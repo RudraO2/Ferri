@@ -34,6 +34,7 @@ import {
 } from "@ferri/knowledge";
 import type { MessageEvent, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
+import type { Builder } from "./builder.ts";
 import type { Launch } from "./launch.ts";
 import type { Plan } from "./plan.ts";
 import { askerMention, type Loop, type RoomInfo } from "./loop.ts";
@@ -49,6 +50,7 @@ export interface FlowDeps {
   loop: Loop;
   launch: Launch;
   plan: Plan;
+  builder: Builder;
   skills: () => string;
   room: (roomId: string) => Promise<RoomInfo>;
   log: (msg: string) => void;
@@ -92,9 +94,10 @@ interface Context {
  * never acts twice.
  */
 export function createFlow(deps: FlowDeps) {
-  const { db, agent, rooms, loop, launch, plan, log } = deps;
+  const { db, agent, rooms, loop, launch, plan, builder, log } = deps;
   // Same rule as Switch's mention_regex: `@name` at a full-token boundary.
   const mentionRe = mentionRegex(config.agentName);
+  const builderRe = mentionRegex(builder.name);
 
   function isOwn(ev: MessageEvent): boolean {
     const p = ev.payload;
@@ -327,6 +330,36 @@ export function createFlow(deps: FlowDeps) {
         intent,
         item: planItem,
         crewRoomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
+      });
+      if (reply) await say(reply);
+      return;
+    }
+
+    // Builder (spec 11): something to make goes to Ferri Builder.
+    if (intent?.intent === "build" && intent.build) {
+      const actionId = await loop.claimCrewAction({
+        communityId: ctx.kb.community.id,
+        messageId: p.message_id,
+        roomId: ev.room_id,
+        crewMemberId: member.id,
+        crewName: member.name,
+        intent: "build",
+        cardId: null,
+        text: p.body,
+      });
+      if (!actionId) return;
+      log(`crew ${member.name}: build ${intent.build.kind} "${intent.build.title}"`);
+      const reply = await builder.start({
+        communityId: ctx.kb.community.id,
+        eventId: ctx.eventId,
+        kind: intent.build.kind,
+        title: intent.build.title,
+        brief: intent.build.what || stripMention(p.body),
+        requestedBy: member.name,
+        requestedById: member.id,
+        origin: "chat",
+        sourceMessageId: p.message_id,
+        roomId: crewRoom ? ev.room_id : await loop.crewRoomFor(ctx.eventId),
       });
       if (reply) await say(reply);
       return;
@@ -590,8 +623,16 @@ export function createFlow(deps: FlowDeps) {
       log(`skip stale message ${p.message_id} in ${ev.room_id}`);
       return;
     }
+    // Another agent (Ferri Builder): its reports close jobs; never a member question or crew chatter.
+    // Agents post as `@switch-agent-<id>:<server>`; `sender_kind` is not always set.
+    if (p.sender_kind === "agent" || p.sender.startsWith("@switch-agent-")) {
+      await builder.onAgentMessage(ev);
+      return;
+    }
     // A typed answer to a Switch card ("A1 ..."): Switch records it; it is not a question.
     if (looksLikeCardAnswer(p.body)) return;
+    // Someone talking to the Builder directly ("@builder make the header bigger"): it is the Builder's.
+    if (builderRe.test(p.body) && !mentionRe.test(p.body)) return;
     // A replay after a restart: skip before spending a model call on it.
     const [seenQuestion] = await db.select({ id: questions.id }).from(questions).where(eq(questions.messageId, p.message_id)).limit(1);
     const [seenAction] = await db.select({ id: crewActions.id }).from(crewActions).where(eq(crewActions.messageId, p.message_id)).limit(1);

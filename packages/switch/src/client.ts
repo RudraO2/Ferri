@@ -46,6 +46,8 @@ export class SwitchAgent {
   private abort: AbortController | null = null;
   private beatTimer: NodeJS.Timeout | null = null;
   private pendingGap: GapFrame | null = null;
+  /** Rooms Ferri's per-room sessions have connected to (see roomOp). */
+  private readonly roomSessions = new Set<string>();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly opts: SwitchAgentOptions) {
@@ -90,6 +92,60 @@ export class SwitchAgent {
       this.opts.connectionId ? { "x-switch-connection-id": this.opts.connectionId } : {},
     );
     return out.result;
+  }
+
+  /**
+   * Call an operation that acts on one room (`send_targeted_message`,
+   * `read_context` without a room id, room documents, ...). Ferri's connection
+   * covers every room, so Switch would refuse ("This connection covers several
+   * rooms"). A session selector fixes that: a session of Ferri's own per room
+   * (`X-Switch-Session-Id`) connects to that room once, and every call naming
+   * it is bound to that room alone (`resolve_caller` in Switch's operations API).
+   */
+  async roomOp<T = unknown>(roomId: string, name: string, args: Record<string, unknown> = {}): Promise<T> {
+    if (!this.opts.connectionId) throw new Error("roomOp needs a live connection id");
+    const headers = { "x-switch-connection-id": this.opts.connectionId, "x-switch-session-id": `ferri-room-${roomId}` };
+    const call = (op: string, body: Record<string, unknown>) =>
+      this.request<{ result: unknown }>("POST", `/agents/${this.opts.agentId}/ops/${op}`, body, headers);
+    for (let attempt = 0; ; attempt++) {
+      if (!this.roomSessions.has(roomId)) {
+        await call("connect_to_room", { room_id: roomId, include_general_instructions: false });
+        this.roomSessions.add(roomId);
+      }
+      try {
+        return (await call(name, args)).result as T;
+      } catch (err) {
+        // Switch restarted, or the connection was opened afresh: connect the session again, once.
+        if (attempt === 0 && err instanceof SwitchHttpError && /not connected/i.test(err.body)) {
+          this.roomSessions.delete(roomId);
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * An addressed message (`send_targeted_message`): Switch prepends `@name` for
+   * each target, so each named agent gets it as addressed and a managed agent
+   * (the Builder) starts a session for it. Returns each agent's reachability.
+   */
+  async sendTargetedMessage(
+    roomId: string,
+    body: string,
+    targetNames: string[],
+    threadId?: string,
+  ): Promise<{ event_id: string; target_statuses: Record<string, string> }> {
+    return this.roomOp(roomId, "send_targeted_message", {
+      body,
+      target_names: targetNames,
+      ...(threadId ? { thread_id: threadId } : {}),
+    });
+  }
+
+  /** Put another agent in a room by its registry name (`invite_agent_to_room`). */
+  async inviteAgentToRoom(roomId: string, agentName: string): Promise<void> {
+    await this.op("invite_agent_to_room", { room_id: roomId, agent_name: agentName });
   }
 
   /** Post a top-level message to a room. Needs no room claim. */

@@ -1,5 +1,6 @@
 import { community } from "@/lib/db";
 import { overview } from "@/lib/data";
+import { builderRequests } from "@/lib/builder";
 import { requireUser } from "@/lib/session";
 import { signOut } from "../login/actions";
 import { setPause } from "./actions";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function DeskLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const c = await community();
-  const o = await overview();
+  const [o, waiting] = await Promise.all([overview(), builderRequests(user).catch(() => [])]);
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-zinc-200 bg-white">
@@ -30,6 +31,7 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
             "/cards": o.openQuestions + o.repliesWaiting,
             "/announcements": o.announcementsWaiting,
             "/plan": o.planWaiting,
+            "/builder": waiting.length,
             "/spaces": o.discovered,
           }}
         />

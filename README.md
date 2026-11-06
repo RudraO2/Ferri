@@ -26,6 +26,7 @@ Around the pillars:
 - **Shield** keeps scam links, link floods and leaked API keys out of every room, on every platform, before anyone sees them. It is our own Switch Trust endpoint and answers in 2 to 9 ms, with no model in the path.
 - **Desk** is the organizers' dashboard: spaces and modes, master pause, cards, the plan, events and crew, knowledge with versions, announcements, Shield.
 - **Ferri Pocket** is the crew's phone app (a PWA with Web Push): the cards that need you, Post, Edit, Don't post, who is stuck, and a `+ Announce` button.
+- **Ferri Builder** is Ferri's second pair of hands: a Claude Code agent that Switch itself runs on the organizer's laptop, with its own folder, its own Claude home and its own token budget. "@ferri get the builder to make a one-page site for Build Night" hands it the job in the crew room; it reads the event's facts from the room's Switch documents, posts the page there, and asks on a card before anything goes public.
 - **Crew helpers**: "@ferri remind me at 5 to order the pizza", and "@ferri make team rooms for Team Alpha with meera and arjun", which makes real private channels on the platform from a Switch template.
 
 ## Why Switch is the spine
@@ -42,6 +43,11 @@ Ferri does not work without Switch. Every group on every platform is a Switch ro
 | Switch Trust (`/guardrails/check`) | Shield, our own Trust endpoint inside the Ferri service: blocks scams and floods, redacts secrets, alerts the crew. | `packages/shield`, `apps/ferri/src/shield.ts` |
 | Templates v2 (`create_room_from_yaml`) | "Make team rooms" creates real private channels on the platform with the members, Ferri and a kickoff, attached to the event. | `apps/ferri/src/launch.ts` |
 | Library documents | The live knowledge is mirrored into a Switch library document attached to the event's rooms, and each event's living plan is a document in its crew room. Both follow every change. | `packages/knowledge/src/mirror.ts`, `apps/ferri/src/plan.ts` |
+| Agent management and the headless agent controller | Ferri creates its own Builder through Switch (`create_agent`, after its owner allows it to manage agents): a managed Claude Code agent on a Switch agent controller running on the organizer's laptop. Switch starts a Builder session whenever it is addressed and gives it the Switch tools over MCP. | `scripts/builder-setup.ts`, `apps/ferri/src/builder.ts` |
+| Handing work to a coding agent (`invite_agent_to_room`, `send_targeted_message`) | Ferri puts the Builder in the crew room and hands each job over as a targeted message, bound to that one room through a session of Ferri's own (`X-Switch-Session-Id`). The Builder reports back to Ferri with a targeted message of its own. | `packages/switch/src/client.ts` (`roomOp`) |
+| Session activity and the coding agent's own cards | The Builder's progress shows as Switch activity cards (steps, tool calls, time). Its Claude Code permission prompts and questions become Switch cards in the room, answered there, in Desk or in Pocket (`/gateway/agent-sessions/approvals`). Public steps (deploy, push, email) always ask. | `builder/.claude/settings.json`, `apps/desk/lib/builder.ts` |
+| Budgets (`/gateway/tenants/{tid}/budgets`) | The Builder has its own output-token and turn budget per 24 hours. Switch stops it when it is spent; Ferri holds new jobs until the reset, and Desk shows the spend. | `scripts/builder-setup.ts`, `apps/desk/app/(desk)/builder` |
+| Room documents as shared context | The hand-off points the Builder at the knowledge and plan documents attached to the crew room; it reads them with `load_internal_documents`, so the brief stays short. | `packages/knowledge/src/builder.ts` |
 | Gateway (auth, rooms, agents, collaborations, addressing policy) | Desk and Pocket sign in with Switch accounts. Desk adds Ferri to rooms, discovers spaces, connects Shield. | `apps/desk`, `scripts/` |
 | **Agent message edit (new, in our fork)** | Switch had no way for an agent to edit a message it posted. We added it to Switch core. See below. | [`RudraO2/switch@2711974`](https://github.com/RudraO2/switch/commit/2711974943c2e72540e012cb8171c9e59cfd2511) |
 
@@ -69,6 +75,11 @@ We run it as a thin image over the published Switch dev image (`deploy/local/fer
         |                    |
   Ferri service         Shield (Trust endpoint, same process, 127.0.0.1:3200)
   apps/ferri            packages/shield: scam links, floods, secrets, 2-9 ms
+        |
+        |  invite_agent_to_room, send_targeted_message      Switch agent controller (headless,
+        +-------------------------------------------------> on the laptop): Ferri Builder, a
+           "Job B1 done:" back to Ferri                     managed Claude Code agent with its
+                                                            own folder, Claude home and budget
   flow, learning loop,
   announcements,              Claude Haiku 5.5: triage, decision check
   scheduler, reminders  ----> Claude Sonnet 5.5: answers and drafts
@@ -123,7 +134,20 @@ You need Docker Desktop, Node 22 and pnpm.
    pnpm dev
    ```
 
-4. Open Mattermost at http://localhost:8065, go to the `ferri-lab` channel and try:
+4. Optional, Ferri Builder (needs `claude` on the PATH and the `agent_management` flag above). Build the Switch agent controller once from the Switch checkout, then set it up and keep it running:
+
+   ```bash
+   cd ../switch/console
+   npx pnpm@10.28.2 install --filter "@switch-console/agent-controller..."
+   npx pnpm@10.28.2 -r --filter "@switch-console/agent-controller..." run build
+   cd ../../ferri
+   pnpm builder:setup        # enrolls this machine, Ferri creates the Builder, sets its budget
+   pnpm builder:controller   # in its own terminal: runs the Builder (on Windows too, with `run`)
+   ```
+
+   `pnpm builder:setup` waits for the controller the first time, so start `pnpm builder:controller` in another terminal when it asks.
+
+5. Open Mattermost at http://localhost:8065, go to the `ferri-lab` channel and try:
    - `@ferri when does hacking start?` gets the answer with its source.
    - `@ferri can I bring my dog?` (not in the knowledge) gets "I'm checking with the team".
    - `does anyone know the wifi password?` (no mention) gets answered after a short pause, unless a person answers first.
@@ -210,6 +234,16 @@ What the crew decides becomes an update on every platform after one approval.
 - `@ferri make team rooms for Team Alpha with meera and arjun, and Team Beta with priya`: Ferri runs a Switch template that makes a private channel per team on the crew room's platform, with the members, Ferri and a welcome message, attached to the event.
 - Desk has an Announcements page (write, schedule, pick spaces, approve, edit everywhere, see each space's status); Pocket shows announcement cards in Needs you and has `+ Announce`.
 
+## Ferri Builder: a coding agent that Switch runs
+
+Some event work is making things: the event's one-page site, a day-of checklist, a sponsor one-pager, a poster. Ferri hands that to Ferri Builder, a second agent with its own sandbox.
+
+- The Builder is a Switch managed agent: Claude Code on a Switch agent controller on the organizer's laptop (the headless controller runs natively on Windows with `run`). Ferri creates it through Switch's agent management. It works in its own folder (`~/.ferri/builder`, seeded from `builder/` in this repo) with its own Claude home, so the organizer's personal Claude settings never reach it. Tests run it on Claude Haiku 5.5 at low effort.
+- In the crew room: `@ferri get the builder to make a one-page site for Build Night`, `@ferri can you make us a day-of checklist with owners from the plan?`. Ferri records job B1, invites the Builder to the room and hands it over with `send_targeted_message`. Switch starts a Builder session, which posts a heads-up, shows its work as an activity card, reads the event's knowledge and plan from the room's Switch documents, and posts the files in the room. It reports "Job B1 done:" to Ferri, which closes the job and pushes the person who asked.
+- Nothing goes public without a yes. The Builder asks with a Switch card before any public step (deploy, push, email, post), and its permission rules make every such command a Claude Code permission prompt, which Switch shows as a card too. The card is answered in the room, in Desk or in Pocket; a no means nothing is published.
+- Its own budget in Switch (400k output tokens and 60 turns per 24 hours by default). When it is spent Switch stops the Builder, and Ferri holds new jobs until the reset.
+- Desk's Builder page shows the Builder and its machine as Switch reports them, the budget spend, the cards waiting for you, every job with its report and files, a form for new jobs and a Cancel button. Pocket shows the Builder's cards in Needs you.
+
 ## Shield: safety on every message
 
 Shield is Ferri's Switch Trust endpoint. Switch sends every message, from people and from agents, to `POST /guardrails/check` before anyone sees it, and Shield answers in a few milliseconds (Switch's limit is 2 seconds; no model call in the path):
@@ -236,14 +270,16 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 | `pnpm crew:account <crew name> <email>` | Create a Switch login for a crew member and link it, for Pocket |
 | `pnpm push:keys` | Write Web Push (VAPID) keys to `.env` once |
 | `pnpm shield:connect` | Point Switch Trust at Shield (`--off`, `--status`) |
+| `pnpm builder:setup` | Enroll this machine with Switch, have Ferri create the Builder, set its addressing and budget (safe to re-run) |
+| `pnpm builder:controller` | Run the Switch agent controller that runs the Builder |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |
 
 ## How we checked it
 
-- `pnpm test`: 91 unit tests (knowledge, policy, cards, launch, the plan, Shield detectors, push notices, the Switch stream parser, flow helpers).
+- `pnpm test`: 97 unit tests (knowledge, policy, cards, launch, the plan, the Builder's reports and hand-offs, Shield detectors, push notices, the Switch stream parser, flow helpers).
 - `pnpm typecheck`: seven packages.
-- `pnpm eval:answers`: 70 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, reading the plan from crew chat and the agenda draft. 70 of 70 pass.
-- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size.
+- `pnpm eval:answers`: 76 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, build requests, reading the plan from crew chat and the agenda draft. 76 of 76 pass.
+- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size; the Builder making the event site, a checklist and a sponsor one-pager from crew requests and Desk, its publish and email cards refused from the room, Desk and Pocket with nothing published, and a spent budget stopping it.
 
 ## Repository layout
 
@@ -258,7 +294,8 @@ packages/push/       Web Push subscriptions and notices
 packages/db/         Drizzle schema and migrations (Ferri runs them on start)
 seed/                the demo community (Lantern Labs) and event (Lantern Build Night)
 skills/              Ferri's persona and answer rules, in markdown
-scripts/             setup, knowledge CLI, eval, test people, Shield connect
+builder/             Ferri Builder's workspace template: its CLAUDE.md and permission rules
+scripts/             setup, knowledge CLI, eval, test people, Shield connect, Builder setup and controller
 infra/               Ferri's Postgres (pgvector) for Docker
 ```
 

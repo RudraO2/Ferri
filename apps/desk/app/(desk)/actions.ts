@@ -23,7 +23,11 @@ import {
   setEntryArchived,
   slugify,
   spaces,
+  builderJobs,
+  createBuilderJob,
+  type BuilderJobKind,
 } from "@/lib/ferri";
+import { answerRequest } from "@/lib/builder";
 import { announceAnswer, zonedTime } from "@/lib/announce";
 import { answerAs, replyAnswer, skip, type CardAnswer } from "@/lib/cards";
 import { removeRule, setRule } from "@/lib/shield";
@@ -465,4 +469,71 @@ export async function addPlanItem(form: FormData) {
     });
   revalidatePath("/plan");
   back(planPath(form), kind === "owner" ? `Saved. ${topic} cards go to ${owner?.name ?? "them"} first now.` : "Added to the plan.");
+}
+
+// ── Ferri Builder (spec 11) ──────────────────────────────────────────────
+
+const BUILD_KINDS: BuilderJobKind[] = ["site", "checklist", "poster", "other"];
+
+/** A job for the Builder from Desk. Ferri hands it over in the crew room within seconds. */
+export async function queueBuilderJob(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const brief = str(form, "brief");
+  const kind = (BUILD_KINDS.includes(str(form, "kind") as BuilderJobKind) ? str(form, "kind") : "other") as BuilderJobKind;
+  const eventId = str(form, "eventId") || null;
+  if (!brief) back("/builder", "Say what the Builder should make.");
+  const title = str(form, "title") || brief.replace(/[.!?]\s*$/, "").split(/\s+/).slice(0, 6).join(" ");
+  const who = (await crewForSwitchEmail(db(), c.id, user.email))[0];
+  const job = await createBuilderJob(db(), {
+    communityId: c.id,
+    eventId,
+    kind,
+    title: title.slice(0, 80),
+    brief,
+    requestedBy: who?.name ?? user.name,
+    requestedById: who?.id ?? null,
+    origin: "desk",
+    sourceMessageId: null,
+    roomId: null,
+    status: "queued",
+  });
+  revalidatePath("/builder");
+  back("/builder", `Queued as job B${job?.number}. Ferri hands it to the Builder in the crew room.`);
+}
+
+/** Stop a job. Ferri tells the Builder in the room if it already had it. */
+export async function cancelBuilderJob(form: FormData) {
+  const user = await requireUser();
+  const c = await community();
+  const id = str(form, "id");
+  const [job] = await db()
+    .update(builderJobs)
+    .set({ status: "cancelled", report: await crewName(user, c.id), updatedAt: new Date() })
+    .where(eq(builderJobs.id, id))
+    .returning();
+  revalidatePath("/builder");
+  back("/builder", job ? `Job B${job.number} cancelled.` : "That job is gone.");
+}
+
+/** Answer one of the Builder's own cards (a permission it asked for, or its question). */
+export async function answerBuilderRequest(form: FormData) {
+  const user = await requireUser();
+  const ref = { agentId: str(form, "agentId"), sessionId: str(form, "sessionId"), requestId: str(form, "requestId") };
+  const kind = str(form, "kind");
+  const to = str(form, "back") || "/builder";
+  const r =
+    kind === "approval"
+      ? await answerRequest(user, ref, { answer: str(form, "option") })
+      : await answerRequest(user, ref, {
+          answers: [
+            {
+              question_id: str(form, "questionId"),
+              selected_option_ids: str(form, "option") ? [str(form, "option")] : [],
+              custom_text: str(form, "text") || null,
+            },
+          ],
+        });
+  revalidatePath(to);
+  back(to, r.note);
 }
