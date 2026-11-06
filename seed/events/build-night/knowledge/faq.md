@@ -21,7 +21,7 @@ The Wi-Fi network is LanternGuest and the password is buildnight2026.
 Bring your laptop, charger, a government photo ID, and a refillable water bottle. Sleeping bags are allowed in the quiet room.
 
 ## Prizes
-First place wins ₹50,000, second place ₹30,000, third place ₹15,000. Every finishing team gets swag.
+First place wins ₹40,000, second place ₹25,000, third place ₹10,000. Every team that demos gets swag.
 
 ## Judging
 Judging starts at 8:00 AM on Sunday. Each team gets 4 minutes to demo and 2 minutes of questions. Projects must be started at the event; you may use open-source libraries.

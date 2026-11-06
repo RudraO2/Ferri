@@ -61,7 +61,9 @@ for (const [name, value] of Object.entries(vars)) {
     continue;
   }
   run("npx", ["vercel", "env", "rm", name, "production", "--yes", ...scopeArgs]);
-  const add = run("npx", ["vercel", "env", "add", name, "production", ...scopeArgs], value);
+  // The CLI asks for the kind in non-interactive mode: public NEXT_PUBLIC_ values are config, the rest secret.
+  const type = name.startsWith("NEXT_PUBLIC_") ? "config" : "secret";
+  const add = run("npx", ["vercel", "env", "add", name, "production", "--type", type, ...scopeArgs], value);
   if (!add.ok) throw new Error(`vercel env add ${name} failed:\n${add.out.replaceAll(value, "***").slice(-800)}`);
   console.log(`set ${name}`);
 }

@@ -108,6 +108,7 @@ Ferri is one AI teammate for community event organizers, built on Switch (https:
 - Haiku at low effort follows a tone or language rule reliably only when it sits next to the question in the user turn; the voice block in the system prompt alone was ignored. `answerQuestion` takes `language` and `tone` and says them there.
 - Buffer (spec 18): GraphQL at https://api.buffer.com with a personal key; `createPost` with `saveToDraft: true` and a `dueAt` saves a dated draft; Instagram needs `metadata.instagram { type: post, shouldShareToFeed: true }` and an image. Buffer stores the image URL we give (`assets.source`) and fetches it when the post goes out, so the URL must stay live until then. A deleted post reads back as `NOT_FOUND`.
 - Haiku can write "" for a nested choice it does not use (seen on `plan.kind`), which voids the structured answer; `structuredCall` repairs such fields to the choice's first option (`repairEmptyChoices`). Put the sensible default first in nested enums.
+- The Vercel CLI (2026-11) refuses a non-interactive `vercel env add` without `--type` (`config` for public values, `secret` for the rest); the site kit's `vercel-env.mjs` passes it and still sends the value on stdin.
 - Budgets: `POST /gateway/tenants/{tid}/budgets {agent_id, metric, model: "", amount_limit, period_hours}` (`GET /gateway/tenants/current` for the id). A spent budget: Switch answers a mention of the agent with "Agent X has reached its budget of ..." in the room and starts no session. Periods reset at fixed times (00:00 UTC for 24 h).
 
 ## Status
