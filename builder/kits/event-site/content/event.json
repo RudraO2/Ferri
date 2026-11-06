@@ -1,0 +1,17 @@
+{
+  "name": "[event name]",
+  "tagline": "[one line on what the event is]",
+  "community": "[community name]",
+  "dates": "[dates]",
+  "timeLine": "[when doors open]",
+  "venue": { "name": "[venue]", "address": "[venue address]", "mapUrl": null, "notes": null },
+  "about": ["[two or three short paragraphs about the event]"],
+  "whoCanJoin": null,
+  "schedule": [{ "day": "[day]", "items": [{ "time": "[time]", "what": "[what happens]" }] }],
+  "faq": [],
+  "sponsors": [],
+  "rules": [],
+  "contact": { "text": "[how to reach the organizers]", "email": null },
+  "registration": { "closes": null, "note": null, "open": true },
+  "accent": "#2563eb"
+}

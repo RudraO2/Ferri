@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handoffMessage, jobFolder, parseBuilderReport } from "./builder.ts";
+import { firstHttpsUrl, handoffMessage, jobFolder, parseBuilderReport, siteEventLine } from "./builder.ts";
 
 describe("parseBuilderReport", () => {
   it("reads a done report, with or without the mention Switch prepends", () => {
@@ -42,5 +42,31 @@ describe("handoffMessage", () => {
     const text = handoffMessage({ job: { ...job, brief: "x ".repeat(5000) }, eventName: "E", documents: [], agentName: "ferri" });
     expect(text.length).toBeLessThan(3000);
     expect(text).toContain("leave a clear placeholder");
+  });
+});
+
+describe("firstHttpsUrl", () => {
+  it("takes the first https link without trailing punctuation", () => {
+    expect(firstHttpsUrl("The site is live at https://lantern-build-night.vercel.app. Register there.")).toBe("https://lantern-build-night.vercel.app");
+    expect(firstHttpsUrl("Live: (https://x.vercel.app/), then https://y.dev")).toBe("https://x.vercel.app/");
+  });
+  it("ignores plain http and this laptop", () => {
+    expect(firstHttpsUrl("built at http://localhost:3300")).toBeNull();
+    expect(firstHttpsUrl("see https://localhost:3300")).toBeNull();
+    expect(firstHttpsUrl("index.html is in jobs/B1")).toBeNull();
+  });
+});
+
+describe("siteEventLine", () => {
+  it("tells the crew about the first registration and every tenth", () => {
+    expect(siteEventLine("registration", { count: 1, name: "Meera" })).toBe("First registration on the site: Meera.");
+    expect(siteEventLine("registration", { count: 2, name: "Arjun" })).toBeNull();
+    expect(siteEventLine("registration", { count: 20, name: "Priya" })).toBe("20 people have registered on the site (latest: Priya).");
+  });
+  it("tells the crew when a credit pool runs low, runs out or is topped up", () => {
+    expect(siteEventLine("pool_low", { sponsor: "CloudCo", left: 1, lowAt: 2 })).toContain("CloudCo credits are running low on the site: 1 code left.");
+    expect(siteEventLine("pool_low", { sponsor: "CloudCo", left: 0 })).toContain("all claimed");
+    expect(siteEventLine("pool_refilled", { sponsor: "CloudCo", left: 40 })).toBe("CloudCo credits are topped up on the site: 40 codes left.");
+    expect(siteEventLine("something_else", {})).toBeNull();
   });
 });

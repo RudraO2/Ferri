@@ -14,6 +14,8 @@
  * Model: FERRI_BUILDER_MODEL (default claude-haiku-5-5) at FERRI_BUILDER_EFFORT (default low).
  */
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { createDb, crewMembers } from "@ferri/db";
 import fs from "node:fs";
 import path from "node:path";
 import { GatewayClient, GatewayError, SwitchAgent, gatewayFromEnv } from "@ferri/switch";
@@ -80,7 +82,35 @@ if (!controllerId) {
 const template = path.join(root, "builder");
 fs.mkdirSync(path.join(paths.dir, "jobs"), { recursive: true });
 fs.mkdirSync(paths.claudeHome, { recursive: true });
-fs.cpSync(template, paths.dir, { recursive: true, force: true, filter: (src) => !src.includes(`${path.sep}jobs${path.sep}`) });
+const skip = [`${path.sep}jobs${path.sep}`, `${path.sep}node_modules`, `${path.sep}.next`, `${path.sep}.vercel`];
+fs.cpSync(template, paths.dir, { recursive: true, force: true, filter: (src) => !skip.some((s) => src.includes(s)) });
+
+// What the ship-event-site skill needs that the controller does not pass to sessions
+// (only provider keys reach them): where to create the database, which Vercel scope,
+// Ferri's hook on Desk's public hostname, and who is an organizer on the site.
+let hookSecret = env.FERRI_SITE_HOOK_SECRET;
+if (!hookSecret) {
+  hookSecret = randomBytes(24).toString("base64url");
+  fs.appendFileSync(path.join(root, ".env"), `\n# The event site's hook into Ferri (spec 12), written by pnpm builder:setup.\nFERRI_SITE_HOOK_SECRET=${hookSecret}\n`);
+}
+const publicUrl = (env.FERRI_PUBLIC_URL ?? "https://ferri.rudratechie.xyz").replace(/\/+$/, "");
+const { db, close } = createDb(env.DATABASE_URL);
+const crewEmails = (await db.select({ handles: crewMembers.handles }).from(crewMembers))
+  .map((c) => (c.handles as Record<string, string> | null)?.switch)
+  .filter((e): e is string => !!e && e.includes("@"));
+await close();
+const admins = [...new Set([...crewEmails, ...(env.FERRI_SITE_ADMINS ?? "").split(","), env.SWITCH_ADMIN_EMAIL ?? "admin@switch.local"].map((e) => e.trim().toLowerCase()).filter(Boolean))];
+const siteSettings = {
+  supabase: { orgId: env.FERRI_SITE_SUPABASE_ORG ?? null, region: env.FERRI_SITE_SUPABASE_REGION ?? "ap-south-1" },
+  vercel: { scope: env.FERRI_SITE_VERCEL_SCOPE ?? null },
+  hook: { url: `${publicUrl}/api/site`, secret: hookSecret },
+  admins,
+};
+fs.mkdirSync(path.join(paths.dir, ".ferri"), { recursive: true });
+fs.writeFileSync(path.join(paths.dir, ".ferri", "site.json"), JSON.stringify(siteSettings, null, 2), { mode: 0o600 });
+if (!siteSettings.supabase.orgId) console.warn("FERRI_SITE_SUPABASE_ORG is not set: the Builder cannot create the event site's database.");
+console.log(`Site settings: Supabase org ${siteSettings.supabase.orgId ?? "unset"} (${siteSettings.supabase.region}), Vercel ${siteSettings.vercel.scope ?? "default scope"}, hook ${siteSettings.hook.url}, ${admins.length} admin(s).`);
+
 const apiKey = need("ANTHROPIC_API_KEY");
 fs.writeFileSync(
   paths.envFile,

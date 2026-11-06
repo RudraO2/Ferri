@@ -9,3 +9,6 @@ dist/
 
 # written by next dev
 apps/desk/AGENTS.md
+
+# Ferri Builder's workspace template ships its Claude Code settings and skills (a global .claude/ ignore must not drop them).
+!builder/.claude/

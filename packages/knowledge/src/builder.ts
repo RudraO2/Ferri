@@ -75,7 +75,7 @@ export function handoffMessage(input: {
 }
 
 const KIND_HINT: Record<BuilderJobKind, string> = {
-  site: "Make it one self-contained index.html: inline CSS, no scripts, mobile first, with what, when, where, the schedule, how to register and who to ask.",
+  site: "If this is the event's site with registration, sign-in or credits, or it should go live, follow your ship-event-site skill. A single page that stays here is one self-contained index.html: inline CSS, no scripts, mobile first, with what, when, where, the schedule, how to register and who to ask.",
   checklist: "Make it checklist.md with - [ ] items grouped as the week before, the day before, on the day and after, each with an owner where the plan names one.",
   poster: "Make the text and layout as an HTML file sized for the poster; no generated images yet.",
   other: "",
@@ -130,6 +130,15 @@ export function jobFiles(job: Pick<BuilderJob, "folder">, dir = builderPaths().d
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       if (e.name.startsWith(".") || e.name === "node_modules") continue;
       const full = path.join(d, e.name);
+      // A whole app (the event site from the kit): only its content is worth showing.
+      if (e.isDirectory() && fs.existsSync(path.join(full, "package.json"))) {
+        const content = path.join(full, "content", "event.json");
+        if (fs.existsSync(content)) {
+          const st = fs.statSync(content);
+          out.push({ name: `${rel}${e.name}/content/event.json`, bytes: st.size, path: content, at: st.mtimeMs });
+        }
+        continue;
+      }
       if (e.isDirectory()) walk(full, `${rel}${e.name}/`);
       else {
         const st = fs.statSync(full);
@@ -139,4 +148,41 @@ export function jobFiles(job: Pick<BuilderJob, "folder">, dir = builderPaths().d
   };
   walk(folder, "");
   return out.sort((a, b) => b.at - a.at).slice(0, 50).map(({ name, bytes, path: p }) => ({ name, bytes, path: p }));
+}
+
+/** The first https link in a Builder report, without trailing punctuation: the live address. */
+export function firstHttpsUrl(text: string): string | null {
+  const m = /https:\/\/[^\s<>"'`)\]]+/i.exec(text);
+  if (!m) return null;
+  const url = m[0].replace(/[.,;:!?]+$/, "");
+  try {
+    const u = new URL(url);
+    return /^(localhost|127\.|0\.0\.0\.0)/.test(u.hostname) ? null : url;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What Ferri says in the crew room about an event the shipped site reported,
+ * or null when it is not worth a message (every registration but the first
+ * and each tenth).
+ */
+export function siteEventLine(type: string, p: Record<string, unknown>): string | null {
+  const n = Number(p.count ?? 0);
+  const name = typeof p.name === "string" && p.name.trim() ? p.name.trim() : null;
+  if (type === "registration") {
+    if (n === 1) return `First registration on the site${name ? `: ${name}` : ""}.`;
+    if (n > 0 && n % 10 === 0) return `${n} people have registered on the site${name ? ` (latest: ${name})` : ""}.`;
+    return null;
+  }
+  const sponsor = typeof p.sponsor === "string" && p.sponsor.trim() ? p.sponsor.trim() : "A sponsor's";
+  const left = Number(p.left ?? 0);
+  if (type === "pool_low") {
+    return left > 0
+      ? `${sponsor} credits are running low on the site: ${left} code${left === 1 ? "" : "s"} left. Paste more in the site's admin view.`
+      : `${sponsor} credits are all claimed on the site. Paste more codes in the site's admin view.`;
+  }
+  if (type === "pool_refilled") return `${sponsor} credits are topped up on the site: ${left} code${left === 1 ? "" : "s"} left.`;
+  return null;
 }

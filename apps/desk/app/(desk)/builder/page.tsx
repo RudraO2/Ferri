@@ -185,6 +185,14 @@ function JobRow({ j }: { j: BuilderJob }) {
           {j.finishedAt && j.status !== "cancelled" ? ` · finished ${ago(j.finishedAt)}` : ""}
         </div>
         <div className="mt-1 text-zinc-700">{j.brief}</div>
+        {j.url ? (
+          <div className="mt-1">
+            <span className={`badge ${ok}`}>live</span>{" "}
+            <a className="font-medium text-zinc-900 underline underline-offset-2" href={j.url} target="_blank" rel="noreferrer">
+              {j.url}
+            </a>
+          </div>
+        ) : null}
         {j.report ? (
           <div className={`mt-1.5 rounded-md px-2.5 py-1.5 ${j.status === "stuck" ? "bg-amber-50 text-amber-800" : "bg-zinc-50 text-zinc-700"}`}>
             {j.status === "cancelled" ? `Cancelled by ${j.report}` : j.report}

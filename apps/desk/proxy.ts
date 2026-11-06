@@ -17,5 +17,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Pocket's sign-in, service worker, manifest and icons load without a session.
-  matcher: ["/((?!login|m/login|m/sw\.js|m/manifest\.webmanifest|m/icon|_next/|favicon.ico).*)"],
+  matcher: ["/((?!login|api/site|m/login|m/sw\.js|m/manifest\.webmanifest|m/icon|_next/|favicon.ico).*)"],
 };

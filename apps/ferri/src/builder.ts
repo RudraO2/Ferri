@@ -1,8 +1,12 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { builderJobs, events, type Db } from "@ferri/db";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { builderJobs, events, siteEvents, type Db } from "@ferri/db";
 import {
   builderName,
+  createAnnouncementRequest,
   createBuilderJob,
+  firstHttpsUrl,
+  loadCrew,
+  siteEventLine,
   findBuilderJob,
   findCommunity,
   handoffMessage,
@@ -12,6 +16,7 @@ import {
   type BuilderJobKind,
 } from "@ferri/knowledge";
 import { pushToUsers, switchUsersForCrew } from "@ferri/push";
+import { setRule } from "@ferri/shield";
 import type { GatewayClient, MessageEvent, SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
 import type { Loop } from "./loop.ts";
@@ -226,13 +231,16 @@ export function createBuilder(deps: BuilderDeps) {
         log(`builder: report for unknown job B${report.ref}`);
         return true;
       }
+      const url = report.outcome === "done" ? firstHttpsUrl(report.text) : null;
       const [updated] = await db
         .update(builderJobs)
-        .set({ status: report.outcome, report: report.text, finishedAt: new Date(), updatedAt: new Date() })
+        .set({ status: report.outcome, report: report.text, url: url ?? job.url, finishedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(builderJobs.id, job.id), inArray(builderJobs.status, ["handed", "working", "stuck", "done"])))
         .returning();
       if (!updated) return true;
       log(`builder: ${jobRef(job)} ${report.outcome}: ${clip(report.text, 160)}`);
+      // A site the crew allowed to go live: Shield trusts its domain, and the crew gets the announcement on a card.
+      if (url && job.kind === "site" && url !== job.url) await siteLive(updated, url);
       if (job.requestedById) {
         await pushToUsers(db, await switchUsersForCrew(db, [job.requestedById]), {
           kind: "builder",
@@ -273,6 +281,86 @@ export function createBuilder(deps: BuilderDeps) {
     return true;
   }
 
+  /**
+   * The Builder put a site live (the crew allowed the deploy on a card). Shield
+   * allows its domain, and Ferri opens the "site is live" announcement card:
+   * one OK posts it to every space of the event and saves the link as knowledge.
+   */
+  async function siteLive(job: BuilderJob, url: string): Promise<void> {
+    try {
+      const domain = await setRule(db, { communityId: job.communityId, kind: "allow", domain: new URL(url).hostname, note: `event site (${jobRef(job)})`, by: "Ferri Builder" });
+      log(`builder: ${jobRef(job)} is live at ${url}; Shield allows ${domain}`);
+    } catch (err) {
+      log(`builder: could not allow ${url} in Shield: ${(err as Error).message}`);
+    }
+    if (!job.eventId) return;
+    const [ev] = await db.select({ name: events.name }).from(events).where(eq(events.id, job.eventId)).limit(1);
+    await createAnnouncementRequest(db, {
+      communityId: job.communityId,
+      eventId: job.eventId,
+      title: `${ev?.name ?? "The event"} site is live`,
+      text: `The ${ev?.name ?? "event"} site is live: ${url}\nRegister there, see the schedule, and once you're registered, claim the sponsor credits from your registration page.`,
+      scheduledAt: null,
+      targetSpaceIds: null,
+      by: job.requestedBy,
+      origin: "builder",
+    });
+    log(`builder: ${jobRef(job)} "site is live" announcement requested`);
+  }
+
+  /** What the shipped site reported (registrations, credit pools): told to the crew in their room. */
+  async function siteTick(): Promise<void> {
+    const open = await db.select().from(siteEvents).where(isNull(siteEvents.handledAt)).orderBy(siteEvents.createdAt).limit(20);
+    for (const e of open) {
+      const [claimed] = await db
+        .update(siteEvents)
+        .set({ handledAt: new Date() })
+        .where(and(eq(siteEvents.id, e.id), isNull(siteEvents.handledAt)))
+        .returning();
+      if (!claimed) continue;
+      const [job] = e.jobId ? await db.select().from(builderJobs).where(eq(builderJobs.id, e.jobId)).limit(1) : [];
+      // The same registration count twice (a double submit): the crew heard it already.
+      if (e.type === "registration") {
+        const [seen] = await db
+          .select({ id: siteEvents.id })
+          .from(siteEvents)
+          .where(
+            and(
+              eq(siteEvents.site, e.site),
+              eq(siteEvents.type, "registration"),
+              ne(siteEvents.id, e.id),
+              isNotNull(siteEvents.handledAt),
+              sql`(${siteEvents.payload}->>'count')::int >= ${Number(e.payload.count ?? 0)}`,
+              lt(siteEvents.createdAt, e.createdAt),
+            ),
+          )
+          .limit(1);
+        if (seen) continue;
+      }
+      const line = siteEventLine(e.type, e.payload);
+      if (!line) continue;
+      const roomId = await loop.crewRoomFor(job?.eventId ?? null);
+      if (!roomId) {
+        log(`site ${e.site}: ${e.type}, but no crew room to tell`);
+        continue;
+      }
+      await loop.post(e.communityId, roomId, line);
+      log(`site ${e.site}: ${e.type} told to the crew`);
+      if (e.type === "pool_low") {
+        const leads = (await loadCrew(db, e.communityId, job?.eventId ?? null)).filter((c) => c.lead);
+        await pushToUsers(db, await switchUsersForCrew(db, leads.map((c) => c.id)), {
+          kind: "builder",
+          title: "Sponsor credits running low",
+          body: clip(line, 180),
+          url: "/m",
+          tag: `site-pool-${String(e.payload.sponsor ?? "")}`,
+          renotify: true,
+          cardId: null,
+        });
+      }
+    }
+  }
+
   /** Jobs Desk queued (or that waited for the machine), and Desk cancellations. */
   async function tick(): Promise<void> {
     try {
@@ -291,6 +379,7 @@ export function createBuilder(deps: BuilderDeps) {
             .catch((err: Error) => log(`builder: cancel of ${jobRef(job)} failed: ${err.message}`));
         }
       }
+      await siteTick();
     } catch (err) {
       log(`builder tick failed: ${(err as Error).message}`);
     }

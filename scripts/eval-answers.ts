@@ -389,6 +389,7 @@ try {
   // ── Spec 11: work for Ferri Builder ─────────────────────────────────────
   const buildCases: { msg: string; intent: string; kind?: string }[] = [
     { msg: "@ferri get the builder to make a one-page site for Build Night", intent: "build", kind: "site" },
+    { msg: "@ferri get the builder to ship the Build Night site with registration and sponsor credits", intent: "build", kind: "site" },
     { msg: "@ferri can you make us a day-of checklist for Build Night, with owners from the plan?", intent: "build", kind: "checklist" },
     { msg: "@ferri make a poster for the meetup with the date and the venue", intent: "build", kind: "poster" },
     { msg: "@ferri have the builder put together a one-page sponsor pitch document", intent: "build", kind: "other" },

@@ -1,0 +1,6 @@
+# Only what `supabase link` and `supabase db push` need. The site creates
+# accounts on the server (already confirmed), so no auth emails are sent.
+project_id = "event-site"
+
+[db]
+major_version = 17

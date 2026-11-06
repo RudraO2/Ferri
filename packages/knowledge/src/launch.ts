@@ -293,7 +293,7 @@ export async function createAnnouncementRequest(
     scheduledAt: Date | null;
     targetSpaceIds: string[] | null;
     by: string;
-    origin: "desk" | "pocket";
+    origin: "desk" | "pocket" | "builder";
   },
 ): Promise<string> {
   const text = stripRoomWide(input.text.trim());
@@ -313,7 +313,7 @@ export async function createAnnouncementRequest(
         requestedBy: input.by,
       })
       .returning({ id: announcements.id });
-    await tx.insert(announcementVersions).values({ announcementId: a!.id, version: 1, title, draft: text, reason: "written in " + (input.origin === "desk" ? "Desk" : "Pocket"), proposedBy: input.by });
+    await tx.insert(announcementVersions).values({ announcementId: a!.id, version: 1, title, draft: text, reason: input.origin === "builder" ? "the Builder put the site live" : "written in " + (input.origin === "desk" ? "Desk" : "Pocket"), proposedBy: input.by });
     return a!.id;
   });
 }

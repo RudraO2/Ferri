@@ -700,9 +700,32 @@ export const builderJobs = pgTable(
     report: text("report"),
     /** The Builder's folder for this job, relative to its working folder. */
     folder: text("folder"),
+    /** The live address the Builder reported (the first https link of its done report). */
+    url: text("url"),
     handedAt: timestamp("handed_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex("builder_jobs_number").on(t.communityId, t.number), index("builder_jobs_status").on(t.status)],
+);
+
+/** What an event site the Builder shipped reports back (spec 12): registrations, credit pools. */
+export const siteEvents = pgTable(
+  "site_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .notNull()
+      .references(() => communities.id, { onDelete: "cascade" }),
+    /** The job that shipped the site (B5), as the site names itself. */
+    site: text("site").notNull(),
+    jobId: uuid("job_id").references(() => builderJobs.id, { onDelete: "set null" }),
+    /** "registration", "pool_low", "pool_refilled". */
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    /** Ferri told the crew (or decided not to). */
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_events_open").on(t.handledAt, t.createdAt)],
 );
