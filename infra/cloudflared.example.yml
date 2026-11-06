@@ -1,0 +1,13 @@
+# Cloudflare named tunnel for Desk and Pocket on a stable hostname (Pocket's push
+# subscriptions belong to one web address). Copy to ~/.cloudflared/config.yml:
+#   cloudflared tunnel login
+#   cloudflared tunnel create ferri
+#   cloudflared tunnel route dns ferri ferri.<your-domain>
+#   cloudflared tunnel run ferri
+# and add the hostname to POCKET_ALLOWED_ORIGINS in .env (then rebuild Desk).
+tunnel: <tunnel id from `cloudflared tunnel create`>
+credentials-file: <home>/.cloudflared/<tunnel id>.json
+ingress:
+  - hostname: ferri.<your-domain>
+    service: http://localhost:3100
+  - service: http_status:404

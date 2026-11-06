@@ -156,7 +156,7 @@ Pocket is the crew's phone app: a PWA at `/m` inside Desk (http://localhost:3100
 - **Me**: say which crew member you are (once), turn on notifications, send a test.
 - **Push**: Web Push (VAPID). Your phone buzzes when a card for you opens, at the nudge, when it is escalated to everyone, and when it expires. When someone else answers, the notification changes to "Answered by Priya" so stale buzzes never linger.
 
-Setup: `pnpm setup:switch` (or `pnpm push:keys`) writes the VAPID keys to `.env`. A crew member without a Switch login gets one with `pnpm crew:account <crew name> <email>`, which also links them. Phones need HTTPS: run `cloudflared tunnel --url http://localhost:3100` and open the `https://….trycloudflare.com/m` link (iPhone: add it to the Home Screen first, then allow notifications). Extra tunnel hosts go in `POCKET_ALLOWED_ORIGINS`.
+Setup: `pnpm setup:switch` (or `pnpm push:keys`) writes the VAPID keys to `.env`. A crew member without a Switch login gets one with `pnpm crew:account <crew name> <email>`, which also links them. Phones need HTTPS. For a quick try, run `cloudflared tunnel --url http://localhost:3100` and open the `https://….trycloudflare.com/m` link. For real use, put Desk on a stable hostname with a named tunnel (`infra/cloudflared.example.yml`), because push subscriptions belong to one web address; ours is `https://ferri.rudratechie.xyz/m`. Tunnel hosts go in `POCKET_ALLOWED_ORIGINS`. iPhone: add Pocket to the Home Screen first, then allow notifications from it.
 
 ## Telegram, Slack and Discord
 
