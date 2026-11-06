@@ -6,7 +6,7 @@ import { approveAnnouncement, dropAnnouncement, editAnnouncement, newAnnouncemen
 import { AutoRefresh } from "../refresh";
 import { Empty, Note, PageHead, Section } from "../ui";
 
-const PLATFORM: Record<string, string> = { telegram: "Telegram", slack: "Slack", discord: "Discord", mattermost: "Mattermost", whatsapp: "WhatsApp" };
+const PLATFORM: Record<string, string> = { telegram: "Telegram", slack: "Slack", discord: "Discord", mattermost: "Mattermost", whatsapp: "WhatsApp", whatsapp_web: "WhatsApp" };
 const short = (name: string) => (name.includes(": ") ? name.slice(name.indexOf(": ") + 2) : name);
 
 export default async function AnnouncementsPage({ searchParams }: { searchParams: Promise<{ note?: string }> }) {

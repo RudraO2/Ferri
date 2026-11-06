@@ -73,9 +73,12 @@ export function describeTargets(targets: { name: string; platform: string | null
 }
 
 /** "Slack build-night": the platform, then the chat's own name. */
+/** How people name a platform, by Switch's bridge type (`whatsapp_web` is WhatsApp through a linked device). */
+export const PLATFORM_NAMES: Record<string, string> = { whatsapp: "WhatsApp", whatsapp_web: "WhatsApp", mattermost: "Mattermost", slack: "Slack", discord: "Discord", telegram: "Telegram", teams: "Teams" };
+
 export function spaceLabel(t: { name: string; platform: string | null }): string {
   const short = t.name.includes(": ") ? t.name.slice(t.name.indexOf(": ") + 2) : t.name;
-  const p = t.platform ? `${t.platform.charAt(0).toUpperCase()}${t.platform.slice(1)}` : "Switch";
+  const p = t.platform ? (PLATFORM_NAMES[t.platform] ?? `${t.platform.charAt(0).toUpperCase()}${t.platform.slice(1)}`) : "Switch";
   return `${p} ${short}`;
 }
 

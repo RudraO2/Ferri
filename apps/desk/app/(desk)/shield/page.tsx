@@ -19,7 +19,7 @@ const OUTCOME_STYLE: Record<string, string> = {
   redacted: "border-amber-200 bg-amber-50 text-amber-700",
   alerted: "border-sky-200 bg-sky-50 text-sky-700",
 };
-const PLATFORM: Record<string, string> = { telegram: "Telegram", slack: "Slack", discord: "Discord", mattermost: "Mattermost", whatsapp: "WhatsApp" };
+const PLATFORM: Record<string, string> = { telegram: "Telegram", slack: "Slack", discord: "Discord", mattermost: "Mattermost", whatsapp: "WhatsApp", whatsapp_web: "WhatsApp" };
 const short = (name: string | null) => (name ? (name.includes(": ") ? name.slice(name.indexOf(": ") + 2) : name) : "a room Ferri is not in");
 
 export default async function ShieldPage({ searchParams }: { searchParams: Promise<{ note?: string }> }) {

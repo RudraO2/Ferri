@@ -226,7 +226,7 @@ export interface RoomDetail {
 /** Looks up a bridge's type ("slack", "discord", ...) by id, or null when it cannot tell. */
 export type BridgeTypeLookup = (bridgeId: string) => Promise<string | null>;
 
-const PLATFORMS = ["mattermost", "slack", "discord", "telegram", "teams", "whatsapp"] as const;
+const PLATFORMS = ["mattermost", "slack", "discord", "telegram", "teams", "whatsapp_web", "whatsapp"] as const;
 
 /**
  * The platform of a room: the bridge's type when the Gateway can say, else a
