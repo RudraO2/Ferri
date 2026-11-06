@@ -127,6 +127,23 @@ if (fs.existsSync(path.join(posterKit, "package-lock.json")) && !fs.existsSync(p
   const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: posterKit, encoding: "utf8", shell: process.platform === "win32" });
   if (npm.status !== 0) throw new Error(`npm ci in ${posterKit} failed:\n${npm.stderr || npm.stdout}`);
 }
+// Listings (spec 14): the Builder's own browser (a Chrome profile of its own, where a
+// person logs in to each platform), and Luma's API key when the calendar has Luma Plus.
+const listings: Record<string, unknown> = {
+  port: Number(env.FERRI_BROWSER_PORT ?? 9333),
+  profile: env.FERRI_BROWSER_PROFILE ?? path.join(path.dirname(paths.dir), "builder-browser"),
+  ...(env.FERRI_BROWSER_EXE ? { executable: env.FERRI_BROWSER_EXE } : {}),
+  ...(env.FERRI_BROWSER_CDP ? { cdpUrl: env.FERRI_BROWSER_CDP } : {}),
+  luma: env.LUMA_API_KEY ? { apiKey: env.LUMA_API_KEY } : {},
+};
+fs.writeFileSync(path.join(paths.dir, ".ferri", "listings.json"), JSON.stringify(listings, null, 2), { mode: 0o600 });
+const listingKit = path.join(paths.dir, "kits", "listings");
+if (fs.existsSync(path.join(listingKit, "package-lock.json")) && !fs.existsSync(path.join(listingKit, "node_modules", "playwright-core"))) {
+  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: listingKit, encoding: "utf8", shell: process.platform === "win32" });
+  if (npm.status !== 0) throw new Error(`npm ci in ${listingKit} failed:\n${npm.stderr || npm.stdout}`);
+}
+console.log(`Listings: the Builder's browser on 127.0.0.1:${listings.port as number} (profile ${path.basename(String(listings.profile))}), Luma ${env.LUMA_API_KEY ? "API key set" : "through the browser (no API key; Luma's API needs Luma Plus)"}.`);
+
 if (!env.OPENAI_API_KEY) console.warn("OPENAI_API_KEY is not set: posters use the kit's own background instead of generated art.");
 console.log(`Posters: ${studio.model} (${studio.quality}, at most ${studio.maxCallsPerJob} image calls per job), image key ${env.OPENAI_API_KEY ? "set" : "missing"}.`);
 

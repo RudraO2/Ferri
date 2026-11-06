@@ -58,7 +58,19 @@
       "Bash(scp:*)",
       "Bash(ssh:*)",
       "Bash(rsync:*)",
-      "WebFetch"
+      "WebFetch",
+      "Bash(node kits/listings/scripts/publish.mjs:*)",
+      "Bash(node kits/listings/scripts/takedown.mjs:*)",
+      "Bash(node kits/listings/scripts/luma-api.mjs create:*)",
+      "Bash(node ./kits/listings/scripts/publish.mjs:*)",
+      "Bash(node ./kits/listings/scripts/takedown.mjs:*)",
+      "Bash(node ./kits/listings/scripts/luma-api.mjs create:*)",
+      "Bash(node scripts/publish.mjs:*)",
+      "Bash(node scripts/takedown.mjs:*)",
+      "Bash(node scripts/luma-api.mjs create:*)",
+      "Bash(node ../../kits/listings/scripts/publish.mjs:*)",
+      "Bash(node ../../kits/listings/scripts/takedown.mjs:*)",
+      "Bash(node ../../kits/listings/scripts/luma-api.mjs create:*)"
     ],
     "deny": [
       "Bash(supabase projects delete:*)",
@@ -70,7 +82,10 @@
       "Bash(npx vercel project rm:*)",
       "Bash(npx vercel project remove:*)",
       "Read(~/.ssh/**)",
-      "Read(~/.ferri/builder.env)"
+      "Read(~/.ferri/builder.env)",
+      "Read(~/.ferri/builder/.ferri/listings.json)",
+      "Bash(npx playwright:*)",
+      "Bash(playwright:*)"
     ]
   }
 }

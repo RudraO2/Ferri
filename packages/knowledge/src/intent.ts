@@ -32,7 +32,7 @@ export const CrewIntentSchema = z.strictObject({
   /** build: work for Ferri Builder (spec 11). */
   build: z
     .strictObject({
-      kind: z.enum(["site", "checklist", "poster", "other"]),
+      kind: z.enum(["site", "checklist", "poster", "listing", "other"]),
       title: z.string(),
       what: z.string(),
     })
@@ -63,7 +63,7 @@ facts: every fact in the message that is not part of the card answer, each as a 
   plan.owner is a person's name as written (the sender's own name for "me"), else null. plan.due is ISO 8601 with the offset ("by Friday" means Friday 6 PM), else null. plan.topic is the closest of: ${TOPICS.join(", ")}. plan.ref is null except for done; plan.kind is "task" unless add says otherwise.
   "remember X" is for facts members may ask about; a task, an owner or an agenda request is plan.
 
-- build: they want something made: a page or site, a checklist, a poster, a file, a document ("get the builder to make a one-page site for Build Night", "can you make us a day-of checklist?", "make a poster for the meetup", "have the builder put together a sponsor one-pager"). Ferri Builder, Ferri's teammate that makes things, does it. build.kind is site (a web page or site), checklist, poster, or other. build.title is a 2 to 6 word label ("Event one-page site", "Day-of checklist"). build.what is what they asked for as a standalone request in their words, with the instructions to Ferri removed, keeping every detail they gave. Writing a plan or agenda is plan, not build; telling members something is announce, not build.
+- build: they want something made: a page or site, a checklist, a poster, a file, a document ("get the builder to make a one-page site for Build Night", "can you make us a day-of checklist?", "make a poster for the meetup", "have the builder put together a sponsor one-pager", "put Build Night on Luma", "list the meetup on Meetup"). Ferri Builder, Ferri's teammate that makes things, does it. build.kind is site (a web page or site), checklist, poster, listing (putting the event on an event platform such as Luma, Meetup, Commudle, Devfolio or Eventbrite), or other. build.title is a 2 to 6 word label ("Event one-page site", "Day-of checklist"). build.what is what they asked for as a standalone request in their words, with the instructions to Ferri removed, keeping every detail they gave. Writing a plan or agenda is plan, not build; telling members something is announce, not build.
 
 For every intent, announce, remind, plan and build are null unless the intent is that one, and teams is [] unless the intent is team_rooms. facts is [] for announce, remind, team_rooms, plan and build.
 

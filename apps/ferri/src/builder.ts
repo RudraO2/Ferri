@@ -1,8 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { builderJobs, events, siteEvents, type Db } from "@ferri/db";
 import {
   builderName,
+  builderPaths,
   createAnnouncementRequest,
+  listingAnnouncement,
   createBuilderJob,
   draftAnnouncement,
   firstHttpsUrl,
@@ -162,6 +166,7 @@ export function createBuilder(deps: BuilderDeps) {
         eventName: ev?.name ?? null,
         documents: await roomDocuments(roomId),
         agentName: config.agentName,
+        cover: claimed.kind === "listing" ? await posterCover(claimed.eventId) : null,
       });
       const sent = await agent.sendTargetedMessage(roomId, text, [name]);
       const reach = sent.target_statuses?.[name];
@@ -250,6 +255,8 @@ export function createBuilder(deps: BuilderDeps) {
       log(`builder: ${jobRef(job)} ${report.outcome}: ${clip(report.text, 160)}`);
       // A site the crew allowed to go live: Shield trusts its domain, and the crew gets the announcement on a card.
       if (url && job.kind === "site" && url !== job.url) await siteLive(updated, url);
+      // A listing the crew allowed: Shield trusts the platform, and the crew gets the "is on Luma" card.
+      if (url && job.kind === "listing" && url !== job.url) await listingLive(updated, url);
       // Posters and cards: the crew decides on a card whether they go outside.
       if (report.outcome === "done" && job.kind === "poster" && job.status !== "done") await posterReady(updated);
       if (job.requestedById) {
@@ -317,6 +324,53 @@ export function createBuilder(deps: BuilderDeps) {
       origin: "builder",
     });
     log(`builder: ${jobRef(job)} "site is live" announcement requested`);
+  }
+
+  /**
+   * The event is listed on a platform (the crew allowed the submit on a card).
+   * Shield allows the platform's domain, and Ferri opens the announcement card:
+   * one OK tells every space and saves the link as knowledge.
+   */
+  async function listingLive(job: BuilderJob, url: string): Promise<void> {
+    try {
+      const domain = await setRule(db, { communityId: job.communityId, kind: "allow", domain: new URL(url).hostname, note: `event listing (${jobRef(job)})`, by: "Ferri Builder" });
+      log(`builder: ${jobRef(job)} listed at ${url}; Shield allows ${domain}`);
+    } catch (err) {
+      log(`builder: could not allow ${url} in Shield: ${(err as Error).message}`);
+    }
+    if (!job.eventId) return;
+    const [ev] = await db.select({ name: events.name }).from(events).where(eq(events.id, job.eventId)).limit(1);
+    const post = listingAnnouncement({ eventName: ev?.name ?? "The event", url, site: await siteUrl(job.eventId) });
+    await createAnnouncementRequest(db, {
+      communityId: job.communityId,
+      eventId: job.eventId,
+      title: post.title,
+      text: post.text,
+      scheduledAt: null,
+      targetSpaceIds: null,
+      by: job.requestedBy,
+      origin: "builder",
+      reason: `the Builder listed the event (${jobRef(job)})`,
+    });
+    log(`builder: ${jobRef(job)} "${post.title}" announcement requested`);
+  }
+
+  /** The event's latest poster square card on this machine, as a path from the Builder's folder (a listing's cover). */
+  async function posterCover(eventId: string | null): Promise<string | null> {
+    if (!eventId) return null;
+    const posters = await db
+      .select()
+      .from(builderJobs)
+      .where(and(eq(builderJobs.eventId, eventId), eq(builderJobs.kind, "poster"), eq(builderJobs.status, "done")))
+      .orderBy(desc(builderJobs.number))
+      .limit(5);
+    for (const p of posters) {
+      const image = shareImage(p.media ?? []);
+      if (!image || !p.folder) continue;
+      const rel = `jobs/${p.folder}/out/${image.filename}`;
+      if (fs.existsSync(path.join(builderPaths().dir, rel))) return rel;
+    }
+    return null;
   }
 
   /** The Builder posted files in a room: they belong to the job it is working on there. */

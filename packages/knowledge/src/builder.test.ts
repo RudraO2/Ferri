@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstHttpsUrl, briefWithFiles, handoffMessage, jobFolder, mediaFromMessage, mergeMedia, parseBuilderReport, posterShareBrief, shareImage, siteEventLine } from "./builder.ts";
+import { firstHttpsUrl, briefWithFiles, handoffMessage, jobFolder, listingAnnouncement, mediaFromMessage, mergeMedia, parseBuilderReport, platformOf, posterShareBrief, shareImage, siteEventLine } from "./builder.ts";
 
 describe("parseBuilderReport", () => {
   it("reads a done report, with or without the mention Switch prepends", () => {
@@ -115,5 +115,50 @@ describe("files attached to a build request", () => {
     expect(text).toContain('Rudra asked: "Make the poster with this photo"');
     expect(text).toContain("They attached last.png (switch-media://abc123). Fetch each with download_attachment");
     expect(briefWithFiles("x", [])).toBe("x");
+  });
+});
+
+describe("listings (spec 14)", () => {
+  it("hands a listing job to the list-event skill, with the poster as the cover", () => {
+    const text = handoffMessage({
+      job: { number: 14, title: "Luma listing", brief: "Put Build Night on Luma", kind: "listing", requestedBy: "Rudra" },
+      eventName: "Lantern Build Night",
+      documents: ["Ferri knowledge"],
+      agentName: "ferri",
+      cover: "jobs/B11-build-night-poster-and-cards/out/lantern-build-night-square.jpg",
+    });
+    expect(text).toContain("list-event skill");
+    expect(text).toContain("Post a screenshot of the filled form here before the submit");
+    expect(text).toContain("Use the event's poster as the cover: jobs/B11-build-night-poster-and-cards/out/lantern-build-night-square.jpg (from job B11).");
+    const plain = handoffMessage({
+      job: { number: 15, title: "Luma listing", brief: "Put it on Luma", kind: "listing", requestedBy: "Rudra" },
+      eventName: null,
+      documents: [],
+      agentName: "ferri",
+    });
+    expect(plain).not.toContain("as the cover");
+  });
+
+  it("names the platform from the listing's address", () => {
+    expect(platformOf("https://luma.com/4qnuaknv")).toBe("Luma");
+    expect(platformOf("https://lu.ma/abc")).toBe("Luma");
+    expect(platformOf("https://www.meetup.com/x/events/1")).toBe("Meetup");
+    expect(platformOf("https://build-night.devfolio.co/")).toBe("Devfolio");
+    expect(platformOf("https://events.example.org/e/1")).toBe("events.example.org");
+  });
+
+  it("drafts the 'is on Luma' announcement, pointing to the site when there is one", () => {
+    const withSite = listingAnnouncement({ eventName: "Lantern Build Night", url: "https://luma.com/abc", site: "https://lantern-build-night.vercel.app" });
+    expect(withSite.title).toBe("Lantern Build Night is on Luma");
+    expect(withSite.text).toBe(
+      "Lantern Build Night is now listed on Luma: https://luma.com/abc\nRegistration is still on https://lantern-build-night.vercel.app; the Luma page helps more people find it.",
+    );
+    expect(listingAnnouncement({ eventName: "Meetup", url: "https://luma.com/x", site: null }).text).toContain("RSVP there");
+  });
+
+  it("reads the listing address from the done report", () => {
+    const r = parseBuilderReport("Job B14 done: Lantern Build Night is listed on Luma at https://luma.com/4qnuaknv.");
+    expect(r?.outcome).toBe("done");
+    expect(firstHttpsUrl(r!.text)).toBe("https://luma.com/4qnuaknv");
   });
 });

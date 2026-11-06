@@ -7,7 +7,7 @@ import { builderJobs, type Db, type SwitchMedia } from "@ferri/db";
 // ── Ferri Builder (spec 11): a Claude Code agent that Switch runs ─────────
 
 export type BuilderJob = typeof builderJobs.$inferSelect;
-export type BuilderJobKind = "site" | "checklist" | "poster" | "other";
+export type BuilderJobKind = "site" | "checklist" | "poster" | "listing" | "other";
 
 /** Where the Builder lives on this machine: its own folder, Claude home and the controller's env file. */
 export function builderPaths(env: Record<string, string | undefined> = process.env) {
@@ -57,6 +57,8 @@ export function handoffMessage(input: {
   eventName: string | null;
   documents: string[];
   agentName: string;
+  /** Listings: the poster's square card for the cover (a path from the Builder's working folder). */
+  cover?: string | null;
 }): string {
   const ref = jobRef(input.job);
   const folder = `jobs/${jobFolder(input.job.number, input.job.title)}/`;
@@ -72,6 +74,7 @@ export function handoffMessage(input: {
       : "Use only facts from this room; leave a clear placeholder for anything missing.",
     `Work in ${folder}. When it is ready, post it here with send_attachment, then tell ${input.agentName} "Job ${ref} done:" with a line on what you made, or "Job ${ref} stuck:" with what you need.`,
     KIND_HINT[(input.job.kind as BuilderJobKind) ?? "other"] ?? "",
+    input.job.kind === "listing" && input.cover ? `Use the event's poster as the cover: ${input.cover} (from job ${input.cover.split("/")[1]?.split("-")[0] ?? "the poster job"}).` : "",
     "Nothing goes public (deploy, push, post, email) without a yes on a card first.",
   ];
   return lines.filter((l, i) => l || i === 3).join("\n");
@@ -90,6 +93,8 @@ const KIND_HINT: Record<BuilderJobKind, string> = {
   checklist: "Make it checklist.md with - [ ] items grouped as the week before, the day before, on the day and after, each with an owner where the plan names one.",
   poster:
     "Start by calling your make-posters skill with the Skill tool, even if you used it before (it may have changed), and follow it: background art plus the exact text, every size, posted here in one message. Write design.json fresh from this room's documents; reuse an earlier job's art or photo only when asked, never its text. Point the QR code at the event's site when there is one. Do not post them anywhere else; I ask the crew on a card before anything is shared outside.",
+  listing:
+    "Start by calling your list-event skill with the Skill tool, even if you used it before (it may have changed), and follow it. Write listing.json fresh from this room's documents. The platform's form is filled in the Builder's browser, where a person logs in themselves; if it needs a login or a captcha, post the screenshot and ask on a card. Post a screenshot of the filled form here before the submit, which waits on the crew's card.",
   other: "",
 };
 
@@ -249,4 +254,36 @@ export function posterShareBrief(input: { eventName: string; url: string | null 
     (input.url ? `Invite everyone to register at ${input.url}.` : "Invite everyone to come.") +
     " One or two short lines. Do not repeat the date, time or venue: the poster shows them."
   );
+}
+
+// ── Listings (spec 14) ────────────────────────────────────────────────────
+
+/** "Luma" for https://luma.com/abc, else the host without www. */
+export function platformOf(url: string): string {
+  const host = new URL(url).hostname.replace(/^www\./, "");
+  const known: Record<string, string> = {
+    "luma.com": "Luma",
+    "lu.ma": "Luma",
+    "meetup.com": "Meetup",
+    "commudle.com": "Commudle",
+    "devfolio.co": "Devfolio",
+    "eventbrite.com": "Eventbrite",
+    "unstop.com": "Unstop",
+    "hack2skill.com": "Hack2skill",
+  };
+  const base = host.split(".").slice(-2).join(".");
+  return known[host] ?? known[base] ?? (host.endsWith(".devfolio.co") ? "Devfolio" : host);
+}
+
+/** The announcement Ferri drafts when the Builder has listed the event. */
+export function listingAnnouncement(input: { eventName: string; url: string; site: string | null }): { title: string; text: string } {
+  const platform = platformOf(input.url);
+  return {
+    title: `${input.eventName} is on ${platform}`,
+    text:
+      `${input.eventName} is now listed on ${platform}: ${input.url}` +
+      (input.site
+        ? `\nRegistration is still on ${input.site}; the ${platform} page helps more people find it.`
+        : "\nRSVP there, and share it with anyone who'd like to come."),
+  };
 }

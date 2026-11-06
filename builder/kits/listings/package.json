@@ -1,0 +1,13 @@
+{
+  "name": "ferri-listings-kit",
+  "private": true,
+  "type": "module",
+  "description": "Ferri Builder's event listing kit: fills an event platform's form in the Builder's own browser, and submits only after a yes on a Switch card. Luma through its API when there is a key.",
+  "scripts": {
+    "browser": "node scripts/browser.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.65.0"
+  }
+}

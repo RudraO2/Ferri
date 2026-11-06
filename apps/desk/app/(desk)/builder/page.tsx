@@ -137,6 +137,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
               <option value="site">Page or site</option>
               <option value="checklist">Checklist</option>
               <option value="poster">Poster</option>
+              <option value="listing">Listing (Luma, ...)</option>
               <option value="other">Other</option>
             </select>
           </div>
@@ -171,8 +172,9 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
 
 function JobRow({ j }: { j: BuilderJob }) {
   const files = jobFiles(j);
-  // Posters and cards (spec 13): the rendered PNGs as thumbnails, everything else as links.
-  const images = files.filter((f) => /^out\/[^/]+\.png$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+  // Posters and cards (spec 13): the rendered PNGs as thumbnails; listings (spec 14): the form and live-page screenshots.
+  const shown = j.kind === "listing" ? /^out\/[^/]+-(filled|live|needs-you)\.jpg$|^out\/needs-you\.jpg$/i : /^out\/[^/]+\.png$/i;
+  const images = files.filter((f) => shown.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
   const others = files.filter((f) => !images.includes(f));
   const live = ["queued", "handed", "working", "stuck"].includes(j.status);
   return (
@@ -190,7 +192,7 @@ function JobRow({ j }: { j: BuilderJob }) {
         <div className="mt-1 text-zinc-700">{j.brief}</div>
         {j.url ? (
           <div className="mt-1">
-            {j.kind === "site" ? <span className={`badge ${ok}`}>live</span> : <span className="badge">points to</span>}{" "}
+            {j.kind === "site" ? <span className={`badge ${ok}`}>live</span> : j.kind === "listing" ? <span className={`badge ${ok}`}>listed</span> : <span className="badge">points to</span>}{" "}
             <a className="font-medium text-zinc-900 underline underline-offset-2" href={j.url} target="_blank" rel="noreferrer">
               {j.url}
             </a>
@@ -207,7 +209,7 @@ function JobRow({ j }: { j: BuilderJob }) {
               <a key={f.name} className="block text-center text-[11px] text-zinc-500 hover:text-zinc-900" href={fileHref(j, f.name)} target="_blank" rel="noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={fileHref(j, f.name)} alt={f.name} className="h-28 w-auto rounded-md border border-zinc-200 bg-zinc-50 object-contain" loading="lazy" />
-                <span className="mt-1 block">{f.name.replace(/^out\//, "").replace(/\.png$/, "").split("-").pop()}</span>
+                <span className="mt-1 block">{f.name.replace(/^out\//, "").replace(/\.(png|jpg)$/, "").split("-").pop()}</span>
               </a>
             ))}
           </div>

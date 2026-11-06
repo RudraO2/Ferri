@@ -692,7 +692,7 @@ export const builderJobs = pgTable(
     eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     /** Short number: job B<number>. */
     number: integer("number").notNull(),
-    /** "site", "checklist", "poster", "other". */
+    /** "site", "checklist", "poster", "listing", "other". */
     kind: text("kind").notNull().default("other"),
     /** Short label ("Event one-page site"). */
     title: text("title").notNull(),

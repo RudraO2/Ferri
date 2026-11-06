@@ -1,0 +1,14 @@
+{
+  "platform": "luma",
+  "name": "Riverside Board Game Social",
+  "start": "2027-03-13T17:30",
+  "end": "2027-03-13T21:00",
+  "timezone": "Asia/Kolkata",
+  "venue": "Riverside Community Hall, 12 Example Lane, Pune",
+  "online": null,
+  "description": "An evening of board games for beginners and regulars.\n\nRegister at https://example.org/board-games",
+  "url": "https://example.org/board-games",
+  "visibility": "private",
+  "capacity": 40,
+  "cover": null
+}

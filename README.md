@@ -255,6 +255,25 @@ Some event work is making things: the event's one-page site, a day-of checklist,
 - When it is live, Ferri allows the domain in Shield and opens the "site is live" announcement card: one OK posts it to every space and saves the link as knowledge, so "where do I register?" gets the link with its source.
 - The site reports back through Desk's public address (`POST /api/site` with a shared secret): the first registration and every tenth, and a sponsor's credit pool running low, reach the crew room, and the leads get a push.
 
+### The Builder makes the posters and social cards
+
+`@ferri get the builder to make the Build Night poster and social cards` ends with a print poster and a card for every platform, all with the same exact text.
+
+- The background art comes from an image model (`gpt-image-2.6-flare`, one call per job, at most two). It is never asked to write words.
+- Every word, the date, the venue, the address and a QR code are drawn on top by Satori from a `design.json` the Builder fills from the room's documents, so there are no typos. The kit (`builder/kits/posters`) refuses a character the fonts cannot draw, and reads the QR code back from every image it made.
+- Six formats from one design: A4 print (PNG, JPEG, SVG), square, 4:5, story, link card and X. A photo the crew attaches to the request becomes the background instead.
+- The Builder posts the square, the story and a poster preview in the crew room. Ferri then opens a "share the poster" card; one OK posts the image with a short caption to every space on every platform.
+
+### The Builder lists the event on Luma and other platforms
+
+`@ferri get the builder to put Build Night on Luma` ends with the event listed, and nothing is published until a person says yes.
+
+- Luma's public API needs a Luma Plus subscription on the calendar. With a key (`LUMA_API_KEY`), the Builder creates the event through the API, with the poster uploaded as the cover. Without one, and for every platform without an API, it uses the platform's own form.
+- The form is filled in the Builder's own browser: a Chrome window with a profile of its own on the organizer's screen. A person logs in to each platform there, themselves. Ferri never types, sees or keeps a password and never creates an account. If a login or a captcha shows up, the Builder posts a screenshot and asks on a card, and carries on after "Done".
+- The kit (`builder/kits/listings`, Playwright on the installed Chrome) fills Luma's form from a `listing.json` written from the room's documents: name, times and time zone, the exact venue, description, visibility, capacity, and the poster's square card as the cover. While it fills, it blocks the platform's publish request and every click on a publish button.
+- The Builder posts a screenshot of the filled form in the crew room. Submitting is a separate script whose Claude Code permission prompt is the Switch card; it refuses if the form changed since the screenshot. After "Allow once", it reads the listing's address back and posts the live page.
+- Ferri then allows the platform's domain in Shield and opens the "Build Night is on Luma" announcement card. Any other site works without new code: the Builder lists the page's fields with `inspect`, writes a `form.json`, and the same fill, screenshot and card follow.
+
 ## Shield: safety on every message
 
 Shield is Ferri's Switch Trust endpoint. Switch sends every message, from people and from agents, to `POST /guardrails/check` before anyone sees it, and Shield answers in a few milliseconds (Switch's limit is 2 seconds; no model call in the path):
@@ -283,14 +302,16 @@ Turn it on with `pnpm shield:connect` (writes `SHIELD_API_KEY` to `.env` and sto
 | `pnpm shield:connect` | Point Switch Trust at Shield (`--off`, `--status`) |
 | `pnpm builder:setup` | Enroll this machine with Switch, have Ferri create the Builder, set its addressing and budget (safe to re-run) |
 | `pnpm builder:controller` | Run the Switch agent controller that runs the Builder |
+| `node kits/listings/scripts/browser.mjs start` (in `~/.ferri/builder`) | Open the Builder's own browser, to log in to Luma and other platforms (`status` shows where it is logged in) |
 | `pnpm test`, `pnpm typecheck` | Unit tests and types |
 
 ## How we checked it
 
-- `pnpm test`: 101 unit tests (knowledge, policy, cards, launch, the plan, the Builder's reports, hand-offs and site events, Shield detectors, push notices, the Switch stream parser, flow helpers).
+- `pnpm test`: 110 unit tests (knowledge, policy, cards, launch, the plan, the Builder's reports, hand-offs, site events, posters and listings, Shield detectors, push notices, the Switch stream parser, flow helpers).
 - `pnpm typecheck`: seven packages.
-- `pnpm eval:answers`: 77 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, build requests, reading the plan from crew chat and the agenda draft. 77 of 77 pass.
-- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size; the Builder making the event site, a checklist and a sponsor one-pager from crew requests and Desk, its publish and email cards refused from the room, Desk and Pocket with nothing published, and a spent budget stopping it; the Builder shipping the event site to Vercel and Supabase behind a deploy card, then registration, credit claims, a low-pool alert and a revoke on the live site.
+- `pnpm eval:answers`: 79 fixed cases run against the real model (Claude Haiku 5.5, low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents, build requests, reading the plan from crew chat and the agenda draft. 79 of 79 pass.
+- The Builder's kits check themselves: `node scripts/render.mjs --example` in `builder/kits/posters` (every format, every QR code read back) and `node scripts/check.mjs` in `builder/kits/listings` (times, listing checks, and the Luma API path against a stand-in server).
+- Every feature was run end to end on the real local stack (Switch with Mattermost, Slack, Discord and Telegram connected) before the next one started: questions asked on Telegram answered once from the crew room and delivered on Slack and Discord; announcements posted to seven spaces and edited in place on four platforms; scam links blocked on Discord and Mattermost in 3 to 9 ms; announcement and answer cards approved from Pocket at phone size; the Builder making the event site, a checklist and a sponsor one-pager from crew requests and Desk, its publish and email cards refused from the room, Desk and Pocket with nothing published, and a spent budget stopping it; the Builder shipping the event site to Vercel and Supabase behind a deploy card, then registration, credit claims, a low-pool alert and a revoke on the live site; the Builder making the poster and cards with one image call and the share card posting them to seven spaces on four platforms; the Builder listing Build Night on Luma from its own browser, "Decline" leaving Luma untouched, "Allow once" publishing it with the poster as the cover, a login card on a platform the browser was not logged in to, and a stray click on Luma's submit blocked during the fill.
 
 ## Repository layout
 
@@ -306,6 +327,8 @@ packages/db/         Drizzle schema and migrations (Ferri runs them on start)
 seed/                the demo community (Lantern Labs) and event (Lantern Build Night)
 skills/              Ferri's persona and answer rules, in markdown
 builder/             Ferri Builder's workspace template: its CLAUDE.md and permission rules
+  kits/              The Builder's kits: event-site (Next.js + Supabase), posters (Satori), listings (Playwright)
+  .claude/skills/    Its skills: ship-event-site, make-posters, list-event
 scripts/             setup, knowledge CLI, eval, test people, Shield connect, Builder setup and controller
 infra/               Ferri's Postgres (pgvector) for Docker
 ```

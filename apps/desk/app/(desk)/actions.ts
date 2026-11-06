@@ -473,7 +473,7 @@ export async function addPlanItem(form: FormData) {
 
 // ── Ferri Builder (spec 11) ──────────────────────────────────────────────
 
-const BUILD_KINDS: BuilderJobKind[] = ["site", "checklist", "poster", "other"];
+const BUILD_KINDS: BuilderJobKind[] = ["site", "checklist", "poster", "listing", "other"];
 
 /** A job for the Builder from Desk. Ferri hands it over in the crew room within seconds. */
 export async function queueBuilderJob(form: FormData) {

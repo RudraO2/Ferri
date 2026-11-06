@@ -393,6 +393,8 @@ try {
     { msg: "@ferri can you make us a day-of checklist for Build Night, with owners from the plan?", intent: "build", kind: "checklist" },
     { msg: "@ferri make a poster for the meetup with the date and the venue", intent: "build", kind: "poster" },
     { msg: "@ferri have the builder put together a one-page sponsor pitch document", intent: "build", kind: "other" },
+    { msg: "@ferri get the builder to put Build Night on Luma", intent: "build", kind: "listing" },
+    { msg: "@ferri can we list the meetup on Commudle too?", intent: "build", kind: "listing" },
     { msg: "@ferri tell everyone the event site is live", intent: "announce" },
     { msg: "@ferri draft the run of show for Saturday", intent: "plan" },
   ];
