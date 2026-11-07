@@ -2,7 +2,7 @@
  * Email setup (spec 15). Safe to re-run.
  *
  *   1. RESEND_API_KEY must be in .env.
- *   2. The outreach mailbox's domain (FERRI_EMAIL_FROM, default partners@rudratechie.xyz)
+ *   2. The outreach mailbox's domain (FERRI_EMAIL_FROM, for example partners@your-domain.org)
  *      must be verified in Resend for sending and receiving.
  *   3. Resend's webhook points at Desk's public `/api/email` (FERRI_PUBLIC_URL) for
  *      received, delivered, bounced and complained; its signing secret goes to .env
@@ -20,17 +20,20 @@ const envFile = path.join(root, ".env");
 const env = { ...readEnvFile(envFile), ...process.env } as Record<string, string | undefined>;
 const key = env.RESEND_API_KEY;
 if (!key) throw new Error("RESEND_API_KEY is not set in .env. Make a key at https://resend.com/api-keys and add it.");
-const from = env.FERRI_EMAIL_FROM ?? "partners@rudratechie.xyz";
+const from = env.FERRI_EMAIL_FROM?.trim();
+if (!from) throw new Error("FERRI_EMAIL_FROM is not set. Set it in .env to the outreach mailbox on your Resend domain (for example partners@your-domain.org), then run pnpm email:setup again.");
 const mailbox = parseAddress(from);
 if (!mailbox) throw new Error(`FERRI_EMAIL_FROM is not an address: ${from}`);
 const domainName = mailbox.email.split("@")[1]!;
-const publicUrl = (env.FERRI_PUBLIC_URL ?? "https://ferri.rudratechie.xyz").replace(/\/+$/, "");
+const publicUrlRaw = env.FERRI_PUBLIC_URL?.trim();
+if (!publicUrlRaw) throw new Error("FERRI_PUBLIC_URL is not set. Set it in .env to Desk's public https address (Resend posts to <FERRI_PUBLIC_URL>/api/email), then run pnpm email:setup again.");
+const publicUrl = publicUrlRaw.replace(/\/+$/, "");
 const endpoint = `${publicUrl}/api/email`;
 const EVENTS = ["email.received", "email.delivered", "email.bounced", "email.complained"];
 const r = resend({ apiKey: key });
 
 function setEnv(name: string, value: string, comment: string) {
-  let text = fs.readFileSync(envFile, "utf8");
+  let text = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8") : "";
   if (new RegExp(`^${name}=`, "m").test(text)) text = text.replace(new RegExp(`^${name}=.*$`, "m"), `${name}=${value}`);
   else text += `${text.endsWith("\n") ? "" : "\n"}# ${comment}\n${name}=${value}\n`;
   fs.writeFileSync(envFile, text);
@@ -67,6 +70,5 @@ if (!hook) {
 const secret = hook.signing_secret ?? (await r.call<Hook>("GET", `/webhooks/${hook.id}`)).signing_secret;
 if (!secret) throw new Error("Resend did not return the webhook's signing secret.");
 setEnv("RESEND_WEBHOOK_SECRET", secret, "Resend's webhook signing secret (spec 15), written by pnpm email:setup.");
-if (!env.FERRI_EMAIL_FROM) setEnv("FERRI_EMAIL_FROM", mailbox.email, "The outreach mailbox (spec 15); replies come back to it.");
 console.log(`Mailbox: ${mailbox.email} (replies to ${mailbox.email.replace("@", "+<contact>@")}). Secret saved to .env.`);
 console.log("Done. Restart Desk and Ferri so they read the new .env.");

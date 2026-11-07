@@ -7,6 +7,7 @@ import { BuilderCards } from "./builder-cards";
 import { builderRequests } from "@/lib/builder";
 import { SEND_KIND_LABEL } from "@/lib/ferri";
 import { audienceLine } from "@/lib/guests";
+import { outreachMailbox } from "@/lib/contacts";
 
 export default async function NeedsYou({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
@@ -122,7 +123,7 @@ function CardRow({ card }: { card: PocketCard }) {
         ) : card.kind === "plan" ? (
           <span className="text-[12.5px] text-zinc-500">{card.topic} · from the agenda draft</span>
         ) : card.kind === "outreach" ? (
-          <span className="text-[12.5px] text-zinc-500">from partners@rudratechie.xyz</span>
+          <span className="text-[12.5px] text-zinc-500">{outreachMailbox() ? `from ${outreachMailbox()}` : "email is off"}</span>
         ) : card.kind === "guests" ? (
           <span className="text-[12.5px] text-zinc-500">
             {card.guestCard?.send ? `${SEND_KIND_LABEL[card.guestCard.send.kind] ?? card.guestCard.send.kind} · ` : ""}to {audienceLine(card.guestCard?.send?.audience ?? "going", card.guestCard?.count ?? null)}

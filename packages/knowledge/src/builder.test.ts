@@ -47,7 +47,7 @@ describe("handoffMessage", () => {
 
 describe("firstHttpsUrl", () => {
   it("takes the first https link without trailing punctuation", () => {
-    expect(firstHttpsUrl("The site is live at https://lantern-build-night.vercel.app. Register there.")).toBe("https://lantern-build-night.vercel.app");
+    expect(firstHttpsUrl("The site is live at https://build-night.example.com. Register there.")).toBe("https://build-night.example.com");
     expect(firstHttpsUrl("Live: (https://x.vercel.app/), then https://y.dev")).toBe("https://x.vercel.app/");
   });
   it("ignores plain http and this laptop", () => {
@@ -95,9 +95,9 @@ describe("poster media (spec 13)", () => {
   });
 
   it("briefs the drafter with the link and leaves the details to the poster", () => {
-    const brief = posterShareBrief({ eventName: "Lantern Build Night", url: "https://lantern-build-night.vercel.app" });
+    const brief = posterShareBrief({ eventName: "Lantern Build Night", url: "https://build-night.example.com" });
     expect(brief).toContain("Lantern Build Night poster");
-    expect(brief).toContain("register at https://lantern-build-night.vercel.app");
+    expect(brief).toContain("register at https://build-night.example.com");
     expect(brief).toContain("Do not repeat the date, time or venue");
   });
 });
@@ -148,10 +148,10 @@ describe("listings (spec 14)", () => {
   });
 
   it("drafts the 'is on Luma' announcement, pointing to the site when there is one", () => {
-    const withSite = listingAnnouncement({ eventName: "Lantern Build Night", url: "https://luma.com/abc", site: "https://lantern-build-night.vercel.app" });
+    const withSite = listingAnnouncement({ eventName: "Lantern Build Night", url: "https://luma.com/abc", site: "https://build-night.example.com" });
     expect(withSite.title).toBe("Lantern Build Night is on Luma");
     expect(withSite.text).toBe(
-      "Lantern Build Night is now listed on Luma: https://luma.com/abc\nRegistration is still on https://lantern-build-night.vercel.app; the Luma page helps more people find it.",
+      "Lantern Build Night is now listed on Luma: https://luma.com/abc\nRegistration is still on https://build-night.example.com; the Luma page helps more people find it.",
     );
     expect(listingAnnouncement({ eventName: "Meetup", url: "https://luma.com/x", site: null }).text).toContain("RSVP there");
   });

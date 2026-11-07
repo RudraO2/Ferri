@@ -24,30 +24,30 @@ describe("webhook signatures", () => {
 
 describe("addresses", () => {
   it("parses names and addresses", () => {
-    expect(parseAddress("Lantern Labs <Partners@RudraTechie.xyz>")).toEqual({ name: "Lantern Labs", email: "partners@rudratechie.xyz" });
+    expect(parseAddress("Lantern Labs <Partners@Example.com>")).toEqual({ name: "Lantern Labs", email: "partners@example.com" });
     expect(parseAddress('"Asha K" <asha@cloudco.example>')).toEqual({ name: "Asha K", email: "asha@cloudco.example" });
     expect(parseAddress("asha@cloudco.example")).toEqual({ name: null, email: "asha@cloudco.example" });
     expect(parseAddress("not an address")).toBeNull();
   });
   it("puts the contact's code in the reply-to and reads it back", () => {
-    const to = replyAddress("Lantern Labs <partners@rudratechie.xyz>", "c7f3a9");
-    expect(to).toBe("partners+c7f3a9@rudratechie.xyz");
-    expect(codeFrom(["someone@else.org", `Lantern <${to}>`], "partners@rudratechie.xyz")).toBe("c7f3a9");
-    expect(codeFrom(["partners@rudratechie.xyz"], "partners@rudratechie.xyz")).toBeNull();
-    expect(codeFrom(["partners+c7f3a9@other.org"], "partners@rudratechie.xyz")).toBeNull();
+    const to = replyAddress("Lantern Labs <partners@example.com>", "c7f3a9");
+    expect(to).toBe("partners+c7f3a9@example.com");
+    expect(codeFrom(["someone@else.org", `Lantern <${to}>`], "partners@example.com")).toBe("c7f3a9");
+    expect(codeFrom(["partners@example.com"], "partners@example.com")).toBeNull();
+    expect(codeFrom(["partners+c7f3a9@other.org"], "partners@example.com")).toBeNull();
   });
 });
 
 describe("reply text", () => {
   it("keeps only the new part of a reply", () => {
-    const text = "Hi Rudra,\n\nYes, we'd love to sponsor. Can we talk Monday?\n\nAsha\n\nOn Fri, 6 Nov 2026 at 17:02, Lantern Labs <partners+c1@rudratechie.xyz> wrote:\n> Hello Asha,\n> We are running Build Night";
+    const text = "Hi Rudra,\n\nYes, we'd love to sponsor. Can we talk Monday?\n\nAsha\n\nOn Fri, 6 Nov 2026 at 17:02, Lantern Labs <partners+c1@example.com> wrote:\n> Hello Asha,\n> We are running Build Night";
     expect(newPart(text)).toBe("Hi Rudra,\n\nYes, we'd love to sponsor. Can we talk Monday?\n\nAsha");
     expect(newPart("no thanks\n\n-----Original Message-----\nFrom: x")).toBe("no thanks");
     expect(newPart("Sure.\nOn Fri, 6 Nov 2026 at 17:02, Lantern Labs <p@x.y>\nwrote:\n> hi")).toBe("Sure.");
   });
   it("turns text into safe HTML with links", () => {
-    expect(textToHtml("Hi <b>Asha</b>,\n\nSee https://lantern-build-night.vercel.app")).toBe(
-      '<p>Hi &lt;b&gt;Asha&lt;/b&gt;,</p>\n<p>See <a href="https://lantern-build-night.vercel.app">https://lantern-build-night.vercel.app</a></p>',
+    expect(textToHtml("Hi <b>Asha</b>,\n\nSee https://build-night.example.com")).toBe(
+      '<p>Hi &lt;b&gt;Asha&lt;/b&gt;,</p>\n<p>See <a href="https://build-night.example.com">https://build-night.example.com</a></p>',
     );
   });
 });

@@ -27,11 +27,11 @@ describe("statuses", () => {
 
 describe("parseGuestCsv", () => {
   it("reads Luma's own export", () => {
-    const csv = 'api_id,name,first_name,last_name,email,approval_status,created_at\ngst-1,Asha Guest,Asha,Guest,RSVP-asha@rudratechie.xyz,approved,2026-11-06\ngst-2,"Ravi, R",Ravi,R,rsvp-ravi@rudratechie.xyz,waitlist,2026-11-06\n';
+    const csv = 'api_id,name,first_name,last_name,email,approval_status,created_at\ngst-1,Asha Guest,Asha,Guest,RSVP-asha@example.com,approved,2026-11-06\ngst-2,"Ravi, R",Ravi,R,rsvp-ravi@example.com,waitlist,2026-11-06\n';
     const r = parseGuestCsv(csv);
     expect(r.rows).toEqual([
-      { name: "Asha Guest", email: "rsvp-asha@rudratechie.xyz", status: "going", team: null },
-      { name: "Ravi, R", email: "rsvp-ravi@rudratechie.xyz", status: "waitlist", team: null },
+      { name: "Asha Guest", email: "rsvp-asha@example.com", status: "going", team: null },
+      { name: "Ravi, R", email: "rsvp-ravi@example.com", status: "waitlist", team: null },
     ]);
   });
   it("reads a Google Forms or Tally export with first and last name", () => {
@@ -52,7 +52,7 @@ describe("emails", () => {
     expect(c).toMatch(/^[a-z0-9]{8}$/);
   });
   it("builds the RSVP link from Desk's public address", () => {
-    expect(rsvpUrl("https://ferri.rudratechie.xyz/", "abc12345")).toBe("https://ferri.rudratechie.xyz/rsvp/abc12345");
+    expect(rsvpUrl("https://ferri.example.com/", "abc12345")).toBe("https://ferri.example.com/rsvp/abc12345");
   });
   it("makes each guest's copy personal, with their RSVP link and the footer", () => {
     const t = personalText({ kind: "nudge", text: "Hi {first},\n\nBuild Night is full.", name: "Asha Guest", url: "https://x/rsvp/a", eventName: "Lantern Build Night" });

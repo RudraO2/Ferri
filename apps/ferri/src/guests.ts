@@ -71,6 +71,9 @@ interface LumaList {
   guests: { id: string; name: string; email: string; lumaStatus: string; status: GuestStatus; registeredAt: string | null; checkedInAt: string | null }[];
 }
 
+/** What to set when guest email is off. */
+export const GUEST_EMAIL_OFF = "set RESEND_API_KEY and FERRI_GUEST_EMAIL_FROM, then run pnpm email:setup";
+
 /**
  * RSVP (spec 17). One guest list per event in Ferri, synced from the event
  * site the Builder shipped (its guest route) and from Luma (the host's Guests
@@ -81,8 +84,9 @@ interface LumaList {
  */
 export function createGuests(deps: GuestsDeps) {
   const { db, agent, loop, log } = deps;
-  const mail = deps.mail !== undefined ? deps.mail : config.resendApiKey ? resend({ apiKey: config.resendApiKey }) : null;
-  const mailbox = parseAddress(config.guestEmailFrom)?.email ?? "events@rudratechie.xyz";
+  /** Unset (no FERRI_GUEST_EMAIL_FROM): guest email is off, and so is sending. */
+  const mailbox = config.guestEmailFrom ? (parseAddress(config.guestEmailFrom)?.email ?? null) : null;
+  const mail = !mailbox ? null : deps.mail !== undefined ? deps.mail : config.resendApiKey ? resend({ apiKey: config.resendApiKey }) : null;
   const lastSync = new Map<string, number>();
 
   async function eventRow(eventId: string): Promise<EventRow | null> {
@@ -376,7 +380,7 @@ export function createGuests(deps: GuestsDeps) {
     const route = approvers(crew);
     const times = await loop.ladderFor(ev.communityId, ev);
     const id = randomUUID();
-    const how = next.lumaId && ev.lumaEventId ? "Luma admits them and emails them itself." : `I email them the offer from ${mailbox}; they have ${OFFER_HOURS} hours to say yes on their RSVP link.`;
+    const how = next.lumaId && ev.lumaEventId ? "Luma admits them and emails them itself." : mailbox && mail ? `I email them the offer from ${mailbox}; they have ${OFFER_HOURS} hours to say yes on their RSVP link.` : `Guest email is off (${GUEST_EMAIL_OFF}), so tell them yourself; they can say yes on their RSVP link.`;
     const question = clip(`${freed ? `${firstName(freed.name)} can't come. ` : ""}Offer the spot to ${next.name}?`, 300);
     const detail = `${freed ? `${freed.name} freed their spot. ` : ""}${going}${ev.capacity ? ` of ${ev.capacity}` : ""} going now. ${next.name} (${next.email}) is first on the waitlist${next.registeredAt ? `, since ${formatWhen(next.registeredAt, "Asia/Kolkata")}` : ""}. ${how}`;
     await db.insert(cards).values({
@@ -583,7 +587,7 @@ export function createGuests(deps: GuestsDeps) {
             id: CARD_QUESTION_ID,
             title: "Send it?",
             prompt:
-              `From: ${ev.name} <${mailbox}>, ${when}, to ${plural(people.length, "guest", "guests")}.${capNote}\n` +
+              `From: ${ev.name} <${mailbox ?? "guest email is off"}>, ${when}, to ${plural(people.length, "guest", "guests")}.${capNote}\n` +
               `Subject: ${subject}\n\nWhat ${firstName(people[0]!.name)} gets:\n\n${sample.slice(0, 3000)}\n\n` +
               (missing.length ? `Not in the knowledge, so left out: ${missing.join("; ")}.\n\n` : "") +
               "Pick Send it or Don't send, or write your own version of the body in quotes after the card code (use {first} for each guest's first name).",
@@ -648,8 +652,8 @@ export function createGuests(deps: GuestsDeps) {
     await db.update(guestSends).set({ status: "sending", updatedAt: new Date() }).where(and(eq(guestSends.status, "scheduled"), lte(guestSends.scheduledAt, new Date())));
     const sending = await db.select().from(guestSends).where(eq(guestSends.status, "sending")).orderBy(asc(guestSends.createdAt)).limit(3);
     for (const s of sending) {
-      if (!mail) {
-        await db.update(guestSends).set({ status: "failed", error: "email is not set up (no RESEND_API_KEY)", updatedAt: new Date() }).where(eq(guestSends.id, s.id));
+      if (!mail || !mailbox) {
+        await db.update(guestSends).set({ status: "failed", error: `guest email is off (${GUEST_EMAIL_OFF})`, updatedAt: new Date() }).where(eq(guestSends.id, s.id));
         continue;
       }
       if (await isPaused(db, s.communityId)) continue;
@@ -739,6 +743,7 @@ export function createGuests(deps: GuestsDeps) {
 
   /** Ferri's own proposals: the day-before reminder, and a nudge when people are waiting. Each once per event. */
   async function proposeTick(): Promise<void> {
+    if (!mail) return;
     const now = Date.now();
     const live = await db.select().from(events).where(and(inArray(events.stage, ["launch", "live"]), isNotNull(events.startsAt)));
     for (const ev of live) {
@@ -766,6 +771,7 @@ export function createGuests(deps: GuestsDeps) {
 
   /** An email to the guests' mailbox (events+<code>@...). True when it was for guests. */
   async function onEmail(email: ReceivedEmail, to: string[]): Promise<boolean> {
+    if (!mailbox) return false;
     const local = mailbox.split("@")[0]!;
     const domain = mailbox.split("@")[1]!;
     const code = to
@@ -817,7 +823,7 @@ export function createGuests(deps: GuestsDeps) {
       return `${ev.name}: ${countsLine(c, ev.capacity)}.${waiting.length ? ` Waitlist: ${waiting.map((w) => w.name).join(", ")}${c.waitlist > waiting.length ? ", ..." : ""}.` : ""}${sync.length ? ` Last sync: ${sync.join(", ")}.` : ""}`;
     }
     if (g.action === "sync") return syncEvent(ev);
-    if (!mail) return "Email isn't set up yet (no RESEND_API_KEY), so I can't email the guests.";
+    if (!mail || !mailbox) return `Guest email isn't set up yet (${GUEST_EMAIL_OFF}), so I can't email the guests.`;
     const when = parseWhen(g.when || null);
     const [s] = await db
       .insert(guestSends)
@@ -885,7 +891,7 @@ export function createGuests(deps: GuestsDeps) {
     await pushToUsers(db, await switchUsersForCrew(db, leads.map((c) => c.id)), { kind: "email", title, body: clip(body, 180), url: "/m", tag: `guests-${eventId}`, renotify: true, cardId: null });
   }
 
-  return { tick, intent, sendHooks, spotHooks, onEmail, onDelivery, siteEvent, syncEvent, pushLeads, mailbox };
+  return { tick, intent, sendHooks, spotHooks, onEmail, onDelivery, siteEvent, syncEvent, pushLeads, mailbox, enabled: !!mail };
 }
 
 export type Guests = ReturnType<typeof createGuests>;

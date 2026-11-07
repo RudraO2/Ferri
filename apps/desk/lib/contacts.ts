@@ -1,6 +1,17 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { parseAddress } from "@ferri/email";
 import { community, db } from "./db";
 import { cards, contactEventLines, contactMessages, contacts, listContacts, type Contact, type ContactMessage } from "./ferri";
+
+/** The outreach mailbox Ferri sends from (FERRI_EMAIL_FROM), or null while email is off. */
+export function outreachMailbox(): string | null {
+  const from = process.env.FERRI_EMAIL_FROM?.trim();
+  if (!from || !process.env.RESEND_API_KEY?.trim()) return null;
+  return parseAddress(from)?.email ?? null;
+}
+
+/** What Desk and Pocket say while outreach email is off. */
+export const EMAIL_OFF_NOTE = "Email is off: set FERRI_EMAIL_FROM and RESEND_API_KEY, then run pnpm email:setup.";
 
 export interface EmailWaiting {
   cardId: string;

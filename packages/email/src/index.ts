@@ -138,7 +138,7 @@ export function parseAddress(raw: string): { name: string | null; email: string 
 
 export const isEmail = (s: string) => parseAddress(s)?.email === String(s).trim().toLowerCase() && !/[<>\s]/.test(s.trim());
 
-/** `partners+c7f3a9@rudratechie.xyz` for the mailbox `partners@rudratechie.xyz` and the code `c7f3a9`. */
+/** `partners+c7f3a9@example.com` for the mailbox `partners@example.com` and the code `c7f3a9`. */
 export function replyAddress(mailbox: string, code: string): string {
   const a = parseAddress(mailbox);
   if (!a) throw new Error(`Not an address: ${mailbox}`);

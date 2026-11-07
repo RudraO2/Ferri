@@ -56,12 +56,12 @@ export const config = {
   shieldPolicyId: process.env.SHIELD_POLICY_ID ?? "ferri-shield",
   /** Email (spec 15): Resend. Off without a key. */
   resendApiKey: process.env.RESEND_API_KEY?.trim() || undefined,
-  /** The outreach mailbox; the display name is the community's name unless given here ("Lantern Labs <partners@...>"). */
-  emailFrom: process.env.FERRI_EMAIL_FROM?.trim() || "partners@rudratechie.xyz",
+  /** The outreach mailbox; the display name is the community's name unless given here ("Lantern Labs <partners@...>"). Unset: outreach email is off. */
+  emailFrom: process.env.FERRI_EMAIL_FROM?.trim() || undefined,
   /** Outreach emails per 24 hours (Resend's free plan sends 100 a day in all). */
   emailDailyCap: Number(process.env.FERRI_EMAIL_DAILY_CAP ?? 20),
-  /** RSVP (spec 17): the guests' mailbox (the display name is the event's name), and guest emails per 24 hours. */
-  guestEmailFrom: process.env.FERRI_GUEST_EMAIL_FROM?.trim() || "events@rudratechie.xyz",
+  /** RSVP (spec 17): the guests' mailbox (the display name is the event's name; unset: guest email is off), and guest emails per 24 hours. */
+  guestEmailFrom: process.env.FERRI_GUEST_EMAIL_FROM?.trim() || undefined,
   guestDailyCap: Number(process.env.FERRI_GUEST_EMAIL_DAILY_CAP ?? 80),
   /** Tests and rehearsals: email only guests at these domains (comma-separated); others are skipped and noted. */
   guestEmailAllow: (process.env.FERRI_GUEST_EMAIL_ALLOW ?? "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean),

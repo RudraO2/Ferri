@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BufferClient, BufferError, checkText, postInput, xLength } from "./index.ts";
+import { BufferClient, BufferError, checkText, mediaHostFromEnv, postInput, xLength } from "./index.ts";
 
 function fakeFetch(responses: { status?: number; body: unknown }[]) {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -60,5 +60,15 @@ describe("BufferClient", () => {
     const err = await c.organizations().catch((e) => e);
     expect(err).toBeInstanceOf(BufferError);
     expect(err).toMatchObject({ code: "UNAUTHORIZED", status: 401 });
+  });
+});
+
+describe("mediaHostFromEnv", () => {
+  it("is off unless both the URL and the secret are set", () => {
+    expect(mediaHostFromEnv({})).toBeNull();
+    expect(mediaHostFromEnv({ FERRI_MEDIA_SECRET: "s" })).toBeNull();
+    expect(mediaHostFromEnv({ FERRI_MEDIA_URL: "https://media.example.com" })).toBeNull();
+    const host = mediaHostFromEnv({ FERRI_MEDIA_URL: "https://media.example.com/", FERRI_MEDIA_SECRET: "s" });
+    expect(host?.url("abc.jpg")).toBe("https://media.example.com/abc.jpg");
   });
 });

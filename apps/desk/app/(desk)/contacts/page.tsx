@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { contactCounts, contactsWithTimeline, emailsWaiting, MESSAGE_LABEL } from "@/lib/contacts";
+import { contactCounts, contactsWithTimeline, EMAIL_OFF_NOTE, emailsWaiting, MESSAGE_LABEL, outreachMailbox } from "@/lib/contacts";
 import { ago, liveEvents } from "@/lib/data";
 import { community } from "@/lib/db";
 import { CONTACT_KINDS, CONTACT_STATUS_LABEL, CONTACT_STATUSES } from "@/lib/ferri";
@@ -22,12 +22,17 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   const { note, status } = await searchParams;
   const c = await community();
   const [waiting, list, counts, evs] = await Promise.all([emailsWaiting(), contactsWithTimeline(status), contactCounts(), liveEvents(c.id)]);
+  const mailbox = outreachMailbox();
   return (
     <>
       <AutoRefresh seconds={10} />
       <PageHead
         title="Contacts"
-        sub="Partners, sponsors, colleges, venues and communities. Every email to them waits for one OK, goes out from partners@rudratechie.xyz, and their replies come back here."
+        sub={
+          mailbox
+            ? `Partners, sponsors, colleges, venues and communities. Every email to them waits for one OK, goes out from ${mailbox}, and their replies come back here.`
+            : `Partners, sponsors, colleges, venues and communities. ${EMAIL_OFF_NOTE}`
+        }
       />
       <Note note={note} />
 

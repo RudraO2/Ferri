@@ -237,10 +237,14 @@ export class MediaHost {
   }
 }
 
+/** What to set when the media host is off. */
+export const MEDIA_HOST_OFF = "the media host is not set up: deploy infra/media-worker, then set FERRI_MEDIA_URL and FERRI_MEDIA_SECRET";
+
+/** The media host from FERRI_MEDIA_URL and FERRI_MEDIA_SECRET; null (no images on posts) unless both are set. */
 export function mediaHostFromEnv(env: Record<string, string | undefined> = process.env): MediaHost | null {
-  const url = env.FERRI_MEDIA_URL?.trim() || "https://ferri-media.rudratechie.workers.dev";
+  const url = env.FERRI_MEDIA_URL?.trim();
   const secret = env.FERRI_MEDIA_SECRET?.trim();
-  return secret ? new MediaHost(url, secret) : null;
+  return url && secret ? new MediaHost(url, secret) : null;
 }
 
 export function bufferFromEnv(env: Record<string, string | undefined> = process.env): BufferClient | null {

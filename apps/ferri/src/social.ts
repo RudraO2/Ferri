@@ -21,7 +21,7 @@ import {
   switchExpiry,
   voiceBlock,
 } from "@ferri/knowledge";
-import { BufferError, MediaHost, bufferFromEnv, mediaHostFromEnv, type BufferChannel } from "@ferri/social";
+import { BufferError, MEDIA_HOST_OFF, MediaHost, bufferFromEnv, mediaHostFromEnv, type BufferChannel } from "@ferri/social";
 import type { SwitchAgent } from "@ferri/switch";
 import { config } from "./config.ts";
 import type { CrewAsk } from "./crew-ask.ts";
@@ -160,7 +160,7 @@ export function createSocial(deps: SocialDeps) {
     if (input.image === "poster") {
       const poster = await posterImage(input.eventId);
       if (!poster) skipped.push("the poster (no finished poster job for this event)");
-      else if (!media) skipped.push("the poster (no media host: FERRI_MEDIA_SECRET is not set)");
+      else if (!media) skipped.push(`the poster (${MEDIA_HOST_OFF})`);
       else {
         const key = MediaHost.newKey(poster.ext);
         try {

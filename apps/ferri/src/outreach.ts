@@ -60,6 +60,9 @@ export interface OutreachDeps {
   mail?: Resend | null;
 }
 
+/** What to set when outreach email is off. */
+export const EMAIL_OFF = "set RESEND_API_KEY and FERRI_EMAIL_FROM, then run pnpm email:setup";
+
 /**
  * Partner outreach (spec 15). Every email waits on its own Switch card
  * ("outreach" kind); one OK sends it through Resend from the community's
@@ -70,7 +73,8 @@ export interface OutreachDeps {
 export function createOutreach(deps: OutreachDeps) {
   const { db, agent, loop, log } = deps;
   const mail = deps.mail !== undefined ? deps.mail : config.resendApiKey ? resend({ apiKey: config.resendApiKey }) : null;
-  const mailbox = parseAddress(config.emailFrom)?.email ?? "partners@rudratechie.xyz";
+  /** Unset (no FERRI_EMAIL_FROM): outreach email is off. Guest replies still arrive through `received` when the guests' mailbox is set. */
+  const mailbox = config.emailFrom ? (parseAddress(config.emailFrom)?.email ?? null) : null;
   /** RSVP (spec 17): mail to the guests' mailbox, and delivery events for guest mail. */
   let guestsHook: {
     onEmail(email: Awaited<ReturnType<Resend["received"]>>, to: string[]): Promise<boolean>;
@@ -78,8 +82,8 @@ export function createOutreach(deps: OutreachDeps) {
   } | null = null;
 
   async function fromLine(communityId: string): Promise<string> {
-    const named = parseAddress(config.emailFrom);
-    if (named?.name) return config.emailFrom;
+    const named = config.emailFrom ? parseAddress(config.emailFrom) : null;
+    if (named?.name) return config.emailFrom!;
     const [c] = await db.select({ name: communities.name }).from(communities).where(eq(communities.id, communityId)).limit(1);
     return `${(c?.name ?? "Ferri").replace(/[<>"]/g, "")} <${mailbox}>`;
   }
@@ -116,7 +120,7 @@ export function createOutreach(deps: OutreachDeps) {
       return `Outreach so far: ${contactsSummary(await listContacts(db, input.communityId))}`;
     }
     // email
-    if (!mail) return "Email isn't set up yet (no RESEND_API_KEY), so I can't send anything.";
+    if (!mail || !mailbox) return `Email isn't set up yet (${EMAIL_OFF}), so I can't send anything.`;
     let contact = await findContact(db, input.communityId, { email: o.email, name: o.who });
     if (!contact && o.email) {
       const addr = parseAddress(o.email);
@@ -325,9 +329,9 @@ export function createOutreach(deps: OutreachDeps) {
     const say = (t: string) => (crewRoomId ? loop.post(m.communityId, crewRoomId, t) : Promise.resolve(null));
     const [fresh] = await db.select().from(contacts).where(eq(contacts.id, c.id)).limit(1);
     const refuse = fresh ? cannotEmail(fresh) : "The contact is gone.";
-    if (refuse || !mail) {
+    if (refuse || !mail || !mailbox) {
       await db.update(contactMessages).set({ status: "refused", error: refuse ?? "email is not set up", updatedAt: new Date() }).where(eq(contactMessages.id, m.id));
-      await say(refuse ?? "Email isn't set up, so nothing was sent.");
+      await say(refuse ?? `Email isn't set up (${EMAIL_OFF}), so nothing was sent.`);
       return false;
     }
     if ((await sentToday(db, m.communityId)) >= config.emailDailyCap) {
@@ -501,12 +505,12 @@ export function createOutreach(deps: OutreachDeps) {
     const email = await mail.received(emailId);
     const sender = parseAddress(email.from);
     const to = [...(email.to ?? []), ...(email.cc ?? []), ...((data.received_for as string[] | undefined) ?? [])];
-    const forUs = to.some((a) => {
+    const forUs = !!mailbox && to.some((a) => {
       const e = parseAddress(a)?.email ?? "";
       return e === mailbox || e.startsWith(`${mailbox.split("@")[0]}+`) && e.endsWith(`@${mailbox.split("@")[1]}`);
     });
     if (!forUs && sender && guestsHook && (await guestsHook.onEmail(email, to))) return;
-    if (!forUs || !sender || sender.email === mailbox) {
+    if (!forUs || !mailbox || !sender || sender.email === mailbox) {
       log(`outreach: email ${emailId} to ${to.join(", ")} is not for the partners mailbox; skipped`);
       return;
     }
@@ -612,7 +616,7 @@ export function createOutreach(deps: OutreachDeps) {
     tick,
     prospectsReady,
     draftAndOpen,
-    enabled: !!mail,
+    enabled: !!mail && !!mailbox,
     mailbox,
     setGuestsHook: (h: NonNullable<typeof guestsHook>) => {
       guestsHook = h;

@@ -9,6 +9,7 @@ import { CareScreen } from "../../care-case";
 import { community } from "@/lib/db";
 import { SEND_KIND_LABEL, formatWhen, translationsFrom } from "@/lib/ferri";
 import { audienceLine } from "@/lib/guests";
+import { EMAIL_OFF_NOTE, outreachMailbox } from "@/lib/contacts";
 import { AnnounceActions } from "./announce-actions";
 import { GuestSendActions } from "./guest-actions";
 import { PlanActions } from "./plan-actions";
@@ -164,7 +165,9 @@ export default async function CardPage({ params, searchParams }: { params: Promi
       {open && card.kind === "outreach" ? (
         <section className="mt-4 px-4">
           <p className="px-1 text-[13px] text-zinc-500">
-            Goes out from partners@rudratechie.xyz as soon as you send it. Their reply comes back to Ferri, which tells the crew.
+            {outreachMailbox()
+              ? `Goes out from ${outreachMailbox()} as soon as you send it. Their reply comes back to Ferri, which tells the crew.`
+              : EMAIL_OFF_NOTE}
           </p>
           <ReplyActions cardId={card.id} draft={card.draftText ?? ""} />
         </section>

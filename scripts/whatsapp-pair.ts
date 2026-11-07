@@ -6,7 +6,7 @@
  *
  * 1. Adds the `whatsapp_web` connection in Switch through the Gateway, if there
  *    is none: the WAHA sidecar at http://waha:3000 (as switch-core reaches it),
- *    the sidecar key from ../switch/.env, and the chats to bridge
+ *    the sidecar key (WAHA_API_KEY from .env, else ../switch/.env), and the chats to bridge
  *    (FERRI_WHATSAPP_CHATS, comma separated; default "me" and the event group).
  * 2. Waits for the sidecar's session, then shows the QR code (or pairing code)
  *    until the phone links it, and says which account linked.
@@ -25,7 +25,7 @@ const switchDir = path.join(root, "..", "switch");
 const env = { ...readEnvFile(path.join(root, ".env")), ...process.env } as Record<string, string | undefined>;
 const switchEnv = readEnvFile(path.join(switchDir, ".env"));
 const apiKey = env.WAHA_API_KEY ?? switchEnv.WAHA_API_KEY;
-if (!apiKey) throw new Error("No WAHA_API_KEY in ../switch/.env: start the sidecar first (see the header of this script).");
+if (!apiKey) throw new Error("No WAHA_API_KEY: set it in .env (the same value the WAHA sidecar uses) and start the sidecar first (see the header of this script).");
 const sidecar = (env.FERRI_WAHA_URL ?? "http://127.0.0.1:3010").replace(/\/+$/, "");
 const session = env.FERRI_WHATSAPP_SESSION ?? "default";
 const chats = (env.FERRI_WHATSAPP_CHATS ?? "me,Lantern Build Night")
