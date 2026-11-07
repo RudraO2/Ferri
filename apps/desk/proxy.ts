@@ -14,7 +14,8 @@ export function proxy(request: NextRequest) {
   const cookie = request.cookies.get("ferri_desk");
   if (!cookie) {
     const pocket = request.nextUrl.pathname === "/m" || request.nextUrl.pathname.startsWith("/m/");
-    const to = new URL(pocket ? "/m/login" : "/login", request.url);
+    // Signed out, Desk's home is the public landing page (spec 24).
+    const to = new URL(pocket ? "/m/login" : request.nextUrl.pathname === "/" ? "/welcome" : "/login", request.url);
     if (pocket && request.nextUrl.pathname !== "/m") to.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(to);
   }
@@ -29,6 +30,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Pocket's sign-in, service worker, manifest and icons load without a session,
-  // and so do guests' own RSVP pages (/rsvp/<code>, spec 17).
-  matcher: ["/((?!login|api/site|api/email|rsvp/|m/login|m/sw\\.js|m/manifest\\.webmanifest|m/icon|_next/|favicon.ico).*)"],
+  // guests' own RSVP pages (/rsvp/<code>, spec 17), the public landing page and the
+  // character art (/welcome and /brand, spec 24).
+  matcher: ["/((?!login|api/site|api/email|rsvp/|welcome|brand/|m/login|m/sw\\.js|m/manifest\\.webmanifest|m/icon|m/splash|_next/|favicon.ico).*)"],
 };

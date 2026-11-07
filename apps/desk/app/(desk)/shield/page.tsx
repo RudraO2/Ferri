@@ -1,3 +1,4 @@
+import { PlatformLogo } from "@/components/platform";
 import { ago } from "@/lib/data";
 import { community, db } from "@/lib/db";
 import { listRules, shieldLog, shieldStats } from "@/lib/shield";
@@ -100,7 +101,8 @@ export default async function ShieldPage({ searchParams }: { searchParams: Promi
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`badge ${OUTCOME_STYLE[e.outcome] ?? ""}`}>{e.outcome}</span>
-                    <span className="text-zinc-500">
+                    <span className="inline-flex items-center gap-1.5 text-zinc-500">
+                      <PlatformLogo platform={e.platform} size={14} />
                       {PLATFORM[e.platform ?? ""] ?? e.platform ?? "Switch"} · {short(e.spaceName)} · {e.role === "assistant" ? "an agent's post" : "a member's message"}
                     </span>
                   </div>

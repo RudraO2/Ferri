@@ -1,3 +1,4 @@
+import { PlatformLogo } from "@/components/platform";
 import { POST_LABEL, STATUS_LABEL, announcementList, type AnnouncementView } from "@/lib/announce";
 import { ago, liveEvents } from "@/lib/data";
 import { community, db } from "@/lib/db";
@@ -102,6 +103,7 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
                       {targets.map((t) => (
                         <label key={t.spaceId} className="flex items-center gap-1.5 text-[13px] text-zinc-700">
                           <input type="checkbox" name="target" value={t.spaceId} />
+                          <PlatformLogo platform={t.platform} size={14} />
                           {PLATFORM[t.platform ?? ""] ?? t.platform ?? "Switch"} · {short(t.name)}
                         </label>
                       ))}
@@ -184,7 +186,8 @@ function Posted({ a, tz }: { a: AnnouncementView; tz: string }) {
       <ul className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {a.posts.map((p) => (
           <li key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-zinc-50 px-2.5 py-1.5 text-[12.5px]">
-            <span className="truncate">
+            <span className="flex min-w-0 items-center gap-1.5 truncate">
+              <PlatformLogo platform={p.platform} size={14} />
               {PLATFORM[p.platform ?? ""] ?? p.platform ?? "Switch"} · {short(p.spaceName)}
             </span>
             <span className={`shrink-0 ${p.status === "failed" ? "text-red-600" : "text-zinc-500"}`}>

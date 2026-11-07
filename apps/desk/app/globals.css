@@ -1,77 +1,509 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Inter", sans-serif;
+/*
+ * Ferri design system (spec 24, palette "Tidepool", Ferri the sea otter).
+ *
+ * Every colour is a token on :root, redefined for dark mode. Tailwind's neutral
+ * scale (zinc) and the tint families pages use are mapped onto these tokens, so
+ * every page follows the theme without per-page dark: classes.
+ *
+ * Brand:   sea teal #0e7c7b, its darker "lip" #0a5a59, highlight #d3f0ec
+ * Accent:  apricot #ff8a5b (small doses: warmth, highlights)
+ * Paper:   warm cream #fbf7f0; Ink #1d1b18; Night: deep sea #0d1b1e
+ * Type:    Bricolage Grotesque (display), Inter (text), Caveat (hand notes)
+ * Space:   4 px grid. Radius: 10 / 14 / 20 / 28 / pill.
+ * Motion:  160 ms ease-out for UI; 500-900 ms for the landing story.
+ */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-display-face), var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-hand: var(--font-hand-face), "Comic Sans MS", cursive;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
+
+  --color-brand: var(--brand);
+  --color-brand-lip: var(--brand-lip);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-chart: var(--chart);
+
+  /* The neutral scale every page already uses, now warm and theme-aware. */
+  /* White is the card surface: in the dark it is the raised night surface, and white text
+     on brand or status fills turns dark, which reads better on the brighter dark-mode fills. */
+  --color-white: var(--white);
+
+  --color-zinc-50: var(--n-50);
+  --color-zinc-100: var(--n-100);
+  --color-zinc-200: var(--n-200);
+  --color-zinc-300: var(--n-300);
+  --color-zinc-400: var(--n-400);
+  --color-zinc-500: var(--n-500);
+  --color-zinc-600: var(--n-600);
+  --color-zinc-700: var(--n-700);
+  --color-zinc-800: var(--n-800);
+  --color-zinc-900: var(--n-900);
+  --color-zinc-950: var(--n-950);
+
+  /* Status tints: soft fills, borders and readable text in both themes. */
+  --color-emerald-50: var(--ok-50);
+  --color-emerald-100: var(--ok-100);
+  --color-emerald-200: var(--ok-200);
+  --color-emerald-300: var(--ok-300);
+  --color-emerald-500: var(--ok-500);
+  --color-emerald-700: var(--ok-700);
+  --color-emerald-800: var(--ok-800);
+  --color-amber-50: var(--warn-50);
+  --color-amber-100: var(--warn-100);
+  --color-amber-200: var(--warn-200);
+  --color-amber-500: var(--warn-500);
+  --color-amber-700: var(--warn-700);
+  --color-amber-800: var(--warn-800);
+  --color-red-50: var(--bad-50);
+  --color-red-100: var(--bad-100);
+  --color-red-200: var(--bad-200);
+  --color-red-500: var(--bad-500);
+  --color-red-600: var(--bad-600);
+  --color-red-700: var(--bad-700);
+  --color-sky-50: var(--info-50);
+  --color-sky-100: var(--info-100);
+  --color-sky-200: var(--info-200);
+  --color-sky-500: var(--info-500);
+  --color-sky-700: var(--info-700);
+  --color-sky-800: var(--info-800);
+  --color-violet-50: var(--vio-50);
+  --color-violet-100: var(--vio-100);
+  --color-violet-200: var(--vio-200);
+  --color-violet-700: var(--vio-700);
+  --color-violet-800: var(--vio-800);
+  --color-indigo-50: var(--brand-soft);
+  --color-indigo-100: var(--brand-soft);
+  --color-indigo-200: var(--brand-line);
+  --color-indigo-500: var(--brand);
+  --color-indigo-700: var(--brand-ink);
+  --color-indigo-800: var(--brand-ink);
+  --color-rose-100: var(--rose-100);
+  --color-rose-800: var(--rose-800);
+  --color-teal-100: var(--ok-100);
+  --color-teal-800: var(--ok-800);
+  --color-blue-700: var(--brand-ink);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --shadow-xs: 0 1px 0 var(--line-soft);
+  --shadow-card: 0 18px 40px -30px var(--shadow-tint);
+  --shadow-pop: 0 24px 60px -28px var(--shadow-tint);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   color-scheme: light;
+  --brand: #0e7c7b;
+  --brand-lip: #0a5a59;
+  --brand-soft: #d3f0ec;
+  --brand-line: #a6dcd5;
+  --brand-ink: #0a6463;
+  --accent: #ff8a5b;
+  --accent-soft: #ffe3d6;
+  --paper: #fbf7f0;
+  --surface: #ffffff;
+  --white: #ffffff;
+  --ink: #1d1b18;
+  --line-soft: #efe9de;
+  --shadow-tint: rgba(60, 44, 24, 0.42);
+  --focus: #0e7c7b;
+  /* Data marks: validated (dataviz checks) against the light surface. */
+  --chart: #008c84;
+
+  --n-50: #fbf7f0;
+  --n-100: #f2ece2;
+  --n-200: #e6dfd3;
+  --n-300: #d2c9bb;
+  --n-400: #9e958a;
+  --n-500: #6d665e;
+  --n-600: #57514a;
+  --n-700: #403b36;
+  --n-800: #2c2824;
+  --n-900: #1d1b18;
+  --n-950: #11100e;
+
+  --ok-50: #ecf8f1;
+  --ok-100: #d5f1e1;
+  --ok-200: #b3e3c7;
+  --ok-300: #83cfa3;
+  --ok-500: #1f9d5c;
+  --ok-700: #137044;
+  --ok-800: #0e5734;
+  --warn-50: #fff6e5;
+  --warn-100: #ffebc2;
+  --warn-200: #f8d68f;
+  --warn-500: #e09412;
+  --warn-700: #93580a;
+  --warn-800: #774607;
+  --bad-50: #fff0ee;
+  --bad-100: #ffdcd7;
+  --bad-200: #f9bdb4;
+  --bad-500: #e5483a;
+  --bad-600: #cf3324;
+  --bad-700: #b02a1d;
+  --info-50: #ebf6fd;
+  --info-100: #d3ecfa;
+  --info-200: #ade0f6;
+  --info-500: #1694d6;
+  --info-700: #0b6698;
+  --info-800: #09547d;
+  --vio-50: #f3f0ff;
+  --vio-100: #e6e0ff;
+  --vio-200: #d2c8ff;
+  --vio-700: #5b3dc4;
+  --vio-800: #4a2fa6;
+  --rose-100: #ffe1e6;
+  --rose-800: #a3203f;
 }
 
+/* Dark: deep sea at night. Neutrals invert; tints become translucent glows. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand: #2fb3ad;
+  --brand-lip: #1b7f7a;
+  --brand-soft: rgba(47, 179, 173, 0.16);
+  --brand-line: rgba(47, 179, 173, 0.42);
+  --brand-ink: #8fe0da;
+  --accent: #ff9b72;
+  --accent-soft: rgba(255, 155, 114, 0.16);
+  --paper: #0d1b1e;
+  --surface: #14272b;
+  --white: #14272b;
+  --ink: #eef3f2;
+  --line-soft: #1d3338;
+  --shadow-tint: rgba(0, 0, 0, 0.7);
+  --focus: #6fd6d0;
+  --chart: #1fa39c;
+
+  --n-50: #0d1b1e;
+  --n-100: #18292d;
+  --n-200: #223a3f;
+  --n-300: #305055;
+  --n-400: #6b8a8d;
+  --n-500: #9db5b6;
+  --n-600: #b9cccc;
+  --n-700: #d2dfde;
+  --n-800: #e4eceb;
+  --n-900: #eef3f2;
+  --n-950: #f8fbfa;
+
+  --ok-50: rgba(46, 196, 120, 0.1);
+  --ok-100: rgba(46, 196, 120, 0.16);
+  --ok-200: rgba(46, 196, 120, 0.32);
+  --ok-300: rgba(46, 196, 120, 0.5);
+  --ok-500: #3ccf84;
+  --ok-700: #7ee0ab;
+  --ok-800: #9be9bf;
+  --warn-50: rgba(240, 168, 40, 0.1);
+  --warn-100: rgba(240, 168, 40, 0.16);
+  --warn-200: rgba(240, 168, 40, 0.32);
+  --warn-500: #f2b13c;
+  --warn-700: #f7c96f;
+  --warn-800: #fad78f;
+  --bad-50: rgba(240, 90, 74, 0.1);
+  --bad-100: rgba(240, 90, 74, 0.16);
+  --bad-200: rgba(240, 90, 74, 0.34);
+  --bad-500: #f26b5e;
+  --bad-600: #f26b5e;
+  --bad-700: #ff9a8f;
+  --info-50: rgba(56, 170, 230, 0.1);
+  --info-100: rgba(56, 170, 230, 0.16);
+  --info-200: rgba(56, 170, 230, 0.32);
+  --info-500: #45b3ec;
+  --info-700: #8fd2f5;
+  --info-800: #a9ddf8;
+  --vio-50: rgba(140, 110, 255, 0.1);
+  --vio-100: rgba(140, 110, 255, 0.18);
+  --vio-200: rgba(140, 110, 255, 0.34);
+  --vio-700: #c2b3ff;
+  --vio-800: #d2c8ff;
+  --rose-100: rgba(255, 90, 130, 0.16);
+  --rose-800: #ffa6bb;
+}
+/* Before the theme script runs (or without it), follow the system. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --brand: #2fb3ad;
+    --brand-lip: #1b7f7a;
+    --brand-soft: rgba(47, 179, 173, 0.16);
+    --brand-ink: #8fe0da;
+    --paper: #0d1b1e;
+    --surface: #14272b;
+    --white: #14272b;
+    --ink: #eef3f2;
+    --n-50: #0d1b1e;
+    --n-100: #18292d;
+    --n-200: #223a3f;
+    --n-400: #6b8a8d;
+    --n-500: #9db5b6;
+    --n-700: #d2dfde;
+    --n-900: #eef3f2;
+  }
+}
+
+
+html {
+  background: var(--paper);
+}
 body {
-  @apply bg-zinc-50 text-zinc-900 antialiased;
+  background: var(--paper);
+  color: var(--n-900);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv11", "ss01";
 }
+::selection {
+  background: var(--brand-soft);
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 
-/* Small shared pieces, so pages stay readable. */
 @layer components {
+  /* Surfaces */
   .card {
-    @apply rounded-lg border border-zinc-200 bg-white;
+    @apply rounded-xl border border-zinc-200 bg-white;
+    box-shadow: var(--shadow-card);
+  }
+  .card-flat {
+    @apply rounded-xl border border-zinc-200 bg-white;
+  }
+
+  /* Buttons: pills with a darker lip at the bottom, pressed on :active. */
+  .btn,
+  .btn-primary,
+  .btn-danger,
+  .btn-lg,
+  .btn-lg-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full font-medium whitespace-nowrap transition select-none disabled:pointer-events-none disabled:opacity-50;
+    transition-duration: 160ms;
   }
   .btn {
-    @apply inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-[13px] font-medium text-zinc-800 shadow-xs transition hover:bg-zinc-50 disabled:opacity-50;
+    @apply h-9 border border-zinc-200 bg-white px-4 text-[13px] text-zinc-800 hover:border-zinc-300 hover:bg-zinc-50;
+    box-shadow: inset 0 -2px 0 var(--n-100);
   }
   .btn-primary {
-    @apply inline-flex h-8 items-center justify-center rounded-md bg-zinc-900 px-3 text-[13px] font-medium text-white shadow-xs transition hover:bg-zinc-700;
+    @apply h-9 bg-brand px-4 text-[13px] text-white hover:brightness-110;
+    box-shadow: inset 0 -3px 0 var(--brand-lip);
   }
   .btn-danger {
-    @apply inline-flex h-8 items-center justify-center rounded-md bg-red-600 px-3 text-[13px] font-medium text-white shadow-xs transition hover:bg-red-500;
+    @apply h-9 bg-red-600 px-4 text-[13px] text-white hover:brightness-110;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
   }
+  .btn:active,
+  .btn-primary:active,
+  .btn-danger:active,
+  .btn-lg:active,
+  .btn-lg-primary:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+
+  /* Fields */
   .input {
-    @apply h-8 w-full rounded-md border border-zinc-200 bg-white px-2.5 text-[13px] outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100;
+    @apply h-9 w-full rounded-[10px] border border-zinc-200 bg-white px-3 text-[13.5px] text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-brand focus:ring-4 focus:ring-brand-soft;
   }
   .textarea {
-    @apply w-full rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100;
+    @apply w-full rounded-[12px] border border-zinc-200 bg-white px-3 py-2.5 text-[13.5px] leading-relaxed text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-brand focus:ring-4 focus:ring-brand-soft;
+  }
+  select.input {
+    @apply pr-8;
   }
   .label {
-    @apply mb-1 block text-[12px] font-medium text-zinc-500;
+    @apply mb-1.5 block text-[12px] font-medium text-zinc-500;
   }
+
+  /* Labels */
   .badge {
-    @apply inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-600;
+    @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-zinc-600;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-zinc-600;
+  }
+  .mark {
+    @apply rounded-md bg-brand-soft px-1.5 text-zinc-900;
+  }
+
+  /* Type */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
   }
   .h1 {
-    @apply text-[20px] font-semibold tracking-tight text-zinc-900;
+    @apply text-[30px] leading-tight text-zinc-900;
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.03em;
   }
   .h2 {
-    @apply text-[13px] font-semibold uppercase tracking-wide text-zinc-500;
+    @apply text-[11.5px] font-semibold tracking-[0.08em] text-zinc-500 uppercase;
+  }
+  .h3 {
+    @apply text-[16px] font-semibold tracking-tight text-zinc-900;
   }
   .muted {
-    @apply text-[13px] text-zinc-500;
+    @apply text-[13.5px] text-zinc-500;
+  }
+  .hand {
+    font-family: var(--font-hand);
+    font-weight: 600;
+  }
+  .num {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
   }
 }
 
 /* Ferri Pocket (/m): bigger tap targets, safe areas on phones. */
 @layer components {
   .input-lg {
-    @apply h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-[16px] outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100;
+    @apply h-12 w-full rounded-[14px] border border-zinc-200 bg-white px-4 text-[16px] text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-brand focus:ring-4 focus:ring-brand-soft;
   }
   .textarea-lg {
-    @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-[16px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100;
+    @apply w-full rounded-[18px] border-[1.5px] border-zinc-200 bg-white px-4 py-3 text-[16px] leading-relaxed text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-brand focus:ring-4 focus:ring-brand-soft;
   }
   .btn-lg {
-    @apply inline-flex h-11 items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 text-[15px] font-medium text-zinc-800 shadow-xs transition active:bg-zinc-100 disabled:opacity-50;
+    @apply h-12 border border-zinc-200 bg-white px-5 text-[15px] text-zinc-800 active:bg-zinc-100;
+    box-shadow: inset 0 -3px 0 var(--n-100);
   }
   .btn-lg-primary {
-    @apply inline-flex h-11 items-center justify-center rounded-lg bg-zinc-900 px-4 text-[15px] font-medium text-white shadow-xs transition active:bg-zinc-700 disabled:opacity-50;
-  }
-  .pill {
-    @apply inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11.5px] font-medium text-zinc-600;
+    @apply h-12 bg-brand px-5 text-[15.5px] font-semibold text-white;
+    box-shadow: inset 0 -4px 0 var(--brand-lip);
   }
 }
 .pocket {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 84px);
 }
 .pocket-tabs {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Ferri's idle motion: a slow bob on the water. Off when motion is reduced. */
+@keyframes ferri-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(-2deg);
+  }
+}
+.ferri-float {
+  animation: ferri-bob 3.4s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Landing: "How it works" story */
+@keyframes hiw-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes hiw-fly-out {
+  0% {
+    left: 50%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-4deg) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 82%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(3deg) scale(1);
+  }
+}
+@keyframes hiw-fly-back {
+  0% {
+    left: 82%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(3deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: 20%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-3deg);
+  }
+}
+@keyframes hiw-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.hiw-pop {
+  animation: hiw-pop 420ms var(--ease-out) both;
+}
+.hiw-fly-in {
+  animation: hiw-pop 420ms var(--ease-out) 900ms both;
+}
+.hiw-fly-out {
+  animation: hiw-fly-out 1200ms var(--ease-out) both;
+}
+.hiw-fly-back {
+  animation: hiw-fly-back 1600ms var(--ease-out) both;
+}
+
+/* Landing: highlighter mark behind a word, drawn in once */
+.hl {
+  background-image: linear-gradient(var(--brand-soft), var(--brand-soft));
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  border-radius: 0.18em;
+  padding: 0 0.12em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }

@@ -4,10 +4,11 @@ import { notFound } from "next/navigation";
 import { guestFirstName } from "@/lib/ferri";
 import { RSVP_STATES, deadline, eventWhen, rsvpGuest, rsvpState, type RsvpAnswer, type RsvpState } from "@/lib/rsvp";
 import { answerRsvp } from "../actions";
+import { Ferri } from "@/components/ferri";
 
 export const dynamic = "force-dynamic";
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fafafa" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fbf7f0" };
 
 type Params = { params: Promise<{ code: string }> };
 type Search = { searchParams: Promise<{ done?: string; was?: string; step?: string; changed?: string }> };
@@ -51,9 +52,14 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
   const confirmNo = step === "no" && (state === "going" || state === "pending" || state === "offer");
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[480px] flex-col bg-zinc-50 px-5 pt-10 pb-8">
-      <div className="text-[13px] font-medium text-zinc-500">{communityName}</div>
-      <h1 className="mt-1 text-[28px] leading-tight font-semibold tracking-tight text-zinc-900">{e.name}</h1>
+    <main className="mx-auto flex min-h-dvh max-w-[480px] flex-col bg-zinc-50 px-5 pt-8 pb-8">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium text-zinc-500">{communityName}</div>
+          <h1 className="mt-1 font-display text-[32px] leading-[1.05] font-extrabold tracking-[-0.03em] text-zinc-900">{e.name}</h1>
+        </div>
+        <Ferri pose={answered ? "party" : "ticket"} size={92} decorative className="shrink-0" />
+      </div>
       {when || e.venue ? (
         <div className="mt-4 space-y-2 text-[15px] text-zinc-700">
           {when ? (
@@ -71,7 +77,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
         </div>
       ) : null}
 
-      <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+      <div className="mt-7 rounded-[24px] border border-zinc-200 bg-white p-5 shadow-[var(--shadow-card)]">
         {answered ? (
           <>
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -79,7 +85,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             </div>
-            <h2 className="mt-4 text-[20px] font-semibold tracking-tight">{answered.title}</h2>
+            <h2 className="mt-4 font-display text-[22px] font-extrabold tracking-[-0.02em]">{answered.title}</h2>
             <p className="mt-2 text-[16px] leading-relaxed text-zinc-700">{answered.text}</p>
             <Link href={`/rsvp/${g.code}`} className="mt-5 inline-block text-[14px] font-medium text-zinc-500 underline underline-offset-4">
               See where you stand
@@ -87,7 +93,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
           </>
         ) : confirmNo ? (
           <>
-            <h2 className="text-[20px] font-semibold tracking-tight">Are you sure you can&apos;t make it?</h2>
+            <h2 className="font-display text-[22px] font-extrabold tracking-[-0.02em]">Are you sure you can&apos;t make it?</h2>
             <p className="mt-2 text-[16px] leading-relaxed text-zinc-700">
               {state === "offer"
                 ? "We'll offer the spot to the next person on the waitlist instead."
@@ -113,7 +119,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
             <div className="text-[16px] text-zinc-700">Hi {first},</div>
             <div className="mt-3 flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${STATE_DOT[state]}`} />
-              <h2 className="text-[20px] font-semibold tracking-tight">
+              <h2 className="font-display text-[22px] font-extrabold tracking-[-0.02em]">
                 {state === "going"
                   ? "You're going"
                   : state === "pending"

@@ -11,17 +11,18 @@
   },
   "dependencies": {
     "@ferri/db": "workspace:*",
+    "@ferri/email": "workspace:*",
     "@ferri/knowledge": "workspace:*",
     "@ferri/push": "workspace:*",
     "@ferri/shield": "workspace:*",
+    "@ferri/social": "workspace:*",
     "@ferri/switch": "workspace:*",
     "drizzle-orm": "^0.45.4",
+    "lucide-react": "^1.70.0",
     "next": "^16.4.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "server-only": "^0.0.1",
-    "@ferri/email": "workspace:*",
-    "@ferri/social": "workspace:*"
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.4",

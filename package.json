@@ -32,7 +32,9 @@
     "builder:setup": "tsx --env-file-if-exists=.env scripts/builder-setup.ts",
     "builder:controller": "tsx scripts/builder-controller.ts",
     "whatsapp:pair": "tsx --env-file-if-exists=.env scripts/whatsapp-pair.ts",
-    "email:setup": "tsx --env-file-if-exists=.env scripts/email-setup.ts"
+    "email:setup": "tsx --env-file-if-exists=.env scripts/email-setup.ts",
+    "demo:fill": "tsx --env-file-if-exists=.env scripts/demo.ts fill",
+    "demo:clear": "tsx --env-file-if-exists=.env scripts/demo.ts clear"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

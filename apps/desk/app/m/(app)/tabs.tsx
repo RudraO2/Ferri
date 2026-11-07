@@ -2,30 +2,39 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Inbox, LifeBuoy, UserRound } from "lucide-react";
 
 const TABS = [
-  { href: "/m", label: "Needs you", icon: "M4 12l5 5L20 6" },
-  { href: "/m/stuck", label: "Who is stuck", icon: "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" },
-  { href: "/m/me", label: "Me", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" },
+  { href: "/m", label: "Needs you", icon: Inbox },
+  { href: "/m/stuck", label: "Who is stuck", icon: LifeBuoy },
+  { href: "/m/me", label: "Me", icon: UserRound },
 ];
 
 export function Tabs({ needsYou, stuck }: { needsYou: number; stuck: number }) {
   const path = usePathname();
   const count: Record<string, number> = { "/m": needsYou, "/m/stuck": stuck };
   return (
-    <nav className="pocket-tabs fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto grid max-w-[520px] grid-cols-3">
+    <nav className="pocket-tabs fixed inset-x-0 bottom-0 z-20 px-3" aria-label="Pocket">
+      <div className="mx-auto mb-2 grid max-w-[500px] grid-cols-3 rounded-[24px] border border-zinc-200 bg-white/95 p-1.5 shadow-[var(--shadow-pop)] backdrop-blur">
         {TABS.map((t) => {
           const active =
             t.href === "/m" ? path === "/m" || path.startsWith("/m/c/") : t.href === "/m/stuck" ? path.startsWith(t.href) || path.startsWith("/m/case/") : path.startsWith(t.href);
+          const Icon = t.icon;
           return (
-            <Link key={t.href} href={t.href} className={`flex h-[60px] flex-col items-center justify-center gap-1 text-[11.5px] font-medium ${active ? "text-zinc-900" : "text-zinc-400"}`}>
+            <Link
+              key={t.href}
+              href={t.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex h-[54px] flex-col items-center justify-center gap-0.5 rounded-[18px] text-[11.5px] font-semibold transition ${
+                active ? "bg-brand-soft text-brand-ink" : "text-zinc-500"
+              }`}
+            >
               <span className="relative">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d={t.icon} />
-                </svg>
+                <Icon size={21} strokeWidth={active ? 2.3 : 1.9} aria-hidden />
                 {count[t.href] ? (
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] rounded-full bg-zinc-900 px-1 text-center text-[10.5px] leading-[18px] text-white">{count[t.href]}</span>
+                  <span className="absolute -top-1.5 -right-3 min-w-[18px] rounded-full bg-accent px-1 text-center text-[10.5px] leading-[18px] font-bold text-[#1d1b18]">
+                    {count[t.href]}
+                  </span>
                 ) : null}
               </span>
               {t.label}

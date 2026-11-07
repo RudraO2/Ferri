@@ -9,8 +9,8 @@ export function GET() {
     scope: "/m",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#fafafa",
-    theme_color: "#fafafa",
+    background_color: "#fbf7f0",
+    theme_color: "#0e7c7b",
     categories: ["productivity", "social"],
     icons: [
       { src: "/m/icon/192", sizes: "192x192", type: "image/png", purpose: "any" },

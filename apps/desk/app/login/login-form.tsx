@@ -1,48 +1,65 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
+import { ArrowRight } from "lucide-react";
+import { Ferri, FerriLogo } from "@/components/ferri";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { signIn } from "./actions";
 
 export function LoginForm({ guest }: { guest: React.ReactNode }) {
   const [state, action, pending] = useActionState(signIn, undefined);
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-[340px]">
-        <div className="mb-6 flex items-center gap-2">
-          <Logo />
-          <span className="text-[15px] font-semibold tracking-tight">Ferri Desk</span>
+    <main className="grid min-h-screen lg:grid-cols-[1fr_1fr]">
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-brand p-12 text-white lg:flex">
+        <Link href="/welcome" aria-label="Ferri home" className="w-fit rounded-full bg-white/95 py-1.5 pr-4 pl-1.5">
+          <FerriLogo size={30} />
+        </Link>
+        <div>
+          <h1 className="display max-w-[480px] text-[56px]">Your crew&apos;s side of Ferri.</h1>
+          <p className="mt-4 max-w-[440px] text-[17px] leading-relaxed text-white/85">Cards, care cases, announcements and everything Ferri knows, in one place.</p>
         </div>
-        <form action={action} className="card space-y-3 p-5">
-          <p className="muted">Sign in with your Switch account.</p>
-          <div>
-            <label className="label" htmlFor="email">
-              Email
-            </label>
-            <input className="input" id="email" name="email" type="email" autoComplete="username" required />
-          </div>
-          <div>
-            <label className="label" htmlFor="password">
-              Password
-            </label>
-            <input className="input" id="password" name="password" type="password" autoComplete="current-password" required />
-          </div>
-          {state?.error ? <p className="text-[13px] text-red-600">{state.error}</p> : null}
-          <button className="btn-primary w-full" disabled={pending}>
-            {pending ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-        {guest}
-      </div>
-    </main>
-  );
-}
+        <Ferri pose="wave" size={300} alive decorative className="absolute -right-6 -bottom-4" />
+        <span className="text-[13px] text-white/70">Built on Switch.</span>
+      </section>
 
-function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-      <rect width="24" height="24" rx="6" fill="#18181b" />
-      <path d="M6 15c3-6 9-6 12 0" stroke="#fafafa" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <circle cx="12" cy="15" r="1.6" fill="#fafafa" />
-    </svg>
+      <section className="flex flex-col px-5 py-6 sm:px-10">
+        <div className="flex items-center justify-between lg:justify-end">
+          <Link href="/welcome" aria-label="Ferri home" className="lg:hidden">
+            <FerriLogo size={30} />
+          </Link>
+          <ThemeToggle />
+        </div>
+        <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col justify-center py-10">
+          <Ferri pose="wave" size={96} decorative className="mb-4 lg:hidden" />
+          <h2 className="h1">Sign in to Desk</h2>
+          <p className="muted mt-1.5">Use your Switch account.</p>
+          <form action={action} className="mt-7 space-y-4">
+            <div>
+              <label className="label" htmlFor="email">
+                Email
+              </label>
+              <input className="input h-11" id="email" name="email" type="email" autoComplete="username" required />
+            </div>
+            <div>
+              <label className="label" htmlFor="password">
+                Password
+              </label>
+              <input className="input h-11" id="password" name="password" type="password" autoComplete="current-password" required />
+            </div>
+            {state?.error ? (
+              <p role="alert" className="rounded-[12px] bg-red-50 px-3 py-2 text-[13px] text-red-700">
+                {state.error}
+              </p>
+            ) : null}
+            <button className="btn-primary h-11 w-full text-[14.5px]" disabled={pending}>
+              {pending ? "Signing in…" : "Sign in"}
+              {pending ? null : <ArrowRight size={16} aria-hidden />}
+            </button>
+          </form>
+          {guest}
+        </div>
+      </section>
+    </main>
   );
 }

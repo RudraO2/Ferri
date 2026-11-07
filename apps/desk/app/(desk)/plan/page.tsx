@@ -157,7 +157,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
                     </div>
                   </div>
                   {i.status !== "done" ? (
-                    <form action={updatePlanItem} className="flex items-center gap-2">
+                    <form action={updatePlanItem} className="flex flex-wrap items-center gap-2">
                       {hidden}
                       <input type="hidden" name="itemId" value={i.id} />
                       <OwnerSelect crew={crew} value={i.ownerId} />

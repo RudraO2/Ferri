@@ -101,7 +101,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
       ) : null}
 
       <Section title="New post">
-        <form action={requestSocialPost} className="card grid grid-cols-6 gap-3 p-4">
+        <form action={requestSocialPost} className="card grid grid-cols-2 gap-3 p-4 sm:grid-cols-6">
           <div className="col-span-2">
             <label className="label">Event</label>
             <select className="input" name="eventId" defaultValue={evs[0]?.id}>
@@ -116,7 +116,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
             <label className="label">When (IST, empty: as soon as it is approved)</label>
             <input className="input" type="datetime-local" name="when" />
           </div>
-          <div className="col-span-2 flex items-end gap-3 text-[12px] text-zinc-600">
+          <div className="col-span-2 flex flex-wrap items-end gap-3 text-[12px] text-zinc-600">
             {["linkedin", "x", "instagram"].map((n) => (
               <label key={n} className="flex items-center gap-1">
                 <input type="checkbox" name="network" value={n} defaultChecked /> {n === "x" ? "X" : serviceName(n)}
@@ -126,11 +126,11 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
               <input type="checkbox" name="image" value="poster" defaultChecked /> with the poster
             </label>
           </div>
-          <div className="col-span-6">
+          <div className="col-span-2 sm:col-span-6">
             <label className="label">What the posts should say</label>
             <textarea className="textarea" name="what" rows={3} placeholder="Registration for Build Night is open, 120 seats, free." />
           </div>
-          <div className="col-span-6">
+          <div className="col-span-2 sm:col-span-6">
             <button className="btn-primary">Draft it for approval</button>
           </div>
         </form>

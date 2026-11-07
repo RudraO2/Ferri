@@ -1,3 +1,4 @@
+import { PlatformLogo } from "@/components/platform";
 import { closedCaseList, firstName, JOB_STATUS_LABEL, openCaseList, type CaseView } from "@/lib/care";
 import { ago, fmt } from "@/lib/data";
 import { CARE_STATUS_LABEL } from "@/lib/ferri";
@@ -61,7 +62,10 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
                     <span className="font-medium">{v.personName}</span>
                     <span className={`badge ${STATUS_STYLE[v.status] ?? ""}`}>{CARE_STATUS_LABEL[v.status] ?? v.status}</span>
                     <span className="text-[12px] text-zinc-400">
-                      {v.kind} · {where(v)}
+                      <span className="inline-flex items-center gap-1.5">
+                        <PlatformLogo platform={v.platform} size={13} />
+                        {v.kind} · {where(v)}
+                      </span>
                     </span>
                   </div>
                   <div className="mt-0.5 text-zinc-700">{v.reason}</div>
@@ -111,7 +115,10 @@ function OpenCase({ v }: { v: CaseView }) {
           </span>
         ) : null}
         <span className="text-[12px] text-zinc-400">
-          {v.personName} in {where(v)} · opened {ago(v.createdAt)}
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <PlatformLogo platform={v.platform} size={13} />
+            {v.personName} in {where(v)} · opened {ago(v.createdAt)}
+          </span>
         </span>
       </div>
       <div className="text-[15px] font-medium">{v.reason}</div>

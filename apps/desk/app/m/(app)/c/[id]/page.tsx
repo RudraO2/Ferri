@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronLeft, Send } from "lucide-react";
+import { FerriAvatar } from "@/components/ferri";
 import { notFound } from "next/navigation";
 import { caseView } from "@/lib/care";
 import { myCrew, pocketCard, waitedFor } from "@/lib/pocket";
@@ -60,18 +62,16 @@ export default async function CardPage({ params, searchParams }: { params: Promi
   const gc = card.guestCard;
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
-        <Link href="/m" className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 active:bg-zinc-200" aria-label="Back">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/90 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
+        <Link href="/m" className="-ml-1 flex h-10 w-10 items-center justify-center rounded-full text-zinc-700 active:bg-zinc-200" aria-label="Back">
+          <ChevronLeft size={22} aria-hidden />
         </Link>
         <div className="text-[15px] font-semibold">{title}</div>
-        <span className="ml-auto text-[12px] text-zinc-400">{waitedFor(card.createdAt)}</span>
+        <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">{waitedFor(card.createdAt)}</span>
       </header>
       <Toast note={note} />
-      <div className="px-5 pt-4">
-        <div className="text-[20px] leading-snug font-semibold tracking-tight">{card.question}</div>
+      <div className="px-5 pt-5">
+        <div className="font-display text-[26px] leading-[1.15] font-extrabold tracking-[-0.03em] text-zinc-900">{card.question}</div>
         {open ? (
           <div className="mt-2 text-[13px] text-zinc-500">
             For {card.owners.join(", ") || "the crew"}
@@ -84,25 +84,40 @@ export default async function CardPage({ params, searchParams }: { params: Promi
         <>
           <section className="mt-4 px-4">
             <h2 className="px-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">Waiting · {people(card.waiting.length)}</h2>
-            <ul className="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+            <ul className="mt-2 space-y-2.5">
               {card.waiting.map((w) => (
-                <li key={w.questionId} className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[14px] font-medium">{w.askerName}</span>
-                    <span className="text-[12px] text-zinc-400">{waitedFor(w.askedAt)}</span>
-                  </div>
-                  <div className="mt-0.5 text-[14px] text-zinc-700">“{w.text}”</div>
-                  <div className="mt-1">
-                    <Where platform={w.platform} space={w.spaceName} />
+                <li key={w.questionId} className="flex items-start gap-2.5">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-semibold text-zinc-800">
+                    {w.askerName.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2 px-1">
+                      <span className="text-[13.5px] font-semibold text-zinc-900">{w.askerName}</span>
+                      <span className="text-[12px] text-zinc-400">{waitedFor(w.askedAt)}</span>
+                    </div>
+                    <div className="mt-1 rounded-[18px] rounded-tl-[6px] border border-zinc-200 bg-white px-3.5 py-2.5 text-[15px] leading-snug text-zinc-800">{w.text}</div>
+                    <div className="mt-1 px-1">
+                      <Where platform={w.platform} space={w.spaceName} />
+                    </div>
                   </div>
                 </li>
               ))}
             </ul>
+            <div className="mt-3 flex items-start gap-2.5">
+              <FerriAvatar size={36} pose="thinking" />
+              <div className="rounded-[18px] rounded-tl-[6px] bg-brand-soft px-3.5 py-2.5 text-[14px] leading-snug text-zinc-800">
+                <b className="font-semibold">Ferri</b> told {card.waiting.length === 1 ? "them" : `all ${card.waiting.length}`}: “Checking with the team, back shortly.”
+              </div>
+            </div>
           </section>
           <form action={pocketAnswer} className="mt-5 space-y-3 px-4">
             <input type="hidden" name="cardId" value={card.id} />
+            <label htmlFor="answer" className="sr-only">
+              Your answer
+            </label>
             <textarea
-              className="textarea-lg"
+              id="answer"
+              className="textarea-lg min-h-[132px]"
               name="text"
               rows={4}
               required
@@ -110,7 +125,10 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                 card.personal ? "Your answer. It goes to this person only." : "Your answer. It goes to everyone who asked, and Ferri saves it for next time."
               }
             />
-            <button className="btn-lg-primary w-full">{card.waiting.length ? `Send answer to ${people(card.waiting.length)}` : "Send answer"}</button>
+            <button className="btn-lg-primary h-14 w-full text-[16px]">
+              <Send size={18} aria-hidden />
+              {card.waiting.length ? `Send to ${people(card.waiting.length)}` : "Send answer"}
+            </button>
             <button className="btn-lg w-full" formAction={pocketSkip} formNoValidate>
               Don&apos;t answer this one
             </button>

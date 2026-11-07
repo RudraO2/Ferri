@@ -1,3 +1,4 @@
+import { PlatformLogo } from "@/components/platform";
 import { community } from "@/lib/db";
 import { ago, liveEvents, spacesWithSettings } from "@/lib/data";
 import type { GatewayRoom } from "@/lib/ferri";
@@ -79,7 +80,8 @@ export default async function SpacesPage({ searchParams }: { searchParams: Promi
                   <div className="text-[13px] font-medium">
                     {s.name} <span className="badge ml-1">new · off</span>
                   </div>
-                  <div className="text-[12px] text-zinc-500">
+                  <div className="flex items-center gap-1.5 text-[12px] text-zinc-500">
+                    <PlatformLogo platform={s.platform} size={13} />
                     {s.platform ?? "unknown platform"} · first seen {ago(s.firstSeenAt)} · last message {ago(s.lastMessageAt)}
                   </div>
                 </div>
@@ -111,7 +113,8 @@ export default async function SpacesPage({ searchParams }: { searchParams: Promi
                       {s.attachment ? `${s.attachment.eventName} · ${s.attachment.mode}` : "off"}
                     </span>
                   </div>
-                  <div className="text-[12px] text-zinc-500">
+                  <div className="flex items-center gap-1.5 text-[12px] text-zinc-500">
+                    <PlatformLogo platform={s.platform} size={13} />
                     {s.platform ?? "unknown platform"} · last message {ago(s.lastMessageAt)}
                   </div>
                 </div>

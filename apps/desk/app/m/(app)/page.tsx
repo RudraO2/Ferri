@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Mail, Megaphone } from "lucide-react";
 import { PLATFORM_LABEL, myCrew, openCards, waitedFor, type PocketCard } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { Empty, Header, Toast, Where } from "./bits";
@@ -33,12 +34,12 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
         </Link>
       ) : null}
       <PushNudge />
-      <div className="mx-4 mt-3 flex justify-end gap-2">
-        <Link href="/m/guests" className="btn-lg h-9 px-3 text-[14px]">
-          + Email guests
+      <div className="mx-4 mt-3 grid grid-cols-2 gap-2">
+        <Link href="/m/new" className="btn-lg h-11 px-3 text-[14px]">
+          <Megaphone size={16} aria-hidden /> Announce
         </Link>
-        <Link href="/m/new" className="btn-lg h-9 px-3 text-[14px]">
-          + Announce
+        <Link href="/m/guests" className="btn-lg h-11 px-3 text-[14px]">
+          <Mail size={16} aria-hidden /> Email guests
         </Link>
       </div>
       <BuilderCards requests={builderAsks} />
@@ -49,7 +50,9 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
           ))}
         </div>
       ) : builderAsks.length ? null : (
-        <Empty title="Nothing needs you">Ferri knows the answers so far. New questions for you buzz this phone.</Empty>
+        <Empty title="Nothing needs you" pose="sleep">
+          Ferri knows the answers so far. New questions for you buzz this phone.
+        </Empty>
       )}
       {others.length ? (
         <>
@@ -69,7 +72,22 @@ function CardRow({ card }: { card: PocketCard }) {
   const first = card.waiting[0];
   const n = card.waiting.length;
   return (
-    <Link href={`/m/c/${card.id}`} className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-xs active:bg-zinc-50">
+    <Link href={`/m/c/${card.id}`} className="block rounded-[22px] border border-zinc-200 bg-white p-4 shadow-[var(--shadow-card)] transition active:scale-[0.99] active:bg-zinc-50">
+      {card.kind === "question" && first ? (
+        <div className="mb-2.5 flex items-center gap-2.5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-semibold text-zinc-800">
+            {first.askerName.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[14.5px] font-semibold text-zinc-900">
+              {first.askerName}
+              {n > 1 ? <span className="font-normal text-zinc-500"> and {n - 1} more</span> : null}
+            </div>
+            <Where platform={first.platform} space={first.spaceName} />
+          </div>
+          <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">{waitedFor(card.createdAt)}</span>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <span
           className={
@@ -110,9 +128,9 @@ function CardRow({ card }: { card: PocketCard }) {
         ) : card.nudgedAt ? (
           <span className="pill bg-sky-100 text-sky-800">nudged</span>
         ) : null}
-        <span className="ml-auto text-[12px] text-zinc-400">{waitedFor(card.createdAt)}</span>
+        {card.kind === "question" && first ? null : <span className="ml-auto text-[12px] text-zinc-400">{waitedFor(card.createdAt)}</span>}
       </div>
-      <div className="mt-2 text-[16px] leading-snug font-medium">{card.question}</div>
+      <div className="mt-2 font-display text-[19px] leading-snug font-bold tracking-[-0.02em] text-zinc-900">{card.question}</div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
         {card.kind === "announce" ? (
           <span className="text-[12.5px] text-zinc-500">
@@ -139,18 +157,10 @@ function CardRow({ card }: { card: PocketCard }) {
           ) : (
             <span className="text-[12.5px] text-zinc-500">a member needs the crew</span>
           )
-        ) : first ? (
-          <>
-            <Where platform={first.platform} space={first.spaceName} />
-            <span className="text-[12.5px] text-zinc-500">
-              {first.askerName}
-              {n > 1 ? ` and ${n - 1} more` : ""}
-            </span>
-          </>
-        ) : (
+        ) : first ? null : (
           <span className="text-[12.5px] text-zinc-500">nobody waiting any more</span>
         )}
-        <span className="text-[12.5px] text-zinc-400">· {card.why}</span>
+        <span className="text-[12.5px] text-zinc-400">{card.kind === "question" && first ? card.why : `· ${card.why}`}</span>
       </div>
     </Link>
   );
