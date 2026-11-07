@@ -22,6 +22,12 @@ export interface GatewayRoom {
   bridge_type?: string | null;
 }
 
+/** Options for tests and health checks: a stand-in fetch, and a timeout per request. */
+export interface GatewayClientOptions {
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+}
+
 export class GatewayClient {
   private cookie = "";
 
@@ -29,6 +35,7 @@ export class GatewayClient {
     private readonly baseUrl: string,
     private readonly email: string,
     private readonly password: string,
+    private readonly opts: GatewayClientOptions = {},
   ) {}
 
   /** A client for an existing session (Desk keeps the person's Gateway cookie). It cannot sign in again. */
@@ -98,13 +105,14 @@ export class GatewayClient {
   }
 
   private async raw(method: string, path: string, body?: unknown): Promise<Response> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await (this.opts.fetch ?? fetch)(`${this.baseUrl}${path}`, {
       method,
       headers: {
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
         ...(this.cookie ? { cookie: this.cookie } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...(this.opts.timeoutMs ? { signal: AbortSignal.timeout(this.opts.timeoutMs) } : {}),
     });
     const setCookie = res.headers.getSetCookie?.() ?? [];
     if (setCookie.length) this.cookie = setCookie.map((c) => c.split(";")[0]).join("; ");

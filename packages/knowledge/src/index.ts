@@ -23,3 +23,5 @@ export * from "./wrap.ts";
 export * from "./desks.ts";
 export * from "./settings.ts";
 export * from "./social.ts";
+export * from "./doctor.ts";
+export * from "./connect.ts";

@@ -164,3 +164,5 @@ export {
 } from "@ferri/knowledge";
 export { pushToUsers, subscribe as savePushSubscription, subscriptionCount, unsubscribe as removePushSubscription, vapidFromEnv } from "@ferri/push";
 export { GatewayClient, GatewayError, type GatewayRoom } from "@ferri/switch";
+// Setup (spec 23): the doctor report.
+export { runDoctor, type DoctorCheck, type DoctorReport } from "@ferri/knowledge";

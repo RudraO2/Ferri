@@ -21,6 +21,7 @@ const ITEMS = [
   { href: "/knowledge", label: "Knowledge" },
   { href: "/skills", label: "Skills" },
   { href: "/community", label: "Community" },
+  { href: "/setup", label: "Setup" },
 ];
 
 export function Nav({ counts }: { counts: Record<string, number> }) {
