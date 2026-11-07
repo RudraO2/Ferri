@@ -623,6 +623,10 @@ body {
   background-image: radial-gradient(var(--n-200) 1px, transparent 1px);
   background-size: 18px 18px;
 }
+/* The playground's message box and card answer show focus with their own ring, so they need no second outline. */
+.pg form :is(input, textarea):focus-visible {
+  outline: none;
+}
 
 /* Section rhythm on the public site. */
 .site-section {

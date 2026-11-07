@@ -192,7 +192,7 @@ export const NOTES: Note[] = [
 ];
 
 /** Words that say "this is about something the notes don't cover", so a loose match (e.g. "bring") doesn't win. */
-const UNKNOWN_HINTS = /\b(dog|dogs|pet|pets|cat|parking|park my|bike|car|parents|plus.?one|friend|smok|alcohol|beer|drone|shower|locker|refund|transfer my|certificate|record(ed|ing)?|livestream|stream|photo(s|graph)|merch|t.?shirt|size|accessib|wheelchair|lift|elevator|nursing|child|kids?)\b/;
+const UNKNOWN_HINTS = /\b(dog|dogs|pet|pets|cat|parking|park my|bike|car|parents|plus.?one|friend|smok|alcohol|beer|drone|shower|locker|refund|transfer my|certificate|record(ed|ing)?|livestream|stream|photo(s|graph)|merch|t.?shirt|accessib|wheelchair|lift|elevator|nursing|child|kids?)\b/;
 
 /** A message Shield would block: a lookalike or known-scam link, or the "free nitro" pattern. */
 export function shieldVerdict(text: string): string | null {
@@ -204,9 +204,18 @@ export function shieldVerdict(text: string): string | null {
   return null;
 }
 
-/** Content words, for matching a new question against what the crew already taught. */
+/**
+ * Content words, for matching a new question against what the crew already taught. Common verbs
+ * ("bring", "allowed") and the event's own name are left out, so "what should I bring?" or
+ * "can I bring my cat?" doesn't match a crew answer about dogs.
+ */
 export function words(text: string): Set<string> {
-  const stop = new Set("a an the is are was were be can could may might i we you our my to of for at in on with and or do does did it its this that there any anyone know about please ferri hey hi what when where how who which will would should".split(" "));
+  const stop = new Set(
+    (
+      "a an the is are was were be can could may might i we you our my to of for at in on with and or do does did it its this that there any anyone know about please ferri hey hi what when where how who which will would should " +
+      "bring allowed allow okay get got need have has had here come coming take use want also just own too some much many still not but your their them they tell like event build night lantern hackathon"
+    ).split(" "),
+  );
   return new Set(
     text
       .toLowerCase()
@@ -214,7 +223,8 @@ export function words(text: string): Set<string> {
       .replace(/[^a-z0-9₹ ]+/g, " ")
       .split(/\s+/)
       .filter((w) => w.length > 2 && !stop.has(w))
-      .map((w) => w.replace(/s$/, "")),
+      .map((w) => w.replace(/s$/, ""))
+      .filter((w) => !stop.has(w)),
   );
 }
 
@@ -229,6 +239,7 @@ export type Learned = { q: string; words: Set<string>; answer: string; by: strin
 
 export type Verdict =
   | { kind: "greeting" }
+  | { kind: "quiet" }
   | { kind: "known"; note: Note }
   | { kind: "learned"; learned: Learned }
   | { kind: "shield"; reason: string }
@@ -238,8 +249,10 @@ export type Verdict =
 export function decide(text: string, learned: Learned[]): Verdict {
   const reason = shieldVerdict(text);
   if (reason) return { kind: "shield", reason };
-  const t = text.toLowerCase().replace(/@ferri/g, "").trim();
-  if (/^(hi|hey|hello|yo|hola|namaste|sup|gm)\b[!. ]*$/.test(t)) return { kind: "greeting" };
+  const t = text.toLowerCase().replace(/@?ferri\b/g, "").trim();
+  if (/^(hi|hey|hello|yo|hola|namaste|sup|gm)( there| everyone| all| team)?[^a-z0-9]*$/.test(t)) return { kind: "greeting" };
+  // Thanks and small talk: nothing to answer, so Ferri stays quiet (no card for the crew).
+  if (/^(thanks|thank you|thank u|thx|ty|tysm|ok|okay|k|cool|great|nice|awesome|got it|perfect|lol|haha+)( so much| a lot)?[^a-z0-9]*$/.test(t)) return { kind: "quiet" };
 
   const w = words(t);
   const taught = learned.map((l) => ({ l, s: overlap(w, l.words) })).sort((a, b) => b.s - a.s)[0];

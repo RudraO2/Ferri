@@ -49,11 +49,19 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function suggestAnswer(q: string) {
   const t = q.toLowerCase();
-  if (/dog|pet|cat/.test(t)) return "Yes, well-behaved dogs are welcome. Keep them on a lead and out of the quiet room.";
-  if (/park|bike|car/.test(t)) return "Yes, there's free bike parking in the basement. Cars should use the paid lot next door.";
+  if (/\b(dogs?|pets?)\b/.test(t)) return "Yes, well-behaved dogs are welcome. Keep them on a lead and out of the quiet room.";
+  if (/\bcats?\b/.test(t)) return "Sorry, only dogs on a lead. A busy hacking room is no fun for a cat.";
+  if (/\b(park|parking|bikes?|cars?)\b/.test(t)) return "Yes, there's free bike parking in the basement. Cars should use the paid lot next door.";
   if (/certificate/.test(t)) return "Yes, every participant gets a certificate by email after the event.";
-  if (/t.?shirt|merch|size/.test(t)) return "Yes, everyone gets a T-shirt at check-in. Sizes S to XXL.";
-  return "Yes, that's fine. Ask at the help desk on the 3rd floor if you need anything.";
+  if (/t.?shirt|merch|\bsizes?\b/.test(t)) return "Yes, everyone gets a T-shirt at check-in. Sizes S to XXL.";
+  if (/\b(friends?|plus.?one)\b/.test(t)) return "Yes, if they register too. Registration is open until 18 November.";
+  if (/\b(kids?|child|children)\b/.test(t)) return "Build Night is for 18 and over, so kids can't join this time.";
+  if (/wheelchair|accessib|\blift\b|elevator/.test(t)) return "Yes. There's a lift to every floor and step-free entry next to the blue bakery.";
+  if (/shower|locker/.test(t)) return "There are no showers, but there are free lockers next to the quiet room.";
+  if (/record|stream|photo/.test(t)) return "Yes, the opening talk and the demos are recorded and shared after the event.";
+  if (/alcohol|beer|smok/.test(t)) return "No alcohol at the venue. Smoking is fine outside, away from the entrance.";
+  if (/refund|transfer/.test(t)) return "Registration is free, so there's nothing to refund. To pass your spot on, email hello@lanternlabs.example.";
+  return "Yes, that's fine. Ask at the front desk on the 3rd floor if you need anything.";
 }
 
 export function Playground() {
@@ -109,6 +117,11 @@ export function Playground() {
       await wait(800);
       say({ who: "Ferri", ferri: true, text: "Hi! I'm Ferri. Ask me anything about Lantern Build Night: the schedule, food, Wi-Fi, the venue, teams or prizes." });
       step({ icon: "done", text: "Said hello. Ferri only answers event questions from its notes.", tone: "ok" });
+      setBusy(false);
+      return;
+    }
+    if (v.kind === "quiet") {
+      step({ icon: "done", text: "Nothing to answer here, so Ferri stayed quiet. Nobody on the crew was pinged.", tone: "ok" });
       setBusy(false);
       return;
     }

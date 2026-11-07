@@ -47,7 +47,8 @@ export function AskButton({ className = "", children }: { className?: string; ch
       type="button"
       className={className}
       onClick={() => {
-        document.getElementById("try")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        document.getElementById("try")?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" });
         setTimeout(() => document.getElementById("ferri-ask-input")?.focus({ preventScroll: true }), 450);
       }}
     >

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FerriLogo } from "@/components/ferri";
-import { DEMO_DESK, DISCORD, DOCS, GITHUB, SWITCH, TELEGRAM } from "./links";
+import { DEMO_DESK, DISCORD, DOCS, GITHUB, SWITCH, TELEGRAM, VIDEO } from "./links";
 
 const COLS: { title: string; links: { href: string; label: string; ext?: boolean }[] }[] = [
   {
@@ -16,6 +16,7 @@ const COLS: { title: string; links: { href: string; label: string; ext?: boolean
     title: "Try it",
     links: [
       { href: "/welcome#try", label: "Playground" },
+      ...(VIDEO ? [{ href: VIDEO, label: "Watch the video", ext: true }] : []),
       { href: DISCORD, label: "Ask on Discord", ext: true },
       { href: TELEGRAM, label: "Ask on Telegram", ext: true },
       { href: DEMO_DESK, label: "Desk (read-only demo)", ext: true },

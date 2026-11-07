@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Check,
   ChevronDown,
+  CirclePlay,
   Globe,
   Hand,
   Languages,
@@ -17,7 +18,7 @@ import { Art, Ferri, FerriAvatar, FerriLoop } from "@/components/ferri";
 import { PlatformLogo } from "@/components/platform";
 import { GithubMark } from "../_components/icons";
 import { AskButton, CopyCommand, PilingQuestions, RotatingWord } from "../_components/bits";
-import { DEMO_DESK, DISCORD, GITHUB, SWITCH, TELEGRAM } from "../_components/links";
+import { DEMO_DESK, DISCORD, GITHUB, SWITCH, TELEGRAM, VIDEO } from "../_components/links";
 import { Playground } from "../_components/playground";
 import { Stages } from "../_components/stages";
 import { HowItWorks } from "./how-it-works";
@@ -26,11 +27,13 @@ import { Spine } from "./spine";
 export const metadata: Metadata = {
   title: { absolute: "Ferri: run the event, Ferri runs the group chats" },
   description:
-    "Ferri is an open-source AI teammate for event organizers. It answers attendees on Discord, Telegram, Slack and WhatsApp from your event's own info, with a source on every reply, and asks your crew once when it doesn't know. Built on Switch.",
+    "Ferri is the open-source AI teammate for people who host community events. It plans with your crew, keeps your community up to date on Discord, Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK. Built on Switch.",
   openGraph: {
     title: "Run the event. Ferri runs the group chats.",
-    description: "Answers your attendees on every app, with sources. Asks your crew once when it doesn't know. Open source, built on Switch.",
+    description: "The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app. Open source, built on Switch.",
   },
+  // No twitter image here: X then uses this page's share image (opengraph-image.tsx), not the site-wide one.
+  twitter: { card: "summary_large_image" },
 };
 
 const APPS = [
@@ -83,7 +86,7 @@ const FAQ = [
   },
   {
     q: "Does it only answer questions?",
-    a: "Answers come first. Ferri also keeps the crew's plan, posts announcements on every app after one OK, opens care cases for members who are stuck or upset, runs the guest list, blocks scams, and writes a recap with real numbers at the end. Its Builder ships the event site, posters and listings.",
+    a: "No. Answering is one part of the job. Ferri also keeps the crew's plan, posts announcements on every app after one OK, opens care cases for members who are stuck or upset, runs the guest list, blocks scams, and writes a recap with real numbers at the end. Its Builder ships the event site, posters and listings.",
   },
   {
     q: "What do I need to run it?",
@@ -115,7 +118,7 @@ export default function Welcome() {
           <div className="rise inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 py-1 pr-3.5 pl-1 text-[14px] font-medium text-zinc-700 shadow-[0_2px_12px_-6px_rgba(40,60,60,0.25)] backdrop-blur">
             <FerriAvatar size={26} />
             <span>
-              The AI teammate for <RotatingWord words={EVENTS} className="font-semibold text-brand-ink" />
+              For people who host <RotatingWord words={EVENTS} className="font-semibold text-brand-ink" />
             </span>
           </div>
 
@@ -125,17 +128,22 @@ export default function Welcome() {
           </h1>
 
           <p className="rise mx-auto mt-6 max-w-[660px] text-[clamp(17px,1.5vw,19px)] leading-[1.6] text-zinc-600 [animation-delay:160ms]">
-            Ferri answers attendees on Discord, Telegram, Slack and WhatsApp, with a source on every reply. When it doesn&apos;t know, it asks your crew once and tells everyone
-            who asked.
+            Ferri is the AI teammate between your crew and your community. It plans with the crew where they already talk, keeps the community up to date on Discord,
+            Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK.
           </p>
 
           <div className="rise mt-8 flex flex-wrap items-center justify-center gap-3 [animation-delay:240ms]">
             <AskButton className="btn-primary h-[52px] px-7 text-[16px]">
-              Ask Ferri a question <ArrowRight size={17} aria-hidden />
+              Try it live <ArrowRight size={17} aria-hidden />
             </AskButton>
             <Link href="/start" className="btn h-[52px] px-7 text-[16px]">
               Set it up free
             </Link>
+            {VIDEO ? (
+              <a href={VIDEO} className="btn h-[52px] px-7 text-[16px]">
+                <CirclePlay size={17} aria-hidden /> Watch the video
+              </a>
+            ) : null}
           </div>
           <ul className="rise mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13.5px] text-zinc-600 [animation-delay:300ms]">
             <li className="inline-flex items-center gap-1.5">
@@ -185,6 +193,19 @@ export default function Welcome() {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* ── Across the event ─────────────────────────────────── */}
+      <section id="event" className="site-section scroll-mt-24 pt-24 pb-8 lg:pt-28 lg:pb-12">
+        <div className="mb-12 max-w-[760px]">
+          <p className="kicker">Not another help desk</p>
+          <h2 className="display text-[clamp(36px,5vw,62px)] text-zinc-900">From the first idea to the last thank-you.</h2>
+          <p className="lede">
+            A help desk talks only to outsiders, and only answers. Ferri works with your crew inside and your community outside. It turns the crew&apos;s chatter into plans,
+            sites, announcements, answers and a recap.
+          </p>
+        </div>
+        <Stages />
       </section>
 
       {/* ── The pain ─────────────────────────────────────────── */}
@@ -246,16 +267,6 @@ export default function Welcome() {
           </div>
           <HowItWorks />
         </div>
-      </section>
-
-      {/* ── Across the event ─────────────────────────────────── */}
-      <section id="event" className="site-section scroll-mt-24 py-24 lg:py-32">
-        <div className="mb-12 max-w-[760px]">
-          <p className="kicker">Not just the day of</p>
-          <h2 className="display text-[clamp(36px,5vw,62px)] text-zinc-900">From the first idea to the last thank-you.</h2>
-          <p className="lede">The crew talks the way it always does. Ferri turns that chatter into plans, sites, announcements, answers and a recap.</p>
-        </div>
-        <Stages />
       </section>
 
       {/* ── Control room ─────────────────────────────────────── */}
@@ -483,6 +494,11 @@ export default function Welcome() {
                 <a href={TELEGRAM} className="btn h-12 border-0 bg-white px-6 text-[15.5px] text-zinc-900 hover:bg-zinc-50">
                   <PlatformLogo platform="telegram" size={18} /> Ask on Telegram
                 </a>
+                {VIDEO ? (
+                  <a href={VIDEO} className="btn h-12 border-0 bg-white px-6 text-[15.5px] text-zinc-900 hover:bg-zinc-50">
+                    <CirclePlay size={18} aria-hidden /> Watch the video
+                  </a>
+                ) : null}
                 <Link href="/start" className="btn h-12 border-white/40 bg-transparent px-6 text-[15.5px] text-white hover:bg-white/10" style={{ boxShadow: "none" }}>
                   <Globe size={16} aria-hidden /> Run your own
                 </Link>

@@ -59,7 +59,7 @@ const STAGES = [
 ];
 
 export function Stages() {
-  const [i, setI] = useState(3);
+  const [i, setI] = useState(0);
   const s = STAGES[i]!;
   return (
     <div>

@@ -11,15 +11,15 @@ const hand = Caveat({ subsets: ["latin"], weight: ["600"], variable: "--font-han
 
 export const metadata: Metadata = {
   title: { default: "Ferri", template: "%s · Ferri" },
-  description: "Ferri is the open-source AI teammate for event organizers. It answers your attendees on Discord, Telegram, Slack and WhatsApp with a source on every reply, and asks your crew once when it doesn't know. Built on Switch.",
+  description: "Ferri is the open-source AI teammate for people who host community events. It plans with your crew, keeps your community up to date on Discord, Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK. Built on Switch.",
   icons: { icon: "/m/icon/96", apple: "/m/icon/180" },
   metadataBase: new URL(process.env.FERRI_PUBLIC_URL || "http://localhost:3100"),
   openGraph: {
     type: "website",
     siteName: "Ferri",
     title: "Ferri: run the event, Ferri runs the group chats",
-    description: "Answers your attendees on every app, with a source. Asks your crew once when it doesn't know. Open source, built on Switch.",
-    images: [{ url: "/brand/og-image.png", width: 1200, height: 630, alt: "Ferri, a friendly sea otter: every question, answered once." }],
+    description: "The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app. Open source, built on Switch.",
+    images: [{ url: "/brand/og-image.png", width: 1200, height: 630, alt: "Ferri, a friendly sea otter: run the event, Ferri runs the group chats." }],
   },
   twitter: { card: "summary_large_image", images: ["/brand/og-image.png"] },
 };

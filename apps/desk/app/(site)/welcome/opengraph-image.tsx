@@ -60,7 +60,7 @@ export default async function OpenGraphImage() {
             <div style={{ fontSize: 88, fontFamily: "Bricolage", letterSpacing: -3.5, lineHeight: 1 }}>Run the event.</div>
             <div style={{ fontSize: 86, fontFamily: "Instrument Serif", fontStyle: "italic", letterSpacing: -1.5, lineHeight: 1.08, marginTop: 4 }}>Ferri runs the group chats.</div>
             <div style={{ fontSize: 27, color: "#57514a", marginTop: 24, maxWidth: 680, lineHeight: 1.4 }}>
-              Answers your attendees on every app, with a source. Asks your crew once when it doesn&apos;t know.
+              The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app.
             </div>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
