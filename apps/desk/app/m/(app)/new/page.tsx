@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { liveEvents } from "@/lib/data";
 import { community, db } from "@/lib/db";
 import { announcementTargets } from "@/lib/ferri";
+import { shortSpace } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
+import { PlatformLogo } from "@/components/platform";
 import { pocketNewAnnouncement } from "../../actions";
-import { Toast, Where } from "../bits";
+import { BackHeader, Empty, Toast } from "../bits";
 
 /** Write an announcement on the phone. It still needs one OK, which can be your own. */
 export default async function NewAnnouncement({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
@@ -15,48 +16,56 @@ export default async function NewAnnouncement({ searchParams }: { searchParams: 
   const targets = evs[0] ? await announcementTargets(db(), evs[0].id) : [];
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
-        <Link href="/m" className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 active:bg-zinc-200" aria-label="Back">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </Link>
-        <div className="text-[15px] font-semibold">New announcement</div>
-      </header>
+      <BackHeader href="/m" title="New announcement" />
       <Toast note={note} />
       {evs.length ? (
-        <form action={pocketNewAnnouncement} className="mt-4 space-y-4 px-4">
+        <form action={pocketNewAnnouncement} className="mt-3 space-y-4 px-4">
           {evs.length > 1 ? (
-            <select className="input-lg" name="eventId" defaultValue={evs[0]!.id}>
-              {evs.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label htmlFor="eventId" className="mb-1 block px-1 text-[13px] font-medium text-zinc-500">
+                Event
+              </label>
+              <select id="eventId" className="input-lg" name="eventId" defaultValue={evs[0]!.id}>
+                {evs.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : (
             <input type="hidden" name="eventId" value={evs[0]!.id} />
           )}
-          <textarea className="textarea-lg" name="text" rows={6} required placeholder="What should everyone know? It goes out exactly as you write it." />
           <div>
-            <label className="mb-1 block px-1 text-[13px] font-medium text-zinc-500">Post at (empty: once approved)</label>
-            <input className="input-lg" type="datetime-local" name="when" />
+            <label htmlFor="text" className="sr-only">
+              Announcement
+            </label>
+            <textarea id="text" className="textarea-lg" name="text" rows={6} required placeholder="What should everyone know?" />
           </div>
-          <div className="px-1">
-            <div className="text-[13px] font-medium text-zinc-500">Goes to {evs.length > 1 ? `${evs[0]!.name}'s` : "every"} space</div>
-            <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
+          {targets.length ? (
+            <ul className="flex flex-wrap gap-1.5 px-1" aria-label={`Goes to ${evs.length > 1 ? `${evs[0]!.name}'s` : "every"} space`}>
               {targets.map((t) => (
-                <li key={t.spaceId}>
-                  <Where platform={t.platform} space={t.name} />
+                <li key={t.spaceId} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[12.5px] text-zinc-700">
+                  <PlatformLogo platform={t.platform} size={13} />
+                  {shortSpace(t.name)}
                 </li>
               ))}
             </ul>
-          </div>
-          <button className="btn-lg-primary w-full">Send for approval</button>
-          <p className="px-1 text-[13px] text-zinc-500">Announcements always need one OK. Its card shows up in Needs you, and yours counts.</p>
+          ) : null}
+          <details className="group">
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center px-1 text-[14px] font-medium text-zinc-600 [&::-webkit-details-marker]:hidden">
+              Schedule it for later
+            </summary>
+            <label htmlFor="when" className="mb-1 block px-1 text-[13px] font-medium text-zinc-500">
+              Post at (empty: once approved)
+            </label>
+            <input id="when" className="input-lg" type="datetime-local" name="when" />
+          </details>
+          <button className="btn-lg-primary h-14 w-full text-[16px]">Send for approval</button>
+          <p className="px-1 text-center text-[13px] text-zinc-500">It needs one OK, and yours counts.</p>
         </form>
       ) : (
-        <p className="mt-6 px-5 text-[14px] text-zinc-500">No live event yet.</p>
+        <Empty title="No live event yet" pose="announce" />
       )}
     </>
   );

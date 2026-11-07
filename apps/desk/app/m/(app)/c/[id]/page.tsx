@@ -1,12 +1,12 @@
-import Link from "next/link";
-import { ChevronLeft, Send } from "lucide-react";
+import { ChevronDown, Send } from "lucide-react";
 import { FerriAvatar } from "@/components/ferri";
+import { PlatformLogo } from "@/components/platform";
 import { notFound } from "next/navigation";
 import { caseView } from "@/lib/care";
-import { myCrew, pocketCard, waitedFor } from "@/lib/pocket";
+import { myCrew, pocketCard, shortSpace, waitedFor } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
 import { pocketAnswer, pocketDontOffer, pocketOfferSpot, pocketSkip } from "../../../actions";
-import { Toast, Where } from "../../bits";
+import { BackHeader, QUIET, Toast, Where } from "../../bits";
 import { CareScreen } from "../../care-case";
 import { community } from "@/lib/db";
 import { SEND_KIND_LABEL, formatWhen, translationsFrom } from "@/lib/ferri";
@@ -60,53 +60,82 @@ export default async function CardPage({ params, searchParams }: { params: Promi
             ? "Social post"
           : `${card.topic.charAt(0).toUpperCase()}${card.topic.slice(1)} question`;
   const gc = card.guestCard;
+  // The small print of each kind, folded away under "About this card" (progressive disclosure).
+  const about: React.ReactNode =
+    card.kind === "announce" ? (
+      <>
+        {edit
+          ? "Approving it edits the post in place everywhere it went."
+          : a?.scheduledAt
+            ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.`
+            : "Goes out as soon as it is approved."}
+        {a?.origin === "decision" ? " Ferri spotted this decision in the crew chat." : ""}
+        {!edit && a?.media?.length ? ` It goes out with the image ${a.media.map((m) => m.filename).join(", ")}.` : ""}
+      </>
+    ) : card.kind === "plan" ? (
+      "Ferri proposed this in the agenda draft. Nothing is decided until someone on the crew confirms it."
+    ) : card.kind === "outreach" ? (
+      outreachMailbox() ? `Goes out from ${outreachMailbox()} as soon as you send it. Their reply comes back to Ferri, which tells the crew.` : EMAIL_OFF_NOTE
+    ) : card.kind === "guests" ? (
+      <>
+        {gc?.send ? `A ${SEND_KIND_LABEL[gc.send.kind] ?? gc.send.kind} to ` : "Goes to "}
+        {audienceLine(gc?.send?.audience ?? "going", gc?.count ?? null)}
+        {gc?.eventName ? ` of ${gc.eventName}` : ""}. {gc?.send?.scheduledAt ? `It goes out at ${formatWhen(gc.send.scheduledAt, tz)}.` : "It goes out as soon as you send it."} Each
+        guest gets their own copy with their first name and their RSVP link.
+        {gc?.send ? (gc.send.origin === "ferri" ? " Ferri suggested it." : ` Asked by ${gc.send.requestedBy}.`) : ""}
+      </>
+    ) : card.kind === "question" ? (
+      card.personal ? "Your answer goes to this person only." : "Your answer goes to everyone who asked, and Ferri saves it for next time."
+    ) : null;
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/90 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
-        <Link href="/m" className="-ml-1 flex h-10 w-10 items-center justify-center rounded-full text-zinc-700 active:bg-zinc-200" aria-label="Back">
-          <ChevronLeft size={22} aria-hidden />
-        </Link>
-        <div className="text-[15px] font-semibold">{title}</div>
-        <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">{waitedFor(card.createdAt)}</span>
-      </header>
+      <BackHeader
+        href="/m"
+        title={title}
+        right={<span className="text-[13px] font-semibold text-amber-700">{waitedFor(card.createdAt)}</span>}
+      />
       <Toast note={note} />
-      <div className="px-5 pt-5">
-        <div className="font-display text-[26px] leading-[1.15] font-extrabold tracking-[-0.03em] text-zinc-900">{card.question}</div>
+      <div className="px-5 pt-3">
+        <h1 className="font-display text-[26px] leading-[1.15] font-extrabold tracking-[-0.03em] text-zinc-900">{card.question}</h1>
         {open ? (
-          <div className="mt-2 text-[13px] text-zinc-500">
-            For {card.owners.join(", ") || "the crew"}
-            {card.escalatedAt ? " · escalated to everyone" : card.nudgedAt ? " · nudged" : ""}
-          </div>
+          <details className="group mt-1.5">
+            <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1 text-[13px] text-zinc-500 [&::-webkit-details-marker]:hidden">
+              For {card.owners.join(", ") || "the crew"}
+              {card.escalatedAt ? " · escalated" : card.nudgedAt ? " · nudged" : ""}
+              {about ? <ChevronDown size={14} className="transition group-open:rotate-180" aria-hidden /> : null}
+            </summary>
+            {about ? <p className="mt-1 text-[13.5px] leading-relaxed text-zinc-600">{about}</p> : null}
+          </details>
         ) : null}
       </div>
 
       {open && card.kind === "question" ? (
         <>
-          <section className="mt-4 px-4">
-            <h2 className="px-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">Waiting · {people(card.waiting.length)}</h2>
-            <ul className="mt-2 space-y-2.5">
+          <section className="mt-4 px-4" aria-label={`Waiting: ${people(card.waiting.length)}`}>
+            <ul className="space-y-3">
               {card.waiting.map((w) => (
-                <li key={w.questionId} className="flex items-start gap-2.5">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-semibold text-zinc-800">
+                <li key={w.questionId} className="flex items-end gap-2">
+                  <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-semibold text-zinc-800">
                     {w.askerName.charAt(0).toUpperCase()}
+                    <span className="absolute -right-1 -bottom-1 inline-flex rounded-full bg-zinc-50 p-[2px]">
+                      <PlatformLogo platform={w.platform} size={12} />
+                    </span>
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2 px-1">
-                      <span className="text-[13.5px] font-semibold text-zinc-900">{w.askerName}</span>
-                      <span className="text-[12px] text-zinc-400">{waitedFor(w.askedAt)}</span>
+                    <div className="px-1 text-[12.5px] text-zinc-500">
+                      <span className="font-semibold text-zinc-800">{w.askerName}</span> · {shortSpace(w.spaceName)} · {waitedFor(w.askedAt)}
                     </div>
-                    <div className="mt-1 rounded-[18px] rounded-tl-[6px] border border-zinc-200 bg-white px-3.5 py-2.5 text-[15px] leading-snug text-zinc-800">{w.text}</div>
-                    <div className="mt-1 px-1">
-                      <Where platform={w.platform} space={w.spaceName} />
+                    <div className="mt-1 inline-block max-w-full rounded-[18px] rounded-bl-[6px] bg-white px-3.5 py-2.5 text-[15.5px] leading-snug text-zinc-800 ring-1 ring-zinc-200">
+                      {w.text}
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
-            <div className="mt-3 flex items-start gap-2.5">
-              <FerriAvatar size={36} pose="thinking" />
-              <div className="rounded-[18px] rounded-tl-[6px] bg-brand-soft px-3.5 py-2.5 text-[14px] leading-snug text-zinc-800">
-                <b className="font-semibold">Ferri</b> told {card.waiting.length === 1 ? "them" : `all ${card.waiting.length}`}: “I don&apos;t have that yet. I&apos;m checking with the team.”
+            <div className="mt-3 flex items-end gap-2">
+              <FerriAvatar size={32} pose="thinking" />
+              <div className="rounded-[18px] rounded-bl-[6px] bg-brand-soft px-3.5 py-2 text-[13.5px] leading-snug text-zinc-700">
+                “I don&apos;t have that yet. I&apos;m checking with the team.”
               </div>
             </div>
           </section>
@@ -115,94 +144,62 @@ export default async function CardPage({ params, searchParams }: { params: Promi
             <label htmlFor="answer" className="sr-only">
               Your answer
             </label>
-            <textarea
-              id="answer"
-              className="textarea-lg min-h-[132px]"
-              name="text"
-              rows={4}
-              required
-              placeholder={
-                card.personal ? "Your answer. It goes to this person only." : "Your answer. It goes to everyone who asked, and Ferri saves it for next time."
-              }
-            />
+            <textarea id="answer" className="textarea-lg min-h-[132px]" name="text" rows={4} required placeholder="Your answer" />
             <button className="btn-lg-primary h-14 w-full text-[16px]">
               <Send size={18} aria-hidden />
               {card.waiting.length ? `Send to ${people(card.waiting.length)}` : "Send answer"}
             </button>
-            <button className="btn-lg w-full" formAction={pocketSkip} formNoValidate>
-              Don&apos;t answer this one
-            </button>
+            <div className="flex justify-center">
+              <button className={QUIET} formAction={pocketSkip} formNoValidate>
+                Don&apos;t answer this one
+              </button>
+            </div>
           </form>
         </>
       ) : null}
 
       {open && card.kind === "announce" ? (
-        <section className="mt-4 px-4">
-          <h2 className="px-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">
-            Goes to · {a?.targets.length ?? 0} {a?.targets.length === 1 ? "space" : "spaces"}
-          </h2>
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 px-1">
+        <section className="mt-3 px-4">
+          <ul className="flex flex-wrap gap-1.5 px-1" aria-label={`Goes to ${a?.targets.length ?? 0} spaces`}>
             {(a?.targets ?? []).map((t) => (
-              <li key={t.spaceId}>
-                <Where platform={t.platform} space={t.name} />
+              <li key={t.spaceId} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[12.5px] text-zinc-700">
+                <PlatformLogo platform={t.platform} size={13} />
+                {shortSpace(t.name)}
               </li>
             ))}
           </ul>
-          <p className="mt-2 px-1 text-[13px] text-zinc-500">
-            {edit
-              ? "Approving it edits the post in place everywhere it went."
-              : a?.scheduledAt
-                ? `Goes out at ${formatWhen(a.scheduledAt, tz)}.`
-                : "Goes out as soon as it is approved."}
-            {a?.origin === "decision" ? " Ferri spotted this decision in the crew chat." : ""}
-            {!edit && a?.media?.length ? ` It goes out with the image ${a.media.map((m) => m.filename).join(", ")}.` : ""}
-          </p>
           {edit && a?.text ? (
-            <div className="mt-3 px-1 text-[13px] text-zinc-400">
+            <div className="mt-3 px-1 text-[13px] text-zinc-500">
               Now it says: <span className="line-through decoration-zinc-300">{a.text}</span>
             </div>
           ) : null}
           {/* Spec 21: a space with its own language gets this version; the one OK covers it too. */}
           {Object.values(translationsFrom(card.payload, card.draftText ?? "")).map((t) => (
-            <div key={t.language} className="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-[14px] whitespace-pre-wrap text-zinc-700">
-              <div className="mb-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">In {t.language}</div>
-              {t.text}
-            </div>
+            <details key={t.language} className="mt-3 rounded-[18px] bg-white px-4 py-1 text-[14px] text-zinc-700 ring-1 ring-zinc-200">
+              <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-semibold text-zinc-500">In {t.language}</summary>
+              <div className="pb-3 whitespace-pre-wrap">{t.text}</div>
+            </details>
           ))}
           <AnnounceActions cardId={card.id} draft={card.draftText ?? ""} edit={edit} scheduled={!!a?.scheduledAt && !edit} />
         </section>
       ) : null}
 
       {open && card.kind === "plan" ? (
-        <section className="mt-4 px-4">
-          <p className="px-1 text-[13px] text-zinc-500">Ferri proposed this in the agenda draft. Nothing is decided until someone on the crew confirms it.</p>
+        <section className="mt-2 px-4">
           <PlanActions cardId={card.id} proposal={card.draftText ?? ""} />
         </section>
       ) : null}
 
       {open && card.kind === "outreach" ? (
-        <section className="mt-4 px-4">
-          <p className="px-1 text-[13px] text-zinc-500">
-            {outreachMailbox()
-              ? `Goes out from ${outreachMailbox()} as soon as you send it. Their reply comes back to Ferri, which tells the crew.`
-              : EMAIL_OFF_NOTE}
-          </p>
+        <section className="mt-2 px-4">
           <ReplyActions cardId={card.id} draft={card.draftText ?? ""} />
         </section>
       ) : null}
 
       {open && card.kind === "guests" ? (
-        <section className="mt-4 px-4">
-          <p className="px-1 text-[13px] text-zinc-500">
-            {gc?.send ? `A ${SEND_KIND_LABEL[gc.send.kind] ?? gc.send.kind} to ` : "Goes to "}
-            {audienceLine(gc?.send?.audience ?? "going", gc?.count ?? null)}
-            {gc?.eventName ? ` of ${gc.eventName}` : ""}.{" "}
-            {gc?.send?.scheduledAt ? `It goes out at ${formatWhen(gc.send.scheduledAt, tz)}.` : "It goes out as soon as you send it."} Each guest gets their own copy with their
-            first name and their RSVP link.
-            {gc?.send ? (gc.send.origin === "ferri" ? " Ferri suggested it." : ` Asked by ${gc.send.requestedBy}.`) : ""}
-          </p>
+        <section className="mt-2 px-4">
           {gc?.send?.subject ? (
-            <div className="mt-3 px-1 text-[14px]">
+            <div className="mt-2 px-1 text-[14px]">
               <span className="text-zinc-500">Subject: </span>
               <span className="font-medium">{gc.send.subject}</span>
             </div>
@@ -212,20 +209,24 @@ export default async function CardPage({ params, searchParams }: { params: Promi
       ) : null}
 
       {open && card.kind === "spot" ? (
-        <section className="mt-4 px-4">
+        <section className="mt-3 px-4">
           {gc?.guest ? (
             <div className="px-1 text-[13px] text-zinc-500">
               {gc.guest.name} · {gc.guest.email}
               {gc.eventName ? ` · ${gc.eventName}` : ""}
             </div>
           ) : null}
-          {card.draftText ? <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{card.draftText}</div> : null}
+          {card.draftText ? (
+            <div className="mt-3 rounded-[18px] bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap text-zinc-800 ring-1 ring-zinc-200">{card.draftText}</div>
+          ) : null}
           <form action={pocketOfferSpot} className="mt-3 space-y-3">
             <input type="hidden" name="cardId" value={card.id} />
-            <button className="btn-lg-primary w-full">Offer it</button>
-            <button className="btn-lg w-full" formAction={pocketDontOffer}>
-              Don&apos;t offer
-            </button>
+            <button className="btn-lg-primary h-14 w-full text-[16px]">Offer it</button>
+            <div className="flex justify-center">
+              <button className={QUIET} formAction={pocketDontOffer}>
+                Don&apos;t offer
+              </button>
+            </div>
           </form>
         </section>
       ) : null}
@@ -249,7 +250,7 @@ export default async function CardPage({ params, searchParams }: { params: Promi
       ) : null}
 
       {open && card.kind === "reply" ? (
-        <section className="mt-4 px-4">
+        <section className="mt-3 px-4">
           <div className="px-1">
             <Where platform={card.target?.platform} space={card.target?.name} />
           </div>
@@ -259,8 +260,8 @@ export default async function CardPage({ params, searchParams }: { params: Promi
 
       {!open ? (
         <section className="mt-4 px-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 text-[14px]">
-            <div className="font-medium">
+          <div className="rounded-[18px] bg-white p-4 text-[14px] ring-1 ring-zinc-200">
+            <div className="font-semibold text-zinc-900">
               {card.kind === "plan"
                 ? card.status === "answered"
                   ? `Confirmed${card.answeredBy ? ` by ${card.answeredBy}` : ""}`
@@ -325,7 +326,7 @@ export default async function CardPage({ params, searchParams }: { params: Promi
                     {a.posts.map((p) => (
                       <li key={p.id} className="flex items-center justify-between gap-2">
                         <Where platform={p.platform} space={p.spaceName} />
-                        <span className="text-[12px] text-zinc-400">
+                        <span className="text-[12px] text-zinc-500">
                           {p.status === "edited" ? "edited in place" : p.status === "reposted" ? "posted as an update" : p.status} · v{p.version}
                         </span>
                       </li>

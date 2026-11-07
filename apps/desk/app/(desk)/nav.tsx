@@ -24,6 +24,7 @@ import {
   Wrench,
   X,
   Contact,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { FerriLogo } from "@/components/ferri";
@@ -31,7 +32,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 type Item = { href: string; label: string; icon: LucideIcon };
 
-export const NAV_GROUPS: { title: string; items: Item[] }[] = [
+export const NAV_GROUPS: { title: string; items: Item[]; folded?: boolean }[] = [
   {
     title: "Today",
     items: [
@@ -52,6 +53,7 @@ export const NAV_GROUPS: { title: string; items: Item[] }[] = [
   },
   {
     title: "Reach",
+    folded: true,
     items: [
       { href: "/social", label: "Social", icon: Share2 },
       { href: "/contacts", label: "Contacts", icon: Contact },
@@ -60,6 +62,7 @@ export const NAV_GROUPS: { title: string; items: Item[] }[] = [
   },
   {
     title: "Setup",
+    folded: true,
     items: [
       { href: "/spaces", label: "Spaces", icon: MessagesSquare },
       { href: "/knowledge", label: "Knowledge", icon: BookOpen },
@@ -72,45 +75,88 @@ export const NAV_GROUPS: { title: string; items: Item[] }[] = [
   },
 ];
 
+/** Counts that mean someone is waiting on the crew get the brand colour; the rest stay grey. */
+const URGENT = new Set(["/cards", "/care"]);
+
 const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
 
 function Links({ counts, onNavigate }: { counts: Record<string, number>; onNavigate?: () => void }) {
   const path = usePathname();
   return (
-    <nav aria-label="Desk" className="space-y-3 px-3">
+    <nav aria-label="Desk" className="space-y-4 px-3">
       {NAV_GROUPS.map((g) => (
-        <div key={g.title}>
-          <div className="px-2.5 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-zinc-400 uppercase">{g.title}</div>
-          <ul className="space-y-0.5">
-            {g.items.map((item) => {
-              const active = isActive(item.href, path);
-              const n = counts[item.href] ?? 0;
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={`group flex items-center gap-2.5 rounded-[12px] px-2.5 py-[5px] text-[13.5px] transition ${
-                      active
-                        ? "bg-white font-semibold text-zinc-900 shadow-[0_0_0_1px_var(--n-200),0_2px_0_var(--n-200)]"
-                        : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                    }`}
-                  >
-                    <Icon size={17} strokeWidth={2} className={active ? "text-brand" : "text-zinc-400 group-hover:text-zinc-600"} aria-hidden />
-                    <span className="flex-1">{item.label}</span>
-                    {n ? (
-                      <span className="min-w-[20px] rounded-full bg-brand px-1.5 text-center text-[11px] leading-[19px] font-semibold text-white tabular-nums">{n}</span>
-                    ) : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <Group key={g.title} group={g} path={path} counts={counts} onNavigate={onNavigate} />
       ))}
     </nav>
+  );
+}
+
+/**
+ * One nav group. Today and Event are always open; Reach and Setup fold away
+ * (Hick's law: fewer choices on first view) and open by themselves when one of
+ * their pages is the current one. A folded group still shows its waiting count.
+ */
+function Group({
+  group,
+  path,
+  counts,
+  onNavigate,
+}: {
+  group: (typeof NAV_GROUPS)[number];
+  path: string;
+  counts: Record<string, number>;
+  onNavigate?: () => void;
+}) {
+  const inside = group.items.some((i) => isActive(i.href, path));
+  const [open, setOpen] = useState(!group.folded || inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside]);
+  const waiting = group.items.reduce((n, i) => n + (counts[i.href] ?? 0), 0);
+  const id = `nav-${group.title.toLowerCase()}`;
+  return (
+    <div>
+      {group.folded ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={id}
+          className="flex w-full items-center gap-1 rounded-[8px] px-2.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase hover:text-zinc-800"
+        >
+          {group.title}
+          <ChevronRight size={13} className={`transition ${open ? "rotate-90" : ""}`} aria-hidden />
+          {!open && waiting ? <span className="ml-auto h-2 w-2 rounded-full bg-brand" aria-label={`${waiting} waiting`} /> : null}
+        </button>
+      ) : (
+        <div className="px-2.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase">{group.title}</div>
+      )}
+      {open ? (
+        <ul id={id} className="space-y-px">
+          {group.items.map((item) => {
+            const active = isActive(item.href, path);
+            const n = counts[item.href] ?? 0;
+            const Icon = item.icon;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`group flex items-center gap-2.5 rounded-[10px] px-2.5 py-[6px] text-[13.5px] transition ${
+                    active ? "bg-white font-semibold text-zinc-900 shadow-[0_0_0_1px_var(--n-200)]" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  }`}
+                >
+                  <Icon size={16} strokeWidth={2} className={active ? "text-brand" : "text-zinc-400 group-hover:text-zinc-600"} aria-hidden />
+                  <span className="flex-1">{item.label}</span>
+                  {n ? <span className={`min-w-[20px] rounded-full px-1.5 text-center text-[11px] leading-[19px] font-semibold tabular-nums ${URGENT.has(item.href) ? "bg-brand text-white" : "bg-zinc-200/70 text-zinc-700"}`}>{n}</span> : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

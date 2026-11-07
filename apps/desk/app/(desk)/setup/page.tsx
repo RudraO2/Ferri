@@ -1,34 +1,38 @@
 import { runDoctor, type DoctorCheck } from "@/lib/ferri";
 import { requireUser } from "@/lib/session";
-import { Empty, PageHead, Section } from "../ui";
+import { Empty, Fold, PageHead, Section } from "../ui";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_STYLE: Record<DoctorCheck["status"], string> = {
-  on: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  off: "",
-  broken: "border-red-200 bg-red-50 text-red-700",
+const DOT: Record<DoctorCheck["status"], string> = {
+  on: "bg-emerald-500",
+  off: "bg-zinc-300",
+  broken: "bg-red-500",
 };
+const LABEL: Record<DoctorCheck["status"], string> = { on: "On", off: "Off", broken: "Broken" };
 
 function Checks({ checks }: { checks: DoctorCheck[] }) {
-  if (!checks.length) return <Empty>Nothing to check.</Empty>;
+  if (!checks.length) return <Empty quiet>Nothing to check.</Empty>;
   return (
-    <div className="card divide-y divide-zinc-100">
+    <ul className="card-flat divide-y divide-zinc-100">
       {checks.map((c) => (
-        <div key={c.id} className="flex items-start gap-3 px-4 py-3">
-          <span className={`badge mt-0.5 w-[58px] justify-center ${STATUS_STYLE[c.status]}`}>{c.status}</span>
+        <li key={c.id} className="flex items-start gap-3 px-4 py-3">
+          <span className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${DOT[c.status]}`} aria-hidden />
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium text-zinc-900">{c.name}</div>
-            <div className="muted">{c.detail}</div>
-            {c.next ? (
-              <div className="mt-1 text-[12px] text-zinc-600">
-                {c.status === "on" ? "Tip" : "Next"}: <code className="rounded bg-zinc-100 px-1 py-0.5 text-[12px] text-zinc-800">{c.next}</code>
+            <div className="flex flex-wrap items-baseline gap-x-2 text-[13.5px]">
+              <span className="font-medium text-zinc-900">{c.name}</span>
+              <span className={`text-[12px] ${c.status === "broken" ? "font-medium text-red-700" : "text-zinc-500"}`}>{LABEL[c.status]}</span>
+            </div>
+            <div className="text-[12.5px] text-zinc-500">{c.detail}</div>
+            {c.next && c.status !== "on" ? (
+              <div className="mt-1.5 text-[12px] text-zinc-600">
+                Next: <code className="rounded-[6px] bg-zinc-100 px-1.5 py-0.5 text-[12px] break-all text-zinc-800">{c.next}</code>
               </div>
             ) : null}
           </div>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -37,6 +41,8 @@ export default async function SetupPage() {
   const report = await runDoctor(process.env);
   const core = report.checks.filter((c) => c.area === "core");
   const integrations = report.checks.filter((c) => c.area === "integration");
+  const working = integrations.filter((c) => c.status !== "off");
+  const off = integrations.filter((c) => c.status === "off");
   const on = integrations.filter((c) => c.status === "on").length;
   const brokenCore = core.filter((c) => c.status === "broken").length;
 
@@ -44,15 +50,20 @@ export default async function SetupPage() {
     <>
       <PageHead
         title="Setup"
-        sub="What is on, off or broken, and the next step for each. The same report as ./ferri doctor. Reload the page after a change."
+        sub="What is on, off or broken, and the next step for each."
+        about={<p>The same report as ./ferri doctor. Reload the page after a change. Checked {new Date(report.at).toLocaleString("en-GB")}.</p>}
       />
-      <Section title="Core" aside={<span className="muted">{brokenCore ? `${brokenCore} broken` : "all good"}</span>}>
+      <Section title="Core" aside={<span className={`text-[12.5px] ${brokenCore ? "font-medium text-red-700" : "text-zinc-500"}`}>{brokenCore ? `${brokenCore} broken` : "all good"}</span>}>
         <Checks checks={core} />
       </Section>
-      <Section title="Integrations" aside={<span className="muted">{`${on} of ${integrations.length} on`}</span>}>
-        <Checks checks={integrations} />
+      <Section title="Integrations" aside={<span className="text-[12.5px] text-zinc-500">{`${on} of ${integrations.length} on`}</span>}>
+        {working.length ? <Checks checks={working} /> : <Empty quiet>No integration is on yet.</Empty>}
       </Section>
-      <p className="muted">Checked {new Date(report.at).toLocaleString("en-GB")}.</p>
+      {off.length ? (
+        <Fold title="Not set up" count={off.length} hint="each with its next step">
+          <Checks checks={off} />
+        </Fold>
+      ) : null}
     </>
   );
 }

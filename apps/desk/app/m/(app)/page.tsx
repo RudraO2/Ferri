@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Mail, Megaphone } from "lucide-react";
-import { PLATFORM_LABEL, myCrew, openCards, waitedFor, type PocketCard } from "@/lib/pocket";
+import { ChevronRight, Mail, Megaphone } from "lucide-react";
+import { myCrew, openCards, shortSpace, waitedFor, type PocketCard } from "@/lib/pocket";
 import { requirePocketUser } from "@/lib/session";
-import { Empty, Header, Toast, Where } from "./bits";
+import { PlatformLogo } from "@/components/platform";
+import { Empty, Header, Toast } from "./bits";
 import { PushNudge } from "./push";
 import { BuilderCards } from "./builder-cards";
 import { builderRequests } from "@/lib/builder";
 import { SEND_KIND_LABEL } from "@/lib/ferri";
 import { audienceLine } from "@/lib/guests";
-import { outreachMailbox } from "@/lib/contacts";
 
 export default async function NeedsYou({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
@@ -29,142 +29,115 @@ export default async function NeedsYou({ searchParams }: { searchParams: Promise
       />
       <Toast note={note} />
       {!me.length ? (
-        <Link href="/m/me" className="mx-4 mt-3 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[14px] text-amber-800">
-          Tell Pocket who you are on the crew, so it only buzzes you for your cards. →
+        <Link href="/m/me" className="mx-4 mt-2 flex min-h-11 items-center gap-2 rounded-[14px] bg-amber-50 px-3.5 py-2 text-[14px] text-amber-800">
+          <span className="flex-1">Tell Pocket who you are, so it buzzes you only for your cards.</span>
+          <ChevronRight size={17} className="shrink-0" aria-hidden />
         </Link>
       ) : null}
-      <PushNudge />
-      <div className="mx-4 mt-3 grid grid-cols-2 gap-2">
-        <Link href="/m/new" className="btn-lg h-11 px-3 text-[14px]">
-          <Megaphone size={16} aria-hidden /> Announce
-        </Link>
-        <Link href="/m/guests" className="btn-lg h-11 px-3 text-[14px]">
-          <Mail size={16} aria-hidden /> Email guests
-        </Link>
-      </div>
+      {/* A read-only guest cannot save a push subscription (every write is refused). */}
+      {user.readonly ? null : <PushNudge />}
       <BuilderCards requests={builderAsks} />
       {mine.length ? (
-        <div className="mt-3 space-y-3 px-4">
+        <div className="mt-3 space-y-2.5 px-4">
           {mine.map((c) => (
             <CardRow key={c.id} card={c} />
           ))}
         </div>
       ) : builderAsks.length ? null : (
         <Empty title="Nothing needs you" pose="sleep">
-          Ferri knows the answers so far. New questions for you buzz this phone.
+          New questions for you buzz this phone.
         </Empty>
       )}
       {others.length ? (
-        <>
-          <h2 className="mt-7 px-5 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">Also open, for others</h2>
-          <div className="mt-2 space-y-3 px-4 opacity-80">
+        <details className="group mt-6 px-4">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 px-1 text-[14px] font-semibold text-zinc-500 [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={16} className="transition group-open:rotate-90" aria-hidden />
+            Open for others
+            <span className="font-medium text-zinc-400 tabular-nums">{others.length}</span>
+          </summary>
+          <div className="mt-2 space-y-2.5">
             {others.map((c) => (
-              <CardRow key={c.id} card={c} />
+              <CardRow key={c.id} card={c} others />
             ))}
           </div>
-        </>
+        </details>
       ) : null}
+      <div className="mt-6 flex items-center justify-center gap-1 px-4">
+        <Link href="/m/new" className="inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[14.5px] font-medium text-zinc-600 active:bg-zinc-200">
+          <Megaphone size={16} aria-hidden /> Announce
+        </Link>
+        <span className="text-zinc-300" aria-hidden>
+          ·
+        </span>
+        <Link href="/m/guests" className="inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[14.5px] font-medium text-zinc-600 active:bg-zinc-200">
+          <Mail size={16} aria-hidden /> Email guests
+        </Link>
+      </div>
     </>
   );
 }
 
-function CardRow({ card }: { card: PocketCard }) {
+const KIND_LABEL: Record<string, string> = {
+  reply: "Reply to approve",
+  plan: "Plan decision",
+  outreach: "Email to approve",
+  guests: "Email to guests",
+  spot: "Spot to offer",
+  care: "Care",
+  wrap: "Close the event",
+  desk: "Desks to make",
+  social: "Social post",
+};
+
+/** One line of who and where: "[logo] Kabir +1 · build-night", or the card's kind and its detail. */
+function meta(card: PocketCard): { platform?: string | null; text: string } {
   const first = card.waiting[0];
   const n = card.waiting.length;
+  switch (card.kind) {
+    case "question":
+      return first
+        ? { platform: first.platform, text: `${first.askerName}${n > 1 ? ` +${n - 1}` : ""} · ${shortSpace(first.spaceName)}` }
+        : { text: "Nobody waiting any more" };
+    case "announce":
+      return {
+        text: `${(card.announcementVersion ?? 1) > 1 ? "Announcement edit" : "Announcement"} · ${card.announcement?.targets.length ?? 0} spaces`,
+      };
+    case "reply":
+      return { platform: card.target?.platform, text: `${KIND_LABEL.reply} · ${shortSpace(card.target?.name)}` };
+    case "plan":
+      return { text: `${KIND_LABEL.plan} · ${card.topic}` };
+    case "guests":
+      return {
+        text: `${card.guestCard?.send ? (SEND_KIND_LABEL[card.guestCard.send.kind] ?? card.guestCard.send.kind) : KIND_LABEL.guests} · ${audienceLine(card.guestCard?.send?.audience ?? "going", card.guestCard?.count ?? null)}`,
+      };
+    case "spot":
+      return { text: `${KIND_LABEL.spot}${card.guestCard?.guest ? ` · ${card.guestCard.guest.name}` : ""}` };
+    case "care":
+      return card.care ? { platform: card.care.platform, text: `${card.care.personName} · ${shortSpace(card.care.spaceName)}` } : { text: "A member needs the crew" };
+    default:
+      return { text: KIND_LABEL[card.kind] ?? card.topic };
+  }
+}
+
+/** A card in the list: one quiet line of who, where and how long, then the question large. */
+function CardRow({ card, others }: { card: PocketCard; others?: boolean }) {
+  const m = meta(card);
+  const urgent = card.kind === "care" && card.care?.urgent;
   return (
-    <Link href={`/m/c/${card.id}`} className="block rounded-[22px] border border-zinc-200 bg-white p-4 shadow-[var(--shadow-card)] transition active:scale-[0.99] active:bg-zinc-50">
-      {card.kind === "question" && first ? (
-        <div className="mb-2.5 flex items-center gap-2.5">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-semibold text-zinc-800">
-            {first.askerName.charAt(0).toUpperCase()}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14.5px] font-semibold text-zinc-900">
-              {first.askerName}
-              {n > 1 ? <span className="font-normal text-zinc-500"> and {n - 1} more</span> : null}
-            </div>
-            <Where platform={first.platform} space={first.spaceName} />
-          </div>
-          <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">{waitedFor(card.createdAt)}</span>
-        </div>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <span
-          className={
-            card.kind === "announce"
-              ? "pill bg-violet-100 text-violet-800"
-              : card.kind === "plan"
-                ? "pill bg-emerald-100 text-emerald-800"
-                : card.kind === "outreach"
-                  ? "pill bg-sky-100 text-sky-800"
-                  : card.kind === "care"
-                    ? "pill bg-rose-100 text-rose-800"
-                    : card.kind === "guests"
-                      ? "pill bg-indigo-100 text-indigo-800"
-                      : card.kind === "spot"
-                        ? "pill bg-teal-100 text-teal-800"
-                        : "pill"
-          }
-        >
-          {card.kind === "announce"
-            ? (card.announcementVersion ?? 1) > 1
-              ? "announcement edit"
-              : "announcement"
-            : card.kind === "reply"
-              ? "reply to approve"
-              : card.kind === "plan"
-                ? "plan decision"
-                : card.kind === "outreach"
-                  ? "email to approve"
-                  : card.kind === "guests"
-                    ? "email to guests"
-                    : card.kind === "spot"
-                      ? "spot to offer"
-                      : card.topic}
-        </span>
-        {card.kind === "care" && card.care?.urgent ? <span className="pill bg-red-600 text-white">urgent</span> : null}
-        {card.escalatedAt ? (
-          <span className="pill bg-amber-100 text-amber-800">escalated</span>
-        ) : card.nudgedAt ? (
-          <span className="pill bg-sky-100 text-sky-800">nudged</span>
-        ) : null}
-        {card.kind === "question" && first ? null : <span className="ml-auto text-[12px] text-zinc-400">{waitedFor(card.createdAt)}</span>}
-      </div>
-      <div className="mt-2 font-display text-[19px] leading-snug font-bold tracking-[-0.02em] text-zinc-900">{card.question}</div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        {card.kind === "announce" ? (
-          <span className="text-[12.5px] text-zinc-500">
-            to {card.announcement?.targets.length ?? 0} spaces · {[...new Set((card.announcement?.targets ?? []).map((t) => PLATFORM_LABEL[t.platform ?? ""] ?? t.platform ?? "Switch"))].join(", ")}
-          </span>
-        ) : card.kind === "reply" ? (
-          <Where platform={card.target?.platform} space={card.target?.name} />
-        ) : card.kind === "plan" ? (
-          <span className="text-[12.5px] text-zinc-500">{card.topic} · from the agenda draft</span>
-        ) : card.kind === "outreach" ? (
-          <span className="text-[12.5px] text-zinc-500">{outreachMailbox() ? `from ${outreachMailbox()}` : "email is off"}</span>
-        ) : card.kind === "guests" ? (
-          <span className="text-[12.5px] text-zinc-500">
-            {card.guestCard?.send ? `${SEND_KIND_LABEL[card.guestCard.send.kind] ?? card.guestCard.send.kind} · ` : ""}to {audienceLine(card.guestCard?.send?.audience ?? "going", card.guestCard?.count ?? null)}
-          </span>
-        ) : card.kind === "spot" ? (
-          <span className="text-[12.5px] text-zinc-500">{card.guestCard?.guest ? `for ${card.guestCard.guest.name}, on the waitlist` : "for the next person on the waitlist"}</span>
-        ) : card.kind === "care" ? (
-          card.care ? (
-            <>
-              <Where platform={card.care.platform} space={card.care.spaceName} />
-              <span className="text-[12.5px] text-zinc-500">{card.care.personName}</span>
-            </>
-          ) : (
-            <span className="text-[12.5px] text-zinc-500">a member needs the crew</span>
-          )
-        ) : first ? null : (
-          <span className="text-[12.5px] text-zinc-500">nobody waiting any more</span>
-        )}
-        <span className="text-[12.5px] text-zinc-400">
-          {card.kind === "question" && first ? "" : "· "}
-          {card.why === "open" ? "for the crew" : card.why}
+    <Link
+      href={`/m/c/${card.id}`}
+      className="block rounded-[20px] border border-zinc-200 bg-white px-4 py-3.5 transition active:scale-[0.99] active:bg-zinc-50"
+    >
+      <div className="flex items-center gap-1.5 text-[13px] text-zinc-500">
+        {m.platform !== undefined ? <PlatformLogo platform={m.platform} size={14} /> : null}
+        <span className="min-w-0 truncate">{m.text}</span>
+        <span className={`ml-auto shrink-0 pl-2 font-medium ${card.kind === "question" || urgent ? "text-amber-700" : "text-zinc-500"}`}>
+          {urgent ? "urgent · " : card.escalatedAt ? "escalated · " : ""}
+          {waitedFor(card.createdAt)}
         </span>
       </div>
+      <div className="mt-1.5 font-display text-[18px] leading-snug font-bold tracking-[-0.02em] text-zinc-900">{card.question}</div>
+      {others && card.owners.length ? <div className="mt-1 text-[12.5px] text-zinc-500">for {card.owners.join(", ")}</div> : null}
     </Link>
   );
 }

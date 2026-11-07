@@ -77,7 +77,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
         </div>
       ) : null}
 
-      <div className="mt-7 rounded-[24px] border border-zinc-200 bg-white p-5 shadow-[var(--shadow-card)]">
+      <div className="mt-7 rounded-[24px] bg-white p-5 ring-1 ring-zinc-200">
         {answered ? (
           <>
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -134,10 +134,10 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
             <p className="mt-2 text-[16px] leading-relaxed text-zinc-700">
               {state === "going"
                 ? g.confirmedAt
-                  ? "You've told us you're coming. Your spot is saved. If your plans change, tell us below so someone else can come."
-                  : "Your spot is saved. Can you still make it? Tell us below, so we can plan for you."
+                  ? "Your spot is saved. If your plans change, tell us so someone else can come."
+                  : "Your spot is saved. Can you still make it?"
                 : state === "pending"
-                  ? "The organizers still need to approve your registration. Tell us now if you're coming or if you can't make it."
+                  ? "The organizers still need to approve your registration. Are you coming?"
                   : state === "offer"
                     ? `Someone freed their spot, and it's yours if you want it. Please answer by ${deadline(g.offerExpiresAt!, timezone)}, or it goes to the next person on the waitlist.`
                     : state === "waitlist"
@@ -152,7 +152,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
                   <input type="hidden" name="answer" value="yes" />
                   <button className="btn-lg-primary w-full">I&apos;m coming</button>
                 </form>
-                <Link href={`/rsvp/${g.code}?step=no`} className="btn-lg w-full">
+                <Link href={`/rsvp/${g.code}?step=no`} className="flex h-11 w-full items-center justify-center rounded-full text-[15px] font-medium text-zinc-600 active:bg-zinc-100">
                   I can&apos;t make it
                 </Link>
               </div>
@@ -163,7 +163,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
                   <input type="hidden" name="answer" value="take" />
                   <button className="btn-lg-primary w-full">Yes, I&apos;ll take the spot</button>
                 </form>
-                <Link href={`/rsvp/${g.code}?step=no`} className="btn-lg w-full">
+                <Link href={`/rsvp/${g.code}?step=no`} className="flex h-11 w-full items-center justify-center rounded-full text-[15px] font-medium text-zinc-600 active:bg-zinc-100">
                   I can&apos;t make it
                 </Link>
               </div>
@@ -188,7 +188,7 @@ export default async function RsvpPage({ params, searchParams }: Params & Search
         )}
       </div>
 
-      <p className="mt-auto pt-10 text-center text-[12.5px] leading-relaxed text-zinc-400">
+      <p className="mt-auto pt-10 text-center text-[12.5px] leading-relaxed text-zinc-500">
         This page is just for you, {first}. Please don&apos;t share the link.
       </p>
     </main>

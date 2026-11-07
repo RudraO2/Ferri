@@ -44,9 +44,6 @@ export default function Welcome() {
             <a href="#switch" className="hover:text-zinc-900">
               Switch
             </a>
-            <a href="#event" className="hover:text-zinc-900">
-              Across the event
-            </a>
             <a href={GITHUB} className="hover:text-zinc-900">
               GitHub
             </a>
@@ -77,27 +74,14 @@ export default function Welcome() {
               Ferri is the teammate that answers your community on <span className="hl text-zinc-900">every app</span>. When it doesn&apos;t know, it asks your crew once and carries the answer
               back to everyone who asked.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-9 flex flex-wrap gap-3">
               <a href={DISCORD} className="btn-primary h-12 px-6 text-[15.5px]">
                 Ask Ferri on Discord <ArrowRight size={17} aria-hidden />
               </a>
-              <a href={video} className="btn h-12 bg-zinc-900 px-6 text-[15.5px] text-zinc-50 hover:bg-zinc-800" style={{ boxShadow: "inset 0 -4px 0 var(--n-950)" }}>
+              <a href={video} className="btn h-12 px-6 text-[15.5px]">
                 <Play size={16} aria-hidden /> Watch the video
               </a>
-              <a href={GITHUB} className="btn h-12 px-5 text-[15.5px]">
-                <PlatformLogo platform="github" size={17} /> GitHub
-              </a>
             </div>
-            <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-zinc-500">
-              Or try it on
-              <a href={TELEGRAM} className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 font-medium text-zinc-800 hover:border-zinc-300">
-                <PlatformLogo platform="telegram" size={14} /> Telegram
-              </a>
-              , or
-              <Link href="/login" className="font-medium text-zinc-800 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-800">
-                look around its Desk
-              </Link>
-            </p>
           </div>
           <div className="relative flex justify-center">
             <div className="absolute inset-x-6 bottom-6 h-24 rounded-[50%] bg-brand-soft blur-2xl" aria-hidden />
@@ -180,18 +164,15 @@ export default function Welcome() {
               <h2 className="display text-[clamp(34px,4.6vw,56px)] text-zinc-900">From the first idea to the last thank-you.</h2>
             </div>
             <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {STAGES.map((s, i) => (
-                <li key={s.name} className="card flex flex-col p-5">
+              {STAGES.map((s) => (
+                <li key={s.name} className="card-flat flex flex-col p-5">
                   <div className="-mx-2 -mt-2 mb-1 flex justify-center rounded-[16px] bg-brand-soft/60">
                     <Art name={s.art} width={180} height={180} className="w-[150px]" />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] bg-brand-soft text-brand">
-                      <s.icon size={18} aria-hidden />
-                    </span>
-                    <span className="num text-[13px] text-zinc-400">0{i + 1}</span>
-                  </div>
-                  <h3 className="mt-4 font-display text-[22px] font-extrabold tracking-[-0.03em] text-zinc-900">{s.name}</h3>
+                  <h3 className="mt-3 flex items-center gap-2 font-display text-[22px] font-extrabold tracking-[-0.03em] text-zinc-900">
+                    <s.icon size={18} className="text-brand" aria-hidden />
+                    {s.name}
+                  </h3>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-zinc-600">{s.line}</p>
                 </li>
               ))}

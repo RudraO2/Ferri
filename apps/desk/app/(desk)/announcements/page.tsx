@@ -1,14 +1,16 @@
-import { PlatformLogo } from "@/components/platform";
+import { ChevronDown } from "lucide-react";
+import { PlatformLogo, platformName } from "@/components/platform";
 import { POST_LABEL, STATUS_LABEL, announcementList, type AnnouncementView } from "@/lib/announce";
 import { ago, liveEvents } from "@/lib/data";
 import { community, db } from "@/lib/db";
-import { announcementTargets, describeTargets, formatWhen } from "@/lib/ferri";
+import { announcementTargets, formatWhen } from "@/lib/ferri";
 import { approveAnnouncement, dropAnnouncement, editAnnouncement, newAnnouncement } from "../actions";
 import { AutoRefresh } from "../refresh";
-import { Empty, Note, PageHead, Section } from "../ui";
+import { Composer, Empty, Fold, Note, PageHead, Section } from "../ui";
 
 const PLATFORM: Record<string, string> = { telegram: "Telegram", slack: "Slack", discord: "Discord", mattermost: "Mattermost", whatsapp: "WhatsApp", whatsapp_web: "WhatsApp" };
 const short = (name: string) => (name.includes(": ") ? name.slice(name.indexOf(": ") + 2) : name);
+const quiet = "h-9 rounded-full px-3 text-[13px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900";
 
 export default async function AnnouncementsPage({ searchParams }: { searchParams: Promise<{ note?: string }> }) {
   const { note } = await searchParams;
@@ -27,52 +29,65 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
       <AutoRefresh seconds={8} />
       <PageHead
         title="Announcements"
-        sub="What the crew decides, told to every space of the event after one OK. A later version edits the post in place everywhere it went."
+        sub="One OK posts to every space of the event, on every app."
+        about={
+          <>
+            <p>Ask in the crew room (“@ferri tell everyone lunch moves to 1:30”), write one here, or let Ferri spot a decision in crew chat. Each version waits for one OK from anyone on the crew: here, in Pocket or in the crew room.</p>
+            <p>A later version edits the post in place everywhere it went.</p>
+          </>
+        }
       />
       <Note note={note} />
 
-      <Section title={`Waiting for an OK · ${waiting.length}`}>
-        {waiting.length ? (
-          <div className="space-y-3">
+      {waiting.length ? (
+        <Section title="Waiting for your OK" count={waiting.length}>
+          <div className="space-y-4">
             {waiting.map((a) => (
-              <div key={a.id} className="card p-4">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="badge">{a.liveVersion > 0 ? `edit · version ${a.waiting!.version}` : a.origin === "decision" ? "spotted in crew chat" : "new"}</span>
-                  <span className="text-[12px] text-zinc-400">
-                    asked by {a.waiting!.proposedBy} {ago(a.waiting!.createdAt)} · to {describeTargets(a.targets)}
-                    {a.scheduledAt && a.liveVersion === 0 ? ` · at ${formatWhen(a.scheduledAt, tz)}` : ""}
-                  </span>
+              <article key={a.id} className="card p-5 sm:p-6">
+                <div className="text-[12.5px] text-zinc-500">
+                  {a.liveVersion > 0 ? `Edit, version ${a.waiting!.version}` : a.origin === "decision" ? "Spotted in crew chat" : "New"} · {a.waiting!.proposedBy} · {ago(a.waiting!.createdAt)}
+                  {a.scheduledAt && a.liveVersion === 0 ? ` · posts ${formatWhen(a.scheduledAt, tz)}` : ""}
                 </div>
-                <div className="text-[15px] font-medium">{a.waiting!.title}</div>
+                <h3 className="mt-1.5 font-display text-[21px] leading-snug font-extrabold tracking-[-0.02em] text-zinc-900">{a.waiting!.title}</h3>
+                <Targets targets={a.targets} />
                 <MediaNote a={a} />
-                {a.liveVersion > 0 && a.text ? <div className="mt-1 text-[12.5px] text-zinc-500 line-through decoration-zinc-300">{a.text}</div> : null}
-                <form action={approveAnnouncement} className="mt-3 space-y-2">
+                {a.liveVersion > 0 && a.text ? <div className="mt-2 text-[12.5px] text-zinc-500 line-through decoration-zinc-300">{a.text}</div> : null}
+                <form action={approveAnnouncement} className="mt-4 space-y-2.5">
                   <input type="hidden" name="cardId" value={a.waiting!.cardId} />
-                  <label className="label">{a.liveVersion > 0 ? "New version (edit it to post your own)" : "Ferri's draft (edit it to post your own version)"}</label>
-                  <textarea className="textarea" name="text" rows={4} defaultValue={a.waiting!.draft} />
-                  <div className="flex gap-2">
+                  <label className="sr-only" htmlFor={`draft-${a.id}`}>
+                    {a.liveVersion > 0 ? "New version" : "Ferri's draft"}
+                  </label>
+                  <textarea id={`draft-${a.id}`} className="textarea" name="text" rows={4} defaultValue={a.waiting!.draft} />
+                  <div className="flex flex-wrap items-center gap-2">
                     <button className="btn-primary">{a.liveVersion > 0 ? "Edit everywhere" : a.scheduledAt ? "Approve for its time" : "Post it"}</button>
-                    <button className="btn" formAction={dropAnnouncement}>
+                    <button className={quiet} formAction={dropAnnouncement}>
                       {a.liveVersion > 0 ? "Keep it as it is" : "Don't post"}
                     </button>
                   </div>
                 </form>
-              </div>
+              </article>
             ))}
           </div>
-        ) : (
-          <Empty>Nothing waiting. Ask Ferri in the crew room (“@ferri tell everyone ...”), or write one below.</Empty>
-        )}
-        {opening.length ? <p className="muted mt-2">{opening.length} more opening their cards now.</p> : null}
-      </Section>
+          {opening.length ? <p className="muted mt-2">{opening.length} more opening their cards now.</p> : null}
+        </Section>
+      ) : (
+        <div className="mb-8">
+          <Empty pose="announce" title="Nothing waiting for an OK">
+            Say “@ferri tell everyone …” in the crew room, or write one here.
+            {opening.length ? ` ${opening.length} more opening their cards now.` : ""}
+          </Empty>
+        </div>
+      )}
 
-      <Section title="New announcement">
-        {evs.length ? (
-          <form action={newAnnouncement} className="card space-y-3 p-4">
-            <div className="grid grid-cols-[1fr_220px] gap-3">
+      {evs.length ? (
+        <Composer label="New announcement">
+          <form action={newAnnouncement} className="card space-y-4 p-5">
+            <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
               <div>
-                <label className="label">Event</label>
-                <select className="input" name="eventId" defaultValue={evs[0]?.id}>
+                <label className="label" htmlFor="ann-event">
+                  Event
+                </label>
+                <select id="ann-event" className="input" name="eventId" defaultValue={evs[0]?.id}>
                   {evs.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}
@@ -81,30 +96,36 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
                 </select>
               </div>
               <div>
-                <label className="label">Post at (empty: once approved)</label>
-                <input className="input" type="datetime-local" name="when" />
+                <label className="label" htmlFor="ann-when">
+                  Post at (optional)
+                </label>
+                <input id="ann-when" className="input" type="datetime-local" name="when" />
               </div>
             </div>
             <div>
-              <label className="label">Title for the crew&apos;s lists (optional)</label>
-              <input className="input" name="title" placeholder="Lunch moves to 1:30 PM" />
+              <label className="label" htmlFor="ann-text">
+                Announcement
+              </label>
+              <textarea id="ann-text" className="textarea" name="text" rows={4} required placeholder="Lunch is now at 1:30 PM on Saturday. See you in the hall!" />
             </div>
             <div>
-              <label className="label">The announcement, as members will read it</label>
-              <textarea className="textarea" name="text" rows={4} required placeholder="Lunch is now at 1:30 PM on Saturday. See you in the hall!" />
+              <label className="label" htmlFor="ann-title">
+                Short title (optional)
+              </label>
+              <input id="ann-title" className="input" name="title" placeholder="Lunch moves to 1:30 PM" />
             </div>
-            <div>
-              <label className="label">Where it goes (none ticked: every Auto and Approve space of the event)</label>
+            <fieldset>
+              <legend className="label">Where (none ticked: every space)</legend>
               <div className="space-y-2">
                 {targetsByEvent.map(({ event, targets }) => (
                   <div key={event.id}>
                     {evs.length > 1 ? <div className="text-[12px] font-medium text-zinc-500">{event.name}</div> : null}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                       {targets.map((t) => (
                         <label key={t.spaceId} className="flex items-center gap-1.5 text-[13px] text-zinc-700">
                           <input type="checkbox" name="target" value={t.spaceId} />
                           <PlatformLogo platform={t.platform} size={14} />
-                          {PLATFORM[t.platform ?? ""] ?? t.platform ?? "Switch"} · {short(t.name)}
+                          {short(t.name)}
                         </label>
                       ))}
                       {!targets.length ? <span className="muted">No Auto or Approve spaces yet.</span> : null}
@@ -112,35 +133,36 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
                   </div>
                 ))}
               </div>
+            </fieldset>
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-primary">Send for approval</button>
+              <span className="text-[12.5px] text-zinc-500">It still needs one OK from the crew.</span>
             </div>
-            <button className="btn-primary">Send for approval</button>
-            <p className="muted">It still needs one OK, from you or anyone on the crew: in the crew room, here, or in Pocket.</p>
           </form>
-        ) : (
-          <Empty>No live event. Create one in Events first.</Empty>
-        )}
-      </Section>
+        </Composer>
+      ) : (
+        <div className="mb-10">
+          <Empty quiet>No live event. Create one in Events first.</Empty>
+        </div>
+      )}
 
-      <Section title={`Scheduled · ${scheduled.length}`}>
-        {scheduled.length ? (
+      {scheduled.length ? (
+        <Section title="Scheduled" count={scheduled.length}>
           <div className="space-y-3">
             {scheduled.map((a) => (
-              <div key={a.id} className="card p-4">
-                <div className="text-[12px] text-zinc-400">
-                  goes out {a.scheduledAt ? formatWhen(a.scheduledAt, tz) : "soon"} · to {describeTargets(a.targets)}
-                </div>
-                <div className="mt-1 text-[15px] font-medium">{a.title}</div>
+              <article key={a.id} className="card-flat p-5">
+                <div className="text-[12.5px] text-zinc-500">Goes out {a.scheduledAt ? formatWhen(a.scheduledAt, tz) : "soon"}</div>
+                <h3 className="mt-1 text-[16px] font-semibold text-zinc-900">{a.title}</h3>
                 <MediaNote a={a} />
-                <div className="mt-1 text-[13px] whitespace-pre-wrap text-zinc-700">{a.text}</div>
-              </div>
+                <p className="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-zinc-700">{a.text}</p>
+                <Targets targets={a.targets} />
+              </article>
             ))}
           </div>
-        ) : (
-          <Empty>Nothing scheduled.</Empty>
-        )}
-      </Section>
+        </Section>
+      ) : null}
 
-      <Section title={`Posted · ${sent.length}`}>
+      <Section title="Posted" count={sent.length}>
         {sent.length ? (
           <div className="space-y-3">
             {sent.map((a) => (
@@ -148,23 +170,23 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
             ))}
           </div>
         ) : (
-          <Empty>Nothing posted yet.</Empty>
+          <Empty quiet>Nothing posted yet.</Empty>
         )}
       </Section>
 
       {notPosted.length ? (
-        <Section title="Not posted">
-          <div className="card divide-y divide-zinc-100">
+        <Fold title="Not posted" count={notPosted.length}>
+          <ul className="card-flat divide-y divide-zinc-100">
             {notPosted.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
+              <li key={a.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
                 <span className="truncate">{a.title}</span>
-                <span className="shrink-0 text-[12px] text-zinc-400">
+                <span className="shrink-0 text-[12px] text-zinc-500">
                   {STATUS_LABEL[a.status]} · {ago(a.updatedAt)}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
-        </Section>
+          </ul>
+        </Fold>
       ) : null}
     </>
   );
@@ -172,48 +194,51 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
 
 function Posted({ a, tz }: { a: AnnouncementView; tz: string }) {
   const approved = a.versions.filter((v) => v.status === "approved");
+  const failed = a.posts.filter((p) => p.status === "failed").length;
   return (
-    <div className="card p-4">
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="badge border-emerald-200 bg-emerald-50 text-emerald-700">version {a.liveVersion}</span>
-        <span className="text-[12px] text-zinc-400">
-          posted {a.sentAt ? formatWhen(a.sentAt, tz) : ""} · {a.origin === "decision" ? "from a decision in crew chat" : `asked by ${a.requestedBy}`}
-        </span>
+    <article className="card-flat p-5">
+      <div className="text-[12.5px] text-zinc-500">
+        {a.sentAt ? formatWhen(a.sentAt, tz) : "Posted"} · {a.origin === "decision" ? "from crew chat" : a.requestedBy}
+        {a.liveVersion > 1 ? ` · version ${a.liveVersion}` : ""}
       </div>
-      <div className="text-[15px] font-medium">{a.title}</div>
+      <h3 className="mt-1 text-[16px] font-semibold text-zinc-900">{a.title}</h3>
       <MediaNote a={a} />
-      <div className="mt-1 text-[13px] whitespace-pre-wrap text-zinc-700">{a.text}</div>
-      <ul className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2">
+      <p className="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-zinc-700">{a.text}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {a.posts.map((p) => (
-          <li key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-zinc-50 px-2.5 py-1.5 text-[12.5px]">
-            <span className="flex min-w-0 items-center gap-1.5 truncate">
-              <PlatformLogo platform={p.platform} size={14} />
-              {PLATFORM[p.platform ?? ""] ?? p.platform ?? "Switch"} · {short(p.spaceName)}
-            </span>
-            <span className={`shrink-0 ${p.status === "failed" ? "text-red-600" : "text-zinc-500"}`}>
-              {POST_LABEL[p.status] ?? p.status} · v{p.version}
-            </span>
-          </li>
+          <span
+            key={p.id}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] ${p.status === "failed" ? "bg-red-50 text-red-700" : "bg-zinc-100 text-zinc-700"}`}
+            title={`${PLATFORM[p.platform ?? ""] ?? p.platform ?? "Switch"} · ${p.spaceName} · ${POST_LABEL[p.status] ?? p.status} · v${p.version}`}
+          >
+            <PlatformLogo platform={p.platform} size={12} />
+            {short(p.spaceName)}
+          </span>
         ))}
-      </ul>
-      {approved.length > 1 ? (
-        <div className="mt-2 text-[12px] text-zinc-500">
-          {approved.map((v) => `v${v.version} by ${v.approvedBy ?? "?"}`).join(" · ")}
+        {failed ? <span className="text-[12px] font-medium text-red-700">{failed} failed</span> : null}
+      </div>
+      <details className="group mt-3">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[12.5px] font-medium text-zinc-500 hover:text-zinc-900 [&::-webkit-details-marker]:hidden">
+          {a.waiting ? "Details" : "Edit everywhere"}
+          <ChevronDown size={13} className="transition group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="mt-2 space-y-2">
+          {approved.length > 1 ? <div className="text-[12px] text-zinc-500">{approved.map((v) => `v${v.version} by ${v.approvedBy ?? "?"}`).join(" · ")}</div> : null}
+          {!a.waiting ? (
+            <form action={editAnnouncement} className="space-y-2">
+              <input type="hidden" name="announcementId" value={a.id} />
+              <label className="sr-only" htmlFor={`edit-${a.id}`}>
+                New version
+              </label>
+              <textarea id={`edit-${a.id}`} className="textarea" name="text" rows={3} defaultValue={a.text ?? ""} />
+              <button className="btn">Send the new version for approval</button>
+            </form>
+          ) : (
+            <p className="muted">A new version is waiting for its OK above.</p>
+          )}
         </div>
-      ) : null}
-      {!a.waiting ? (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-[12.5px] font-medium text-zinc-600">Edit everywhere</summary>
-          <form action={editAnnouncement} className="mt-2 space-y-2">
-            <input type="hidden" name="announcementId" value={a.id} />
-            <textarea className="textarea" name="text" rows={3} defaultValue={a.text ?? ""} />
-            <button className="btn">Send the new version for approval</button>
-          </form>
-        </details>
-      ) : (
-        <p className="muted mt-2">A new version is waiting for its OK above.</p>
-      )}
-    </div>
+      </details>
+    </article>
   );
 }
 
@@ -221,4 +246,20 @@ function Posted({ a, tz }: { a: AnnouncementView; tz: string }) {
 function MediaNote({ a }: { a: AnnouncementView }) {
   if (!a.media?.length) return null;
   return <div className="mt-0.5 text-[12px] text-zinc-500">With the image {a.media.map((m) => m.filename).join(", ")}</div>;
+}
+
+/** "To [logo] build-night  [logo] Lantern Build Night ..." */
+function Targets({ targets }: { targets: { spaceId: string; name: string; platform: string | null }[] }) {
+  if (!targets.length) return <p className="mt-2 text-[12.5px] text-zinc-500">No Auto or Approve space to post in yet.</p>;
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <span className="mr-0.5 text-[12px] text-zinc-500">To</span>
+      {targets.map((t) => (
+        <span key={t.spaceId} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[12px] text-zinc-700" title={`${platformName(t.platform)} · ${t.name}`}>
+          <PlatformLogo platform={t.platform} size={12} />
+          {short(t.name)}
+        </span>
+      ))}
+    </div>
+  );
 }

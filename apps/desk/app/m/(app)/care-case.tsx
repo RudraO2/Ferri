@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { firstName, JOB_STATUS_LABEL, type CaseView } from "@/lib/care";
 import { ago } from "@/lib/data";
 import { CARE_STATUS_LABEL } from "@/lib/ferri";
 import { waitedFor } from "@/lib/pocket";
-import { Toast, Where } from "./bits";
+import { BackHeader, Toast, Where } from "./bits";
 import { CareActions } from "./care-actions";
 
 export const STATUS_PILL: Record<string, string> = {
@@ -51,31 +52,27 @@ export function CareScreen({
   const mine = !!v.ownerId && myIds.has(v.ownerId) && v.status === "helping";
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 backdrop-blur">
-        <Link href={backHref} className="-ml-1 flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 active:bg-zinc-200" aria-label="Back">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </Link>
-        <div className="text-[15px] font-semibold">{title}</div>
-        <span className="ml-auto text-[12px] text-zinc-400">{waitedFor(v.createdAt)}</span>
-      </header>
+      <BackHeader href={backHref} title={title} right={<span className="text-[13px] text-zinc-500">{waitedFor(v.createdAt)}</span>} />
       <Toast note={note} />
 
-      <div className="px-5 pt-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="pill bg-rose-100 text-rose-800">
+      <div className="px-5 pt-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-zinc-500">
+          <span>
             {v.ref} · {v.kind}
           </span>
           {v.urgent ? <span className="pill bg-red-600 text-white">urgent</span> : null}
           <span className={STATUS_PILL[v.status] ?? "pill"}>{CARE_STATUS_LABEL[v.status] ?? v.status}</span>
         </div>
-        <div className="mt-3 text-[20px] leading-snug font-semibold tracking-tight">{v.reason}</div>
-        {v.quote ? <div className="mt-2 text-[15px] leading-relaxed text-zinc-600 italic">“{v.quote}”</div> : null}
+        <h1 className="mt-2 font-display text-[23px] leading-snug font-extrabold tracking-[-0.02em] text-zinc-900">{v.reason}</h1>
+        {v.quote ? (
+          <div className="mt-3 inline-block max-w-full rounded-[18px] rounded-bl-[6px] bg-white px-3.5 py-2.5 text-[15px] leading-relaxed text-zinc-700 ring-1 ring-zinc-200">
+            “{v.quote}”
+          </div>
+        ) : null}
       </div>
 
       <section className="mt-4 px-4">
-        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+        <div className="divide-y divide-zinc-100 rounded-[18px] bg-white ring-1 ring-zinc-200">
           <Row label="Who">
             <div className="font-medium">{v.personName}</div>
             <div className="mt-0.5">
@@ -116,25 +113,29 @@ export function CareScreen({
       <CareActions caseId={v.id} first={first} isOpen={v.isOpen} mine={mine} canBuilder={v.canBuilder} canMessage={v.canMessage} back={here} done={done} />
 
       {full && v.notes.length ? (
-        <section className="mt-7 px-4">
-          <h2 className="px-1 text-[12px] font-semibold tracking-wide text-zinc-500 uppercase">What happened</h2>
-          <ol className="mt-2 divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+        <details className="group mt-7 px-4">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 px-1 text-[14px] font-semibold text-zinc-500 [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={16} className="transition group-open:rotate-90" aria-hidden />
+            What happened
+            <span className="font-medium text-zinc-400 tabular-nums">{v.notes.length}</span>
+          </summary>
+          <ol className="mt-2 divide-y divide-zinc-100 rounded-[18px] bg-white ring-1 ring-zinc-200">
             {v.notes.map((n) => (
               <li key={n.id} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[13.5px] font-medium">{n.by}</span>
-                  <span className="text-[12px] text-zinc-400">{ago(n.createdAt)}</span>
+                  <span className="text-[12px] text-zinc-500">{ago(n.createdAt)}</span>
                 </div>
                 <div className="mt-0.5 text-[14px] whitespace-pre-wrap text-zinc-700">{n.text}</div>
               </li>
             ))}
           </ol>
-        </section>
+        </details>
       ) : null}
 
       {!full ? (
-        <div className="mt-5 px-5 text-center">
-          <Link href={`/m/case/${v.id}`} className="text-[14px] font-medium text-zinc-600 underline underline-offset-2">
+        <div className="mt-3 px-5 text-center">
+          <Link href={`/m/case/${v.id}`} className="inline-flex h-11 items-center text-[14px] font-medium text-zinc-600 underline underline-offset-2">
             See the whole case
           </Link>
         </div>

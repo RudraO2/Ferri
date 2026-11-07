@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, HeartHandshake, Inbox, Megaphone, MessageCircleQuestion, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, HeartHandshake, Inbox, Megaphone, MessageCircleQuestion, ShieldCheck, Sparkles } from "lucide-react";
 import { ago, overview } from "@/lib/data";
 import { controlRoom, type FeedItem } from "@/lib/control-room";
 import { FerriAvatar, Ferri } from "@/components/ferri";
@@ -32,11 +32,11 @@ export default async function OverviewPage() {
   return (
     <>
       <AutoRefresh seconds={15} />
-      <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-4">
-          <span className="hidden shrink-0 sm:block"><Ferri pose={waiting ? "thinking" : "main"} size={76} alive priority /></span>
+          <span className="hidden shrink-0 sm:block"><Ferri pose={waiting ? "thinking" : "main"} size={64} alive priority /></span>
           <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2 text-[13px] font-medium text-zinc-500">
+            <div className="mb-1 flex items-center gap-2 text-[13px] text-zinc-500">
               <span className="relative flex h-2 w-2" aria-hidden>
                 {live ? <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /> : null}
                 <span className={`relative inline-flex h-2 w-2 rounded-full ${live ? "bg-emerald-500" : "bg-red-500"}`} />
@@ -66,22 +66,17 @@ export default async function OverviewPage() {
 
       <div className="mb-10 grid gap-4 lg:grid-cols-[1.65fr_1fr] [&>*]:min-w-0">
         <section className="card p-5" aria-labelledby="share-title">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h2 id="share-title" className="h3">
-                Questions Ferri answered alone
-              </h2>
-              <p className="muted mt-0.5">By hour. It climbs as the crew teaches it.</p>
-            </div>
-            <span className="badge">
-              {r.totals.asked} question{r.totals.asked === 1 ? "" : "s"}
-            </span>
-          </div>
+          <h2 id="share-title" className="h3">
+            Answered alone, by hour
+          </h2>
+          <p className="muted mt-0.5">
+            {r.totals.asked} question{r.totals.asked === 1 ? "" : "s"} · it climbs as the crew teaches it
+          </p>
           <div className="mt-3">
             {r.totals.asked ? (
               <ShareChart points={r.hours} />
             ) : (
-              <Empty pose="sleep">No member questions in the last 12 hours. Ask Ferri something in an attached space and it shows up here.</Empty>
+              <Empty quiet>No member questions in the last 12 hours.</Empty>
             )}
           </div>
         </section>
@@ -90,7 +85,7 @@ export default async function OverviewPage() {
           <h2 id="platform-title" className="h3">
             Questions by app
           </h2>
-          <p className="muted mt-0.5">Last 12 hours, every attached space.</p>
+          <p className="muted mt-0.5">Last 12 hours</p>
           {r.platforms.length ? (
             <ul className="mt-4 space-y-3">
               {r.platforms.map((p) => (
@@ -105,7 +100,7 @@ export default async function OverviewPage() {
               ))}
             </ul>
           ) : (
-            <p className="mt-6 text-[13.5px] text-zinc-500">Nothing yet. Attach a space on Spaces, then ask Ferri there.</p>
+            <p className="mt-6 text-[13.5px] text-zinc-500">Nothing yet. Attach a space on Spaces.</p>
           )}
         </section>
       </div>
@@ -113,8 +108,8 @@ export default async function OverviewPage() {
       <div className="grid gap-8 lg:grid-cols-[1fr_1fr] [&>*]:min-w-0">
         <Section title="Live">
           {r.feed.length ? (
-            <ol className="card divide-y divide-zinc-100">
-              {r.feed.map((f, i) => {
+            <ol className="card-flat divide-y divide-zinc-100">
+              {r.feed.slice(0, 7).map((f, i) => {
                 const Icon = FEED_ICON[f.kind];
                 const ferri = f.kind === "answered" || f.kind === "asked-crew" || f.kind === "announced";
                 return (
@@ -131,7 +126,7 @@ export default async function OverviewPage() {
                         {f.kind === "crew-answered" ? <b className="font-semibold">{f.who ?? "The crew"} </b> : ferri ? <b className="font-semibold">Ferri </b> : null}
                         {f.text}
                       </span>
-                      <div className="mt-1 flex items-center gap-2 text-[12px] text-zinc-400">
+                      <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-500">
                         {f.platform ? <PlatformLogo platform={f.platform} size={12} /> : null}
                         {ago(f.at)}
                       </div>
@@ -141,7 +136,7 @@ export default async function OverviewPage() {
               })}
             </ol>
           ) : (
-            <Empty pose="sleep">Quiet so far. Answers, cards, announcements, Shield blocks and care cases appear here as they happen.</Empty>
+            <Empty pose="sleep">Quiet so far. Answers, cards and announcements appear here as they happen.</Empty>
           )}
         </Section>
 
@@ -154,17 +149,16 @@ export default async function OverviewPage() {
           }
         >
           {o.recent.length ? (
-            <ul className="card divide-y divide-zinc-100">
-              {o.recent.slice(0, 9).map((q) => (
+            <ul className="card-flat divide-y divide-zinc-100">
+              {o.recent.slice(0, 7).map((q) => (
                 <li key={q.id} className="flex items-start gap-3 px-4 py-3">
                   <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[12px] font-semibold text-zinc-800">
                     {q.askerName.charAt(0).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] text-zinc-900">{q.text}</div>
-                    <div className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-zinc-500">
-                      <UserCheck size={12} aria-hidden className="shrink-0" />
-                      {q.askerName} · {q.spaceName ?? "an unknown space"} · {ago(q.askedAt)}
+                    <div className="mt-0.5 truncate text-[12px] text-zinc-500">
+                      {q.askerName} · {ago(q.askedAt)}
                     </div>
                   </div>
                   <Outcome outcome={q.outcome} resolution={q.resolution} />
@@ -172,7 +166,7 @@ export default async function OverviewPage() {
               ))}
             </ul>
           ) : (
-            <Empty pose="wave">No questions yet. Say “@ferri when does hacking start?” in an attached space.</Empty>
+            <Empty quiet>No questions yet. Try “@ferri when does hacking start?” in an attached space.</Empty>
           )}
         </Section>
       </div>

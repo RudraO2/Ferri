@@ -1,4 +1,5 @@
 import { closeEvent, notYet } from "../../../../(desk)/wrap/actions";
+import { QUIET } from "../../quiet";
 
 /** The close card (spec 19) in Pocket: Off, move (when the card offers it), Not yet. Answers the card as you. */
 export function WrapActions({ cardId, payload, what }: { cardId: string; payload: Record<string, unknown> | null; what: string | null }) {
@@ -13,24 +14,24 @@ export function WrapActions({ cardId, payload, what }: { cardId: string; payload
     </>
   );
   return (
-    <div className="mt-2 space-y-3">
-      {what ? <p className="px-1 text-[13px] text-zinc-500">{what}</p> : null}
+    <div className="mt-3 space-y-3">
+      {what ? <p className="px-1 text-[14px] text-zinc-600">{what}</p> : null}
       <form action={closeEvent}>
         {ids}
         <input type="hidden" name="how" value="off" />
-        <button className="btn-lg-primary w-full">Close, spaces Off</button>
+        <button className="btn-lg-primary h-14 w-full text-[16px]">Close, spaces Off</button>
       </form>
       {moveTo ? (
         <form action={closeEvent}>
           {ids}
           <input type="hidden" name="how" value="move" />
           <input type="hidden" name="moveTo" value={moveTo} />
-          <button className="btn-lg w-full">Close and move the spaces to {moveToName ?? "the next event"}</button>
+          <button className="btn-lg w-full">Close and move spaces to {moveToName ?? "the next event"}</button>
         </form>
       ) : null}
-      <form action={notYet}>
+      <form action={notYet} className="flex justify-center">
         {ids}
-        <button className="btn-lg w-full">Not yet</button>
+        <button className={QUIET}>Not yet</button>
       </form>
     </div>
   );

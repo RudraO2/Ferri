@@ -13,7 +13,7 @@ function Form() {
       <input type="hidden" name="next" value={next.startsWith("/m") ? next : "/m"} />
       <div>
         <label className="label" htmlFor="email">
-          Switch email
+          Email
         </label>
         <input className="input-lg" id="email" name="email" type="email" autoComplete="username" inputMode="email" required />
       </div>
@@ -39,9 +39,9 @@ export default function PocketLogin() {
   return (
     <main className="flex min-h-dvh flex-col justify-center px-6 pt-[env(safe-area-inset-top)] pb-16">
       <div className="mb-8 flex flex-col items-center text-center">
-        <FerriLoop name="wave-loop" fallback="wave" width={170} height={170} priority />
+        <FerriLoop name="wave-loop" fallback="wave" width={136} height={136} priority />
         <h1 className="mt-3 font-display text-[30px] font-extrabold tracking-[-0.03em] text-zinc-900">Ferri Pocket</h1>
-        <p className="mt-1 text-[15px] text-zinc-500">Your community, answered from your phone.</p>
+        <p className="mt-1 text-[15px] text-zinc-500">Sign in with your Switch account.</p>
       </div>
       <Suspense>
         <Form />

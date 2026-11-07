@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { BellRing, ChevronDown } from "lucide-react";
 import { pushKey, removePush, savePush, testPush } from "../actions";
+import { QUIET } from "./quiet";
 
 type State = "loading" | "unsupported" | "insecure" | "denied" | "off" | "on";
 
@@ -78,9 +80,10 @@ export function PushNudge() {
   const { state, turnOn, error } = usePush();
   if (state !== "off" && !error) return null;
   return (
-    <div className="mx-4 mt-3 flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5">
-      <div className="flex-1 text-[14px] text-zinc-700">{error ?? "Turn on notifications so a question for you buzzes this phone."}</div>
-      <button className="btn-lg-primary h-9 px-3 text-[14px]" onClick={() => void turnOn()}>
+    <div className="mx-4 mt-2 flex items-center gap-2 rounded-[14px] bg-brand-soft py-1 pr-1 pl-3.5">
+      <BellRing size={16} className="shrink-0 text-brand-ink" aria-hidden />
+      <div className="min-w-0 flex-1 text-[13.5px] text-zinc-700">{error ?? "Get a buzz when a card is for you."}</div>
+      <button className="inline-flex h-11 shrink-0 items-center rounded-full px-3.5 text-[14px] font-semibold text-brand-ink active:bg-white/60" onClick={() => void turnOn()}>
         Turn on
       </button>
     </div>
@@ -93,31 +96,31 @@ export function PushPanel() {
   const [tested, setTested] = useState<string | null>(null);
   const text: Record<State, string> = {
     loading: "Checking…",
-    unsupported: "This browser cannot get push notifications. On iPhone, add Pocket to the Home Screen first (Share, then Add to Home Screen), then open it from there.",
-    insecure: "Notifications need a secure address (https). Open Pocket through the tunnel link.",
-    denied: "Notifications are blocked for this site. Allow them in the browser's site settings, then come back.",
-    off: "Off. Turn them on to hear about cards for you, nudges and escalations.",
-    on: "On for this device. Cards for you, nudges and escalations buzz here.",
+    unsupported: "This browser cannot get notifications. On iPhone, add Pocket to the Home Screen first, then open it from there.",
+    insecure: "Notifications need a secure (https) address. Open Pocket through the tunnel link.",
+    denied: "Blocked for this site. Allow them in the browser's site settings.",
+    off: "Get a buzz for your cards, nudges and escalations.",
+    on: "This phone buzzes for your cards, nudges and escalations.",
   };
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+    <div className="rounded-[20px] bg-white p-4 ring-1 ring-zinc-200">
       <div className="flex items-center justify-between">
-        <div className="text-[15px] font-medium">Notifications</div>
-        <span className={`pill ${state === "on" ? "bg-emerald-100 text-emerald-800" : ""}`}>{state === "on" ? "on" : state === "loading" ? "…" : "off"}</span>
+        <div className="text-[15px] font-semibold text-zinc-900">Notifications</div>
+        <span className={`text-[13px] font-medium ${state === "on" ? "text-emerald-700" : "text-zinc-500"}`}>{state === "on" ? "On" : state === "loading" ? "…" : "Off"}</span>
       </div>
       <p className="mt-1 text-[13.5px] text-zinc-500">{text[state]}</p>
       {error ? <p className="mt-2 text-[13.5px] text-red-600">{error}</p> : null}
       {tested ? <p className="mt-2 text-[13.5px] text-emerald-700">{tested}</p> : null}
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex items-center gap-1">
         {state === "off" ? (
           <button className="btn-lg-primary flex-1" onClick={() => void turnOn()}>
-            Turn on notifications
+            Turn on
           </button>
         ) : null}
         {state === "on" ? (
           <>
             <button
-              className="btn-lg-primary flex-1"
+              className="btn-lg flex-1"
               onClick={async () => {
                 setError(null);
                 setTested(null);
@@ -128,7 +131,7 @@ export function PushPanel() {
             >
               Send a test
             </button>
-            <button className="btn-lg" onClick={() => void turnOff()}>
+            <button className={QUIET} onClick={() => void turnOff()}>
               Turn off
             </button>
           </>
@@ -145,14 +148,17 @@ export function InstallHint() {
   }, []);
   if (standalone) return null;
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 text-[13.5px] text-zinc-600">
-      <div className="text-[15px] font-medium text-zinc-900">Put Pocket on your home screen</div>
-      <p className="mt-1">
+    <details className="group rounded-[20px] bg-white px-4 py-1 text-[13.5px] text-zinc-600 ring-1 ring-zinc-200">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-[15px] font-semibold text-zinc-900 [&::-webkit-details-marker]:hidden">
+        Add Pocket to your home screen
+        <ChevronDown size={17} className="text-zinc-400 transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <p className="pb-3">
         Android: browser menu, then Install app. iPhone: Share, then Add to Home Screen. It opens full screen like an app.{" "}
         <Link className="underline" href="/m">
           Back to Needs you
         </Link>
       </p>
-    </div>
+    </details>
   );
 }

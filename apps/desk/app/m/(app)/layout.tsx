@@ -15,9 +15,10 @@ export default async function PocketApp({ children }: { children: React.ReactNod
     <>
       <AutoRefresh seconds={10} />
       {c.paused ? (
-        <div className="bg-red-50 px-5 py-2 text-[13px] text-red-700">Ferri is paused: nothing is posted anywhere. Answers go out when it resumes.</div>
+        <div className="bg-red-50 px-5 py-2 text-[13px] text-red-700">Ferri is paused. Answers go out when it resumes.</div>
       ) : null}
-      <main>{children}</main>
+      {/* Room below the last card, so the floating tab bar never covers it. */}
+      <main className="pb-10">{children}</main>
       <Tabs needsYou={counts.needsYou + builderAsks.length} stuck={counts.stuck} />
     </>
   );

@@ -1,5 +1,6 @@
 import type { OpenRequest } from "@/lib/builder";
 import { answerBuilderRequest } from "../../(desk)/actions";
+import { QUIET } from "./quiet";
 
 /** The Builder's own Switch cards in Pocket: a permission it asked for, or its question. */
 export function BuilderCards({ requests }: { requests: OpenRequest[] }) {
@@ -17,11 +18,11 @@ export function BuilderCards({ requests }: { requests: OpenRequest[] }) {
           </>
         );
         return (
-          <div key={r.requestId} className="rounded-xl border border-amber-200 bg-white p-4 shadow-xs">
-            <div className="flex items-center gap-2">
-              <span className="pill bg-amber-100 text-amber-800">{r.kind === "approval" ? "Builder wants to" : "Builder asks"}</span>
+          <div key={r.requestId} className="rounded-[20px] border border-zinc-200 bg-white px-4 py-3.5">
+            <div className="text-[13px] font-medium text-amber-700">{r.kind === "approval" ? "The Builder wants to" : "The Builder asks"}</div>
+            <div className="mt-1 font-display text-[18px] leading-snug font-bold tracking-[-0.02em] text-zinc-900">
+              {r.kind === "approval" ? r.title : (r.questions[0]?.title ?? r.title)}
             </div>
-            <div className="mt-2 text-[16px] leading-snug font-medium">{r.kind === "approval" ? r.title : (r.questions[0]?.title ?? r.title)}</div>
             {r.kind === "approval" && r.detail ? (
               <pre className="mt-2 overflow-x-auto rounded-md bg-zinc-50 px-2.5 py-1.5 font-mono text-[12px] text-zinc-700">{r.detail}</pre>
             ) : r.questions[0]?.prompt ? (
@@ -35,7 +36,7 @@ export function BuilderCards({ requests }: { requests: OpenRequest[] }) {
                       <form key={o.id} action={answerBuilderRequest}>
                         {hidden}
                         <input type="hidden" name="option" value={o.id} />
-                        <button className={`w-full ${o.decision === "decline" ? "btn-lg" : "btn-lg-primary"}`}>{o.decision === "decline" ? "No" : "Yes, once"}</button>
+                        <button className={`w-full ${o.decision === "decline" ? QUIET : "btn-lg-primary"}`}>{o.decision === "decline" ? "No" : "Yes, once"}</button>
                       </form>
                     ))
                 : (r.questions[0]?.options ?? []).map((o, i) => (

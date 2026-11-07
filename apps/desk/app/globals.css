@@ -101,7 +101,7 @@
   --radius-2xl: 28px;
 
   --shadow-xs: 0 1px 0 var(--line-soft);
-  --shadow-card: 0 18px 40px -30px var(--shadow-tint);
+  --shadow-card: 0 12px 32px -28px var(--shadow-tint);
   --shadow-pop: 0 24px 60px -28px var(--shadow-tint);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -336,8 +336,9 @@ body {
   }
 
   /* Labels */
+  /* Borderless on purpose: a tint is enough, borders add noise. */
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-zinc-600;
+    @apply inline-flex items-center gap-1 rounded-full border-0 bg-zinc-100 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-zinc-600;
   }
   .pill {
     @apply inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-zinc-600;
@@ -360,7 +361,7 @@ body {
     letter-spacing: -0.03em;
   }
   .h2 {
-    @apply text-[11.5px] font-semibold tracking-[0.08em] text-zinc-500 uppercase;
+    @apply text-[15px] font-semibold tracking-[-0.01em] text-zinc-900;
   }
   .h3 {
     @apply text-[16px] font-semibold tracking-tight text-zinc-900;

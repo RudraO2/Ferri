@@ -11,10 +11,9 @@ export const dynamic = "force-dynamic";
 export default function LoginPage() {
   const guest =
     process.env.DESK_GUEST_VIEW === "on" ? (
-      <form action={viewAsGuest} className="mt-6 rounded-[20px] border border-dashed border-brand-line bg-brand-soft/60 p-5">
-        <p className="text-[14px] font-semibold text-zinc-900">Judging or just curious?</p>
-        <p className="muted mt-0.5">Look around the live demo without an account. Nothing can be changed.</p>
-        <button className="btn mt-3 h-11 w-full">Look around (read-only)</button>
+      <form action={viewAsGuest} className="mt-8 border-t border-zinc-200 pt-6 text-center">
+        <p className="muted">No account? Look around the live demo, read-only.</p>
+        <button className="btn mt-3 h-11 w-full">Look around</button>
       </form>
     ) : null;
   return <LoginForm guest={guest} />;
