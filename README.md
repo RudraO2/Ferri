@@ -2,7 +2,9 @@
 
 <p align="center"><img src="docs/images/ferri-hero.png" alt="Ferri, a friendly sea otter: host the event, Ferri runs the rest, with your crew inside and your community outside." width="760"></p>
 
-**Ferri is an AI teammate for people who host community events**, like hackathons, meetups and festival nights. Members ask the same questions in groups on several apps, and what the crew decides in its own chat often never reaches them. Ferri sits in every group of the event and in the crew's own room. It answers members with sources, brings the crew only what needs a person, and turns each crew decision into an update in every group after one OK. A second agent, Ferri Builder, makes the event's site, posters and Luma listing. Both run on [Switch](https://github.com/sandbox-quantum/switch).
+**Ferri is an AI teammate for people who host community events**, like hackathons, meetups and festival nights. It takes on the work a volunteer crew does from the first idea to the thank-you post. It keeps the plan from the crew's own chat. It builds the event website with registration and a real database, and deploys it. It designs the posters, lists the event on Luma, and finds sponsors and partner communities, then emails them and tracks every reply. And it keeps the whole community up to date in every group on every app. Every step that reaches the public waits for one OK from a person.
+
+Two agents do the work, and both run on [Switch](https://github.com/sandbox-quantum/switch). Ferri runs the event, inside with the crew and outside with the community. Ferri Builder is Claude Code, run by Switch, and builds and ships what the event needs.
 
 ## Two sides of every event
 
@@ -10,7 +12,8 @@
 |---|---|
 | **Plan.** Ferri reads the crew's own chat and keeps the plan: decisions, owners, tasks with deadlines, open questions. | **Answers.** On Discord, Telegram, Slack, WhatsApp and Mattermost, only from the event's knowledge, with the source under every answer. |
 | **Cards on Pocket.** A question only the crew can answer, a reply waiting for an OK or a member who needs care reaches the right person's phone. | **Care.** A member who is stuck, upset or unsafe becomes a case for the right person on the crew. |
-| **Site and posters.** Ferri Builder makes the event site on Vercel and Supabase, and the posters and social cards, when the crew asks in its room. | **Shared everywhere.** After one OK, the site link and the poster go to every group, the poster as a real image. |
+| **Site and posters.** Ferri Builder creates the event's Supabase database, builds the site (registration, sign-in, schedule, sponsor credits), deploys it to Vercel after a card, and makes the posters and social cards, when the crew asks in its room. | **Shared everywhere.** After one OK, the site link and the poster go to every group, the poster as a real image. |
+| **Sponsors and partners.** The Builder researches sponsors, colleges and partner communities, each with its source page. Ferri drafts every email on a card, sends it from your own domain after an OK, and tracks the replies in Contacts. | **Sponsor perks.** Registered members claim sponsor credits on the event site, one code per person, with an audit log the crew can check. |
 | **Luma and registrations.** The Builder lists the event on Luma after a card. Ferri keeps one guest list from the site, Luma and CSV files. | **Reminders.** Guests get reminders by email, and a freed spot goes to the next person on the waitlist, each after one OK. |
 | **Announcements.** "@ferri tell everyone lunch moves to 1:30" drafts it, and one card shows the text and every group it will reach. | **Updates in place.** A later version edits the post in every group, so nobody sees the old time. |
 | **Shield alerts.** The crew room hears what was stopped, and the leads get a push. | **Shield.** Scam links and link floods are blocked, and leaked keys are redacted, on every message before anyone sees them. |
