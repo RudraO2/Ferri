@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 
-export const alt = "Ferri, a friendly sea otter. Run the event. Ferri runs the group chats.";
+export const alt = "Ferri, a friendly sea otter. Host the event. Ferri runs the rest.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -57,10 +57,10 @@ export default async function OpenGraphImage() {
             Ferri
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 88, fontFamily: "Bricolage", letterSpacing: -3.5, lineHeight: 1 }}>Run the event.</div>
-            <div style={{ fontSize: 86, fontFamily: "Instrument Serif", fontStyle: "italic", letterSpacing: -1.5, lineHeight: 1.08, marginTop: 4 }}>Ferri runs the group chats.</div>
+            <div style={{ fontSize: 88, fontFamily: "Bricolage", letterSpacing: -3.5, lineHeight: 1 }}>Host the event.</div>
+            <div style={{ fontSize: 86, fontFamily: "Instrument Serif", fontStyle: "italic", letterSpacing: -1.5, lineHeight: 1.08, marginTop: 4 }}>Ferri runs the rest.</div>
             <div style={{ fontSize: 27, color: "#57514a", marginTop: 24, maxWidth: 680, lineHeight: 1.4 }}>
-              The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app.
+              The AI teammate for people who host community events: with your crew inside, and your community outside, on every app.
             </div>
           </div>
           <div style={{ display: "flex", gap: 12 }}>

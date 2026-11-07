@@ -628,6 +628,227 @@ body {
   outline: none;
 }
 
+/*
+ * The playground's chat, in each app's own look: colours and simple CSS patterns only (no
+ * copies of the apps' wallpapers, icons or images). Fixed colours: the apps keep their look
+ * whatever the site's theme.
+ */
+.pg-app {
+  --pg-bg: #ffffff;
+  --pg-text: #1d1c1d;
+  --pg-muted: #616061;
+  --pg-head-bg: #ffffff;
+  --pg-head-text: #1d1c1d;
+  --pg-line: #dddddd;
+  --pg-compose-bg: #ffffff;
+  --pg-input-bg: #ffffff;
+  --pg-input-line: #bbbabb;
+  --pg-input-text: #1d1c1d;
+  --pg-placeholder: #8d8d8d;
+  --pg-chip-bg: #f8f8f8;
+  --pg-chip-line: #dddddd;
+  --pg-chip-text: #1d1c1d;
+  --pg-in: #ffffff;
+  --pg-out: #ffffff;
+  --pg-bubble-text: #111b21;
+  --pg-radius: 10px;
+  color: var(--pg-text);
+}
+.pg-app[data-app="discord"] {
+  --pg-bg: #313338;
+  --pg-text: #dbdee1;
+  --pg-muted: #949ba4;
+  --pg-head-bg: #313338;
+  --pg-head-text: #f2f3f5;
+  --pg-line: #232428;
+  --pg-compose-bg: #313338;
+  --pg-input-bg: #383a40;
+  --pg-input-line: #383a40;
+  --pg-input-text: #dbdee1;
+  --pg-placeholder: #6d6f78;
+  --pg-chip-bg: #2b2d31;
+  --pg-chip-line: #3f4147;
+  --pg-chip-text: #dbdee1;
+  --pg-radius: 8px;
+}
+.pg-app[data-app="slack"] {
+  --pg-radius: 8px;
+}
+.pg-app[data-app="telegram"] {
+  --pg-text: #000000;
+  --pg-muted: #707579;
+  --pg-head-text: #000000;
+  --pg-line: #dadce0;
+  --pg-input-line: #dadce0;
+  --pg-input-text: #000000;
+  --pg-placeholder: #a2acb4;
+  --pg-chip-bg: #ffffff;
+  --pg-chip-line: #dadce0;
+  --pg-chip-text: #000000;
+  --pg-out: #effdde;
+  --pg-bubble-text: #000000;
+  --pg-radius: 20px;
+}
+.pg-app[data-app="whatsapp"] {
+  --pg-text: #111b21;
+  --pg-muted: #667781;
+  --pg-head-bg: #f0f2f5;
+  --pg-head-text: #111b21;
+  --pg-line: #d1d7db;
+  --pg-compose-bg: #f0f2f5;
+  --pg-input-line: #ffffff;
+  --pg-input-text: #111b21;
+  --pg-placeholder: #8696a0;
+  --pg-chip-bg: #ffffff;
+  --pg-chip-line: #d1d7db;
+  --pg-chip-text: #111b21;
+  --pg-out: #d9fdd3;
+  --pg-radius: 20px;
+}
+.pg-app .pg-head {
+  background: var(--pg-head-bg);
+  border-bottom: 1px solid var(--pg-line);
+}
+.pg-app .pg-title {
+  color: var(--pg-head-text);
+}
+.pg-app .pg-sub,
+.pg-app .pg-hash,
+.pg-app .pg-muted {
+  color: var(--pg-muted);
+}
+.pg-app .pg-text {
+  color: var(--pg-text);
+}
+.pg-app .pg-name {
+  color: var(--pg-head-text);
+}
+.pg-app .pg-group {
+  background: linear-gradient(135deg, #2fb3ad, #0e7c7b);
+}
+.pg-app .pg-typing {
+  background: var(--pg-muted);
+}
+.pg-app .pg-log {
+  background: var(--pg-bg);
+}
+.pg-app[data-app="telegram"] .pg-log {
+  background-color: #a7cf8e;
+  background-image:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.22) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 75%, rgba(40, 90, 40, 0.1) 0 1.5px, transparent 2px),
+    linear-gradient(160deg, #dbddbb 0%, #a9d09a 38%, #d5d88d 70%, #88b884 100%);
+  background-size:
+    38px 38px,
+    26px 26px,
+    100% 100%;
+}
+.pg-app[data-app="whatsapp"] .pg-log {
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(84, 70, 52, 0.09) 1.2px, transparent 1.6px);
+  background-size: 18px 18px;
+}
+.pg-app .pg-compose {
+  background: var(--pg-compose-bg);
+  border-top: 1px solid var(--pg-line);
+}
+.pg-app .pg-input {
+  background: var(--pg-input-bg);
+  border-color: var(--pg-input-line);
+  border-radius: var(--pg-radius);
+  color: var(--pg-input-text);
+}
+.pg-app .pg-input:focus-within {
+  border-color: #0e7c7b;
+  box-shadow: 0 0 0 3px rgba(14, 124, 123, 0.25);
+}
+.pg-app .pg-input input::placeholder {
+  color: var(--pg-placeholder);
+}
+.pg-app .pg-chip {
+  background: var(--pg-chip-bg);
+  border-color: var(--pg-chip-line);
+  color: var(--pg-chip-text);
+}
+.pg-app .pg-chip.is-learned {
+  background: #d3f0ec;
+  border-color: #0e7c7b;
+  color: #0a6463;
+}
+.pg-app .pg-tag-discord,
+.pg-app .pg-tag-slack {
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+}
+.pg-app .pg-tag-discord {
+  background: #5865f2;
+  color: #ffffff;
+}
+.pg-app .pg-tag-slack {
+  background: rgba(29, 28, 29, 0.1);
+  color: #616061;
+}
+/* Bubbles with a tail: Telegram's at the bottom, WhatsApp's at the top. */
+.pg-app .pg-bubble {
+  position: relative;
+  background: var(--pg-in);
+  color: var(--pg-bubble-text);
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+}
+.pg-app .pg-bubble.is-out {
+  background: var(--pg-out);
+}
+.pg-app .pg-bubble::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 13px;
+  background: inherit;
+}
+.pg-app[data-app="telegram"] .pg-bubble {
+  border-radius: 14px;
+}
+.pg-app[data-app="telegram"] .pg-bubble::before {
+  bottom: 0;
+}
+.pg-app[data-app="telegram"] .pg-bubble.is-in {
+  border-bottom-left-radius: 0;
+}
+.pg-app[data-app="telegram"] .pg-bubble.is-in::before {
+  left: -7px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+.pg-app[data-app="telegram"] .pg-bubble.is-out {
+  border-bottom-right-radius: 0;
+}
+.pg-app[data-app="telegram"] .pg-bubble.is-out::before {
+  right: -7px;
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+}
+.pg-app[data-app="whatsapp"] .pg-bubble {
+  border-radius: 8px;
+}
+.pg-app[data-app="whatsapp"] .pg-bubble::before {
+  top: 0;
+}
+.pg-app[data-app="whatsapp"] .pg-bubble.is-in {
+  border-top-left-radius: 0;
+}
+.pg-app[data-app="whatsapp"] .pg-bubble.is-in::before {
+  left: -7px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.pg-app[data-app="whatsapp"] .pg-bubble.is-out {
+  border-top-right-radius: 0;
+}
+.pg-app[data-app="whatsapp"] .pg-bubble.is-out::before {
+  right: -7px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
 /* Section rhythm on the public site. */
 .site-section {
   @apply mx-auto max-w-[1160px] px-5 sm:px-8;

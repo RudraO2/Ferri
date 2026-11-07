@@ -11,15 +11,16 @@ const hand = Caveat({ subsets: ["latin"], weight: ["600"], variable: "--font-han
 
 export const metadata: Metadata = {
   title: { default: "Ferri", template: "%s · Ferri" },
-  description: "Ferri is the open-source AI teammate for people who host community events. It plans with your crew, keeps your community up to date on Discord, Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK. Built on Switch.",
+  description:
+    "Ferri is the open-source AI teammate for people who host community events. With your crew, it keeps the plan, ships the site and posters, puts the event on Luma and tracks who's coming. With your community, it keeps everyone informed on Discord, Telegram, Slack and WhatsApp. Built on Switch.",
   icons: { icon: "/m/icon/96", apple: "/m/icon/180" },
   metadataBase: new URL(process.env.FERRI_PUBLIC_URL || "http://localhost:3100"),
   openGraph: {
     type: "website",
     siteName: "Ferri",
-    title: "Ferri: run the event, Ferri runs the group chats",
-    description: "The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app. Open source, built on Switch.",
-    images: [{ url: "/brand/og-image.png", width: 1200, height: 630, alt: "Ferri, a friendly sea otter: run the event, Ferri runs the group chats." }],
+    title: "Ferri: host the event, Ferri runs the rest",
+    description: "The AI teammate for people who host community events. It works with your crew inside and your community outside, on every app. Open source, built on Switch.",
+    images: [{ url: "/brand/og-image.png", width: 1200, height: 630, alt: "Ferri, a friendly sea otter. Host the event. Ferri runs the rest." }],
   },
   twitter: { card: "summary_large_image", images: ["/brand/og-image.png"] },
 };

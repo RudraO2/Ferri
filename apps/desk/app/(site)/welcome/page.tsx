@@ -21,16 +21,17 @@ import { AskButton, CopyCommand, PilingQuestions, RotatingWord } from "../_compo
 import { DEMO_DESK, DISCORD, GITHUB, SWITCH, TELEGRAM, VIDEO } from "../_components/links";
 import { Playground } from "../_components/playground";
 import { Stages } from "../_components/stages";
+import { Bridge } from "./bridge";
 import { HowItWorks } from "./how-it-works";
 import { Spine } from "./spine";
 
 export const metadata: Metadata = {
-  title: { absolute: "Ferri: run the event, Ferri runs the group chats" },
+  title: { absolute: "Ferri: host the event, Ferri runs the rest" },
   description:
-    "Ferri is the open-source AI teammate for people who host community events. It plans with your crew, keeps your community up to date on Discord, Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK. Built on Switch.",
+    "Ferri is the open-source AI teammate for people who host community events. With your crew, it keeps the plan, ships the site and posters, puts the event on Luma and tracks who's coming. With your community, it keeps everyone informed on Discord, Telegram, Slack and WhatsApp. Built on Switch.",
   openGraph: {
-    title: "Run the event. Ferri runs the group chats.",
-    description: "The AI teammate for people who host community events. It plans with your crew and keeps your community up to date on every app. Open source, built on Switch.",
+    title: "Host the event. Ferri runs the rest.",
+    description: "The AI teammate for people who host community events. It works with your crew inside and your community outside, on every app. Open source, built on Switch.",
   },
   // No twitter image here: X then uses this page's share image (opengraph-image.tsx), not the site-wide one.
   twitter: { card: "summary_large_image" },
@@ -114,62 +115,80 @@ export default function Welcome() {
           <span className="cloud top-[34%] right-[10%] h-[60px] w-[220px] [animation-delay:-20s]" />
         </div>
 
-        <div className="site-section text-center">
-          <div className="rise inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 py-1 pr-3.5 pl-1 text-[14px] font-medium text-zinc-700 shadow-[0_2px_12px_-6px_rgba(40,60,60,0.25)] backdrop-blur">
-            <FerriAvatar size={26} />
-            <span>
-              For people who host <RotatingWord words={EVENTS} className="font-semibold text-brand-ink" />
-            </span>
-          </div>
+        <div className="site-section grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10">
+          <div className="text-center lg:text-left">
+            <div className="rise inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 py-1 pr-3.5 pl-1 text-[14px] font-medium text-zinc-700 shadow-[0_2px_12px_-6px_rgba(40,60,60,0.25)] backdrop-blur">
+              <FerriAvatar size={26} />
+              <span>
+                The AI teammate for <RotatingWord words={EVENTS} className="font-semibold text-brand-ink" />
+              </span>
+            </div>
 
-          <h1 className="rise mx-auto mt-6 max-w-[1100px] text-zinc-900 [animation-delay:80ms]">
-            <span className="display block text-[clamp(44px,7.4vw,96px)]">Run the event.</span>
-            <span className="font-serif-display block text-[clamp(46px,7.8vw,102px)] leading-[1.02]">Ferri runs the group chats.</span>
-          </h1>
+            <h1 className="rise mt-6 text-zinc-900 [animation-delay:80ms]">
+              <span className="display block text-[clamp(44px,6.2vw,84px)]">Host the event.</span>
+              <span className="font-serif-display block text-[clamp(46px,6.6vw,92px)] leading-[1.02]">Ferri runs the rest.</span>
+            </h1>
 
-          <p className="rise mx-auto mt-6 max-w-[660px] text-[clamp(17px,1.5vw,19px)] leading-[1.6] text-zinc-600 [animation-delay:160ms]">
-            Ferri is the AI teammate between your crew and your community. It plans with the crew where they already talk, keeps the community up to date on Discord,
-            Telegram, Slack and WhatsApp, and posts each decision everywhere after one OK.
-          </p>
+            <p className="rise mx-auto mt-6 max-w-[600px] text-[clamp(16.5px,1.4vw,18.5px)] leading-[1.6] text-zinc-600 lg:mx-0 [animation-delay:160ms]">
+              Ferri works on both sides of your event. With your crew, it keeps the plan, ships the site and posters, puts the event on Luma and tracks who&apos;s coming.
+              With your community, it keeps everyone informed on Discord, Telegram, Slack and WhatsApp. Every decision reaches them after one OK.
+            </p>
 
-          <div className="rise mt-8 flex flex-wrap items-center justify-center gap-3 [animation-delay:240ms]">
-            <AskButton className="btn-primary h-[52px] px-7 text-[16px]">
-              Try it live <ArrowRight size={17} aria-hidden />
-            </AskButton>
-            <Link href="/start" className="btn h-[52px] px-7 text-[16px]">
-              Set it up free
-            </Link>
-            {VIDEO ? (
-              <a href={VIDEO} className="btn h-[52px] px-7 text-[16px]">
-                <CirclePlay size={17} aria-hidden /> Watch the video
+            <div className="rise mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start [animation-delay:240ms]">
+              <a href={DISCORD} className="btn-primary h-[52px] px-6 text-[16px]">
+                <PlatformLogo platform="discord" size={19} mono /> Ask Ferri on Discord
               </a>
-            ) : null}
+              <a href={TELEGRAM} className="btn-primary h-[52px] px-6 text-[16px]">
+                <PlatformLogo platform="telegram" size={19} mono /> Ask on Telegram
+              </a>
+            </div>
+            <div className="rise mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 lg:justify-start [animation-delay:300ms]">
+              <Link href="/start" className="btn h-11 px-5 text-[15px]">
+                Set it up free
+              </Link>
+              {VIDEO ? (
+                <a href={VIDEO} className="btn h-11 px-5 text-[15px]">
+                  <CirclePlay size={16} aria-hidden /> Watch the video
+                </a>
+              ) : null}
+              <AskButton className="rounded-sm text-[15px] font-medium text-brand-ink underline decoration-brand-line decoration-2 underline-offset-4 hover:decoration-brand">
+                or try it right here
+              </AskButton>
+            </div>
+            <ul className="rise mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13.5px] text-zinc-600 lg:justify-start [animation-delay:340ms]">
+              <li className="inline-flex items-center gap-1.5">
+                <Check size={15} className="text-brand" aria-hidden /> Live on Discord and Telegram now
+              </li>
+              <li className="inline-flex items-center gap-1.5">
+                <Check size={15} className="text-brand" aria-hidden /> Open source, MIT
+              </li>
+              <li className="inline-flex items-center gap-1.5">
+                <Check size={15} className="text-brand" aria-hidden /> Built on Switch
+              </li>
+            </ul>
           </div>
-          <ul className="rise mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13.5px] text-zinc-600 [animation-delay:300ms]">
-            <li className="inline-flex items-center gap-1.5">
-              <Check size={15} className="text-brand" aria-hidden /> No sign-up to try it
-            </li>
-            <li className="inline-flex items-center gap-1.5">
-              <Check size={15} className="text-brand" aria-hidden /> Open source, MIT
-            </li>
-            <li className="inline-flex items-center gap-1.5">
-              <Check size={15} className="text-brand" aria-hidden /> Built on Switch
-            </li>
-          </ul>
+
+          <div className="rise [animation-delay:200ms]">
+            <Bridge />
+          </div>
         </div>
 
-        {/* The playground: the product, live, in the hero */}
-        <div id="try" className="relative mx-auto mt-14 max-w-[1120px] scroll-mt-28 px-3 sm:mt-16 sm:px-6">
+        {/* The playground: a quick try in the browser; the live Discord and Telegram are the real demo */}
+        <div id="try" className="relative mx-auto mt-16 max-w-[1120px] scroll-mt-28 px-3 sm:mt-20 sm:px-6">
           <div className="sea-band top-[18%] bottom-[-8%]" aria-hidden />
-          <div className="pointer-events-none absolute -top-[86px] right-[4%] z-10 hidden w-[170px] sm:block lg:right-[6%] lg:w-[200px]" aria-hidden>
-            <FerriLoop name="hero-loop" width={220} height={220} priority className="w-full" />
-          </div>
-          <div className="hand pointer-events-none absolute -top-[54px] left-[5%] hidden -rotate-3 text-[26px] leading-tight text-zinc-700 md:block" aria-hidden>
-            Ask it anything about the event
-            <svg width="44" height="36" viewBox="0 0 44 36" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="mt-0.5 ml-10">
-              <path d="M4 3 C8 14 14 24 30 31" />
-              <path d="M30 31 l-10 1 M30 31 l-3 -9" />
-            </svg>
+          <div className="mx-auto mb-5 flex max-w-[760px] flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 px-2 text-center text-[14.5px] leading-snug text-zinc-600">
+            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12.5px] font-semibold text-zinc-800">Quick try</span>
+            <span>
+              A small copy of Ferri that runs in your browser. Ask as a member, then answer as the crew. The real Ferri is live on{" "}
+              <a href={DISCORD} className="font-medium text-brand-ink underline decoration-brand-line underline-offset-4 hover:decoration-brand">
+                Discord
+              </a>{" "}
+              and{" "}
+              <a href={TELEGRAM} className="font-medium text-brand-ink underline decoration-brand-line underline-offset-4 hover:decoration-brand">
+                Telegram
+              </a>
+              .
+            </span>
           </div>
           <div className="hand pointer-events-none absolute right-[3%] -bottom-[58px] hidden rotate-2 text-right text-[24px] leading-tight text-zinc-700 lg:block" aria-hidden>
             <svg width="44" height="36" viewBox="0 0 44 36" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="mb-0.5 ml-auto mr-28">

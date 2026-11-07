@@ -14,13 +14,23 @@ import { decide, NOTES, SUGGESTIONS, words, type Learned } from "./playground-kb
  */
 
 type App = "discord" | "telegram" | "slack" | "whatsapp";
-const APPS: { key: App; name: string; room: string; style: "rows" | "bubbles" }[] = [
-  { key: "discord", name: "Discord", room: "# build-night", style: "rows" },
-  { key: "telegram", name: "Telegram", room: "Lantern Build Night", style: "bubbles" },
-  { key: "slack", name: "Slack", room: "# build-night", style: "rows" },
-  { key: "whatsapp", name: "WhatsApp", room: "Build Night group", style: "bubbles" },
+/** Each app's own look comes from `.pg-app[data-app=...]` in globals.css: colours and CSS patterns only. */
+const APPS: { key: App; name: string; room: string; style: "rows" | "bubbles"; sub: string; placeholder: string }[] = [
+  { key: "discord", name: "Discord", room: "build-night", style: "rows", sub: "142 members · Ferri in Auto mode", placeholder: "Message #build-night as a member…" },
+  { key: "telegram", name: "Telegram", room: "Lantern Build Night", style: "bubbles", sub: "142 members · Ferri in Auto mode", placeholder: "Write a message as a member…" },
+  { key: "slack", name: "Slack", room: "build-night", style: "rows", sub: "142 members · Ferri in Auto mode", placeholder: "Message #build-night as a member…" },
+  { key: "whatsapp", name: "WhatsApp", room: "Build Night group", style: "bubbles", sub: "Meera, Arjun, Priya and 139 others", placeholder: "Type a message as a member…" },
 ];
 const OTHER_APP: Record<App, string> = { discord: "Telegram", telegram: "Discord", slack: "WhatsApp", whatsapp: "Slack" };
+
+/** Sender name colours in each app's own style (Slack keeps every name the same colour). */
+const NAME_COLORS: Record<App, Record<string, string>> = {
+  discord: { Meera: "#f0b232", You: "#00a8fc", Ferri: "#5fd3cb" },
+  telegram: { Meera: "#d14e5c", You: "#3a8fd6", Ferri: "#0e7c7b" },
+  slack: {},
+  whatsapp: { Meera: "#d3396d", You: "#1f7aec", Ferri: "#0e7c7b" },
+};
+const AVATAR_COLORS: Record<string, string> = { Meera: "#e07a5f", You: "#3d8bd9" };
 
 // Ferri's real holding reply (HOLDING_REPLY in packages/knowledge/src/answer.ts).
 const HOLD = "I don't have that yet. I'm checking with the team.";
@@ -220,56 +230,69 @@ export function Playground() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 px-4 pt-3 pb-1 text-[12px] text-zinc-500">
-            <PlatformLogo platform={app} size={14} />
-            <span className="font-semibold text-zinc-800">{a.room}</span>
-            <span>142 members, Ferri in Auto mode</span>
-          </div>
-
-          <div ref={chat} className={`h-[320px] space-y-3 overflow-y-auto px-4 py-3 sm:h-[350px] ${a.style === "bubbles" ? "pg-bubbles" : ""}`} role="log" aria-live="polite" aria-label="Messages">
-            {msgs.map((m) => (a.style === "rows" ? <Row key={m.id} m={m} app={app} /> : <Bubble key={m.id} m={m} />))}
-          </div>
-
-          <div className="border-t border-zinc-200 px-3 pt-2.5 pb-3">
-            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-              {(tried ? [{ label: `Ask again: ${tried}`, text: `@ferri ${tried.toLowerCase()}`, hint: "Ferri learned it" }, ...SUGGESTIONS.slice(0, 2)] : SUGGESTIONS).map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => ask(s.text)}
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium transition disabled:opacity-50 ${
-                    "hint" in s && s.hint === "Ferri learned it" ? "border-brand bg-brand-soft text-brand-ink" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50"
-                  }`}
-                  title={"hint" in s ? s.hint : undefined}
-                >
-                  {s.label}
-                </button>
-              ))}
+          <div className="pg-app flex min-h-0 flex-1 flex-col" data-app={app}>
+            <div className="pg-head flex items-center gap-2.5 px-4 py-2.5">
+              {a.style === "rows" ? (
+                <span className="pg-hash text-[20px] leading-none font-semibold" aria-hidden>
+                  #
+                </span>
+              ) : (
+                <span className="pg-group inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-[#fff]" aria-hidden>
+                  LB
+                </span>
+              )}
+              <div className="min-w-0 leading-tight">
+                <div className="pg-title truncate text-[14.5px] font-bold">{a.room}</div>
+                <div className="pg-sub truncate text-[11.5px]">{a.sub}</div>
+              </div>
+              <PlatformLogo platform={app} size={15} className="ml-auto" />
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                ask(text);
-              }}
-              className="flex items-center gap-2 rounded-[14px] border border-zinc-200 bg-zinc-50 py-1.5 pr-1.5 pl-3 focus-within:border-brand focus-within:ring-4 focus-within:ring-brand-soft"
-            >
-              <label htmlFor="ferri-ask-input" className="sr-only">
-                Ask Ferri a question about Lantern Build Night
-              </label>
-              <input
-                id="ferri-ask-input"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={`Message ${a.room} as a member…`}
-                autoComplete="off"
-                maxLength={200}
-                className="min-w-0 flex-1 bg-transparent text-[16px] text-zinc-900 outline-none placeholder:text-zinc-400 focus-visible:outline-none sm:text-[14.5px]"
-              />
-              <button type="submit" disabled={busy || !text.trim()} aria-label="Send" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-brand text-white transition disabled:opacity-40">
-                <ArrowUp size={16} aria-hidden />
-              </button>
-            </form>
+
+            <div ref={chat} className="pg-log h-[320px] space-y-3 overflow-y-auto px-4 py-3 sm:h-[350px]" role="log" aria-live="polite" aria-label="Messages">
+              {msgs.map((m) => (a.style === "rows" ? <Row key={m.id} m={m} app={app} /> : <Bubble key={m.id} m={m} app={app} />))}
+            </div>
+
+            <div className="pg-compose px-3 pt-2.5 pb-3">
+              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                {(tried ? [{ label: `Ask again: ${tried}`, text: `@ferri ${tried.toLowerCase()}`, hint: "Ferri learned it" }, ...SUGGESTIONS.slice(0, 2)] : SUGGESTIONS).map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => ask(s.text)}
+                    className={`pg-chip inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium transition disabled:opacity-50 ${
+                      "hint" in s && s.hint === "Ferri learned it" ? "is-learned" : ""
+                    }`}
+                    title={"hint" in s ? s.hint : undefined}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  ask(text);
+                }}
+                className="pg-input flex items-center gap-2 border py-1.5 pr-1.5 pl-3"
+              >
+                <label htmlFor="ferri-ask-input" className="sr-only">
+                  Ask Ferri a question about Lantern Build Night
+                </label>
+                <input
+                  id="ferri-ask-input"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={a.placeholder}
+                  autoComplete="off"
+                  maxLength={200}
+                  className="min-w-0 flex-1 bg-transparent text-[16px] outline-none focus-visible:outline-none sm:text-[14.5px]"
+                />
+                <button type="submit" disabled={busy || !text.trim()} aria-label="Send" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#0e7c7b] text-[#fff] transition disabled:opacity-40">
+                  <ArrowUp size={16} aria-hidden />
+                </button>
+              </form>
+            </div>
           </div>
         </section>
 
@@ -353,48 +376,54 @@ export function Playground() {
 }
 
 function Source({ s }: { s?: string }) {
-  return s ? <div className="mt-1 text-[11.5px] text-zinc-500">{s}</div> : null;
+  return s ? <div className="pg-muted mt-1 text-[11.5px]">{s}</div> : null;
 }
 
 function Typing() {
   return (
     <span className="inline-flex items-center gap-1 py-1" aria-label="Ferri is typing">
-      <span className="pg-dot h-1.5 w-1.5 rounded-full bg-zinc-400" />
-      <span className="pg-dot h-1.5 w-1.5 rounded-full bg-zinc-400 [animation-delay:150ms]" />
-      <span className="pg-dot h-1.5 w-1.5 rounded-full bg-zinc-400 [animation-delay:300ms]" />
+      <span className="pg-dot pg-typing h-1.5 w-1.5 rounded-full" />
+      <span className="pg-dot pg-typing h-1.5 w-1.5 rounded-full [animation-delay:150ms]" />
+      <span className="pg-dot pg-typing h-1.5 w-1.5 rounded-full [animation-delay:300ms]" />
     </span>
   );
 }
 
 function Blocked({ reason }: { reason: string }) {
   return (
-    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#fde8e8] px-2 py-0.5 text-[11px] font-semibold text-[#b42318]">
       <ShieldAlert size={12} aria-hidden /> Hidden by Shield: {reason}
     </div>
   );
 }
 
-/** Discord and Slack: flat rows with an avatar and a name. */
+/** A letter avatar in a fixed colour (the app's look does not follow the site's theme). */
+function Letter({ m, size, square = false }: { m: Msg; size: number; square?: boolean }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center font-semibold text-[#fff] ${square ? "rounded-[8px]" : "rounded-full"}`}
+      style={{ width: size, height: size, fontSize: size * 0.4, background: AVATAR_COLORS[m.who] ?? "#8a7f74" }}
+      aria-hidden
+    >
+      {m.who.charAt(0)}
+    </span>
+  );
+}
+
+/** Discord and Slack: flat rows with an avatar and a name, no bubbles. */
 function Row({ m, app }: { m: Msg; app: App }) {
+  const slack = app === "slack";
   return (
     <div className="hiw-pop flex items-start gap-2.5">
-      {m.ferri ? (
-        <FerriAvatar size={34} />
-      ) : (
-        <span className={`inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${m.you ? "bg-brand-soft text-brand-ink" : "bg-accent-soft text-zinc-800"}`}>
-          {m.who.charAt(0)}
-        </span>
-      )}
+      {m.ferri ? <FerriAvatar size={36} className={slack ? "rounded-[8px]!" : ""} /> : <Letter m={m} size={36} square={slack} />}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[13px]">
-          <span className={`font-semibold ${m.ferri ? "text-brand-ink" : "text-zinc-900"}`}>{m.who}</span>
-          {m.ferri ? <span className="rounded bg-[#5865f2] px-1 text-[9.5px] leading-[15px] font-bold text-white">{app === "slack" ? "APP" : "BOT"}</span> : null}
+        <div className="flex items-center gap-1.5 text-[14px]">
+          <span className="pg-name font-bold" style={{ color: NAME_COLORS[app][m.who] }}>
+            {m.who}
+          </span>
+          {m.ferri ? <span className={slack ? "pg-tag-slack" : "pg-tag-discord"}>APP</span> : null}
         </div>
-        {m.typing ? (
-          <Typing />
-        ) : (
-          <div className={`text-[14px] leading-snug ${m.blocked ? "text-zinc-400 line-through" : "text-zinc-800"}`}>{m.text}</div>
-        )}
+        {m.typing ? <Typing /> : <div className={`text-[14.5px] leading-snug ${m.blocked ? "pg-muted line-through" : "pg-text"}`}>{m.text}</div>}
         {m.blocked ? <Blocked reason={m.blocked} /> : null}
         <Source s={m.source} />
       </div>
@@ -402,18 +431,19 @@ function Row({ m, app }: { m: Msg; app: App }) {
   );
 }
 
-/** Telegram and WhatsApp: bubbles, yours on the right. */
-function Bubble({ m }: { m: Msg }) {
+/** Telegram and WhatsApp: bubbles with tails, yours on the right. */
+function Bubble({ m, app }: { m: Msg; app: App }) {
+  const avatars = app === "telegram";
   return (
-    <div className={`hiw-pop flex ${m.you ? "justify-end" : "justify-start"} items-end gap-1.5`}>
-      {m.ferri ? <FerriAvatar size={26} /> : null}
-      <div
-        className={`max-w-[82%] rounded-[16px] px-3 py-2 shadow-[0_1px_0_var(--n-200)] ${
-          m.you ? "rounded-br-[5px] bg-brand-soft" : "rounded-bl-[5px] bg-white"
-        }`}
-      >
-        {!m.you ? <div className={`text-[12px] font-semibold ${m.ferri ? "text-brand-ink" : "text-[#c2410c]"}`}>{m.who}</div> : null}
-        {m.typing ? <Typing /> : <div className={`text-[14px] leading-snug ${m.blocked ? "text-zinc-400 line-through" : "text-zinc-900"}`}>{m.text}</div>}
+    <div className={`hiw-pop flex ${m.you ? "justify-end" : "justify-start"} items-end gap-2`}>
+      {avatars && !m.you ? m.ferri ? <FerriAvatar size={30} /> : <Letter m={m} size={30} /> : null}
+      <div className={`pg-bubble max-w-[80%] px-3 py-1.5 ${m.you ? "is-out" : "is-in"}`}>
+        {!m.you ? (
+          <div className="text-[12.5px] font-semibold" style={{ color: NAME_COLORS[app][m.who] }}>
+            {m.who}
+          </div>
+        ) : null}
+        {m.typing ? <Typing /> : <div className={`text-[14.5px] leading-snug ${m.blocked ? "pg-muted line-through" : ""}`}>{m.text}</div>}
         {m.blocked ? <Blocked reason={m.blocked} /> : null}
         <Source s={m.source} />
       </div>
