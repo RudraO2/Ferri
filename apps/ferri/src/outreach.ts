@@ -285,7 +285,7 @@ export function createOutreach(deps: OutreachDeps) {
     if (contact.status === "prospect") await setContactStatus(db, contact.id, "drafted");
     const { platform } = await deps.room(crewRoomId);
     const who = owners.map((o) => mention(o, platform)).join(" ") || "Crew";
-    await loop.post(m.communityId, crewRoomId, `${who}, ${theirs ? "a reply to" : "an email to"} ${contact.org} needs your OK: “${subject}”. It's on the card above.`);
+    await loop.post(m.communityId, crewRoomId, `${who}, ${theirs ? "a reply to" : "an email to"} ${contact.org} needs your OK: “${subject}”. It's on the card in this room.`);
     const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (opened) loop.pocketNotify("open", opened, owners.map((o) => o.id), { roomName: contact.org });
     log(`outreach: card ${id} for an email to ${contact.org} <${contact.email}>`);

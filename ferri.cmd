@@ -51,6 +51,7 @@ exit /b %ERRORLEVEL%
 
 :ensure_image
 if "%FERRI_BUILD%"=="1" (docker compose --profile cli build ferri-cli && exit /b 0 || exit /b 1)
+echo Getting Ferri's image ^(about 350 MB the first time, quick after that^) ...
 docker compose --profile cli pull --quiet ferri-cli >nul 2>nul
 if errorlevel 1 (
   echo Ferri's image is not published for this version yet; building it from this checkout ^(a few minutes, once^).

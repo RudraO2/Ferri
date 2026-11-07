@@ -33,7 +33,10 @@ cli() { dc run --rm --no-deps $(tty_flag) -e ANTHROPIC_API_KEY ferri-cli "$@"; }
 ensure_image() {
   if [ "${FERRI_BUILD:-0}" = "1" ]; then
     dc --profile cli build ferri-cli
-  elif ! dc --profile cli pull --quiet ferri-cli >/dev/null 2>&1; then
+    return
+  fi
+  say "Getting Ferri's image (about 350 MB the first time, quick after that) ..."
+  if ! dc --profile cli pull --quiet ferri-cli >/dev/null 2>&1; then
     say "Ferri's image is not published for this version yet; building it from this checkout (a few minutes, once)."
     dc --profile cli build ferri-cli
   fi

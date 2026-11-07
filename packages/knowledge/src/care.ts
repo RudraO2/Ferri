@@ -201,8 +201,8 @@ export function careLine(input: { c: Pick<CareCase, "number" | "kind" | "severit
   const tail = input.builder
     ? ` The Builder is helping ${c.personName} there now; ${input.owner ? `${input.owner}, it stays yours if it needs a person` : "it needs an owner if it needs a person"}.`
     : input.owner
-      ? ` ${input.owner}, it's yours: pick an option on the card above, or tell me "@ferri I've got case ${c.number}".`
-      : " Whoever can, take it on the card above.";
+      ? ` ${input.owner}, it's yours: pick an option on the card in this room, or tell me "@ferri I've got case ${c.number}".`
+      : " Whoever can, take it on the card in this room.";
   return `${c.severity === "high" ? "Urgent: " : ""}${caseRef(c)} · ${c.kind} · ${c.personName} in ${input.roomName}: ${c.reason}${tail}`;
 }
 

@@ -34,7 +34,7 @@ Start with `./ferri doctor` (Windows: `.\ferri doctor` in PowerShell, `ferri doc
 - **Fix**: remove the folder with `rmdir .env`, then run `./ferri up`. It creates the file and fills it.
 
 ### The first `./ferri up` takes several minutes
-- **Cause**: the first start downloads about 3 GB (Switch, Mattermost, Postgres). If it cannot pull one of Ferri's two images, it also builds that image: Ferri's from the checkout ("building it from this checkout (a few minutes, once)"), Switch's core from our Switch fork ("building it from the Switch fork on GitHub (a few minutes, once)").
+- **Cause**: the first start downloads about 1.2 GB (Switch, Mattermost, Postgres, Ferri): about 5 minutes on a 50 Mbit/s line. If it cannot pull one of Ferri's two images, it also builds that image: Ferri's from the checkout ("building it from this checkout (a few minutes, once)"), Switch's core from our Switch fork ("building it from the Switch fork on GitHub (a few minutes, once)").
 - **Fix**: nothing to fix. Later starts take seconds.
 
 ### "pull access denied", "denied" or "unauthorized" for a ghcr.io image

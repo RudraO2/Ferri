@@ -375,7 +375,7 @@ export function createLaunch(deps: LaunchDeps) {
         : edit
           ? `${v.proposedBy} wants to change the announcement “${a.title}” everywhere it went. The new version needs your OK.`
           : `an announcement needs your OK: “${v.title}” (${where}${a.scheduledAt ? `, at ${formatWhen(a.scheduledAt, tz)}` : ""}).`;
-    await loop.post(a.communityId, crewRoomId, `${who}, ${ask} It's on the card above.`);
+    await loop.post(a.communityId, crewRoomId, `${who}, ${ask} It's on the card in this room.`);
     const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (opened) loop.pocketNotify("open", opened, route.owners.map((o) => o.id), { roomName: plural(targets.length, "space", "spaces") });
     log(`announcement ${a.id}: card ${id} for version ${v.version} opened for ${route.owners.map((o) => o.name).join(", ") || "the crew"}`);

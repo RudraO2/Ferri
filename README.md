@@ -47,14 +47,14 @@ On Windows, the last command is `.\ferri up` in PowerShell, or `ferri up` in cmd
 ### Requirements
 
 - Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.22 or newer (Linux).
-- About 4 GB of free RAM (8 GB is comfortable) and about 8 GB of disk.
+- About 4 GB of free RAM (the running stack uses about 1 GB; 8 GB is comfortable) and about 8 GB of disk.
 - An Anthropic API key: platform.claude.com, Settings, API keys, Create key, with one workspace picked for it ([docs/accounts.md](docs/accounts.md) says why).
 - Nothing else: no Node, no Switch checkout.
 
 ### What `./ferri up` does
 
 1. Asks for the Anthropic key once and generates every other secret into `.env`.
-2. Pulls the images. If it cannot pull one of Ferri's two images, it builds it: Ferri's from the checkout, Switch's core from our Switch fork at a pinned commit. The first run downloads about 3 GB and takes several minutes.
+2. Pulls the images. If it cannot pull one of Ferri's two images, it builds it: Ferri's from the checkout, Switch's core from our Switch fork at a pinned commit. The first run downloads about 1.2 GB: about 5 minutes on a 50 Mbit/s line (77 seconds on a fresh GitHub runner, where our "Quick start" check runs it on every push). Later starts take about 20 seconds.
 3. Starts Switch (core, dashboard, Postgres), Mattermost, Ferri's Postgres, Ferri and Desk, and waits until they are healthy.
 4. Registers Ferri in Switch (a personal agent key, open addressing), creates the rooms `ferri-lab` and `ferri-crew`, the test people `meera`, `arjun` (members) and `priya` (crew), and loads the demo community Lantern Labs and its event, Lantern Build Night.
 5. Prints the addresses, the logins and three messages to try.
@@ -81,7 +81,7 @@ In Mattermost:
 
 1. In `ferri-lab`, say `@ferri when does hacking start?`. Ferri answers with the time and a Source line.
 2. In `ferri-lab`, say `@ferri can I bring my dog?`. The demo knowledge does not cover it, so Ferri says it is checking with the crew, and a question card opens in `ferri-crew`.
-3. In `ferri-crew`, answer the card with a button, or type `A1 "Yes, dogs are welcome"`. Ferri answers the asker in `ferri-lab` and remembers it, so the next person gets the answer at once.
+3. In `ferri-crew`, type `A1 "Yes, dogs are welcome"`, with the code the card shows (in Mattermost the card's one button, "Don't answer this one", declines it). Ferri answers the asker in `ferri-lab` and remembers it, so the next person gets the answer at once.
 
 Also try `does anyone know the wifi password?` in `ferri-lab`, with no mention. Ferri waits a short moment so a person can answer first, then answers with its source.
 

@@ -460,7 +460,7 @@ export async function runDoctor(env: Env = process.env, deps: DoctorDeps = {}): 
     // Posters (spec 13)
     (async (): Promise<DoctorCheck> => {
       const key = env.OPENAI_API_KEY?.trim();
-      if (!key) return integ("posters", "Posters", "off", "No OPENAI_API_KEY: posters use the kit's own background.", `Set OPENAI_API_KEY in .env, then ${cmd} builder:setup`);
+      if (!key) return integ("posters", "Posters", "off", "No OPENAI_API_KEY: posters use the kit's own background.", "Set OPENAI_API_KEY in .env, then pnpm builder:setup on the Builder's machine");
       return optional({ id: "posters", name: "Posters", status: "broken", detail: "OpenAI could not be reached.", next: null }, async () => {
         const r = await get("https://api.openai.com/v1/models", { headers: { authorization: `Bearer ${key}` } });
         if (r.status === 401 || r.status === 403) return integ("posters", "Posters", "broken", `OpenAI refused OPENAI_API_KEY (HTTP ${r.status}).`, "Put a valid OPENAI_API_KEY in .env.");

@@ -426,7 +426,7 @@ export function createGuests(deps: GuestsDeps) {
       return;
     }
     const { platform } = await deps.room(crewRoomId);
-    await loop.post(ev.communityId, crewRoomId, `${route.owners.map((o) => mention(o, platform)).join(" ") || "Crew"}, a spot is free for ${ev.name}${freed ? ` (${freed.name} can't come)` : ""}. Offer it to ${next.name}, first on the waitlist? It's on the card above.`);
+    await loop.post(ev.communityId, crewRoomId, `${route.owners.map((o) => mention(o, platform)).join(" ") || "Crew"}, a spot is free for ${ev.name}${freed ? ` (${freed.name} can't come)` : ""}. Offer it to ${next.name}, first on the waitlist? It's on the card in this room.`);
     const [row] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (row) loop.pocketNotify("open", row, route.owners.map((o) => o.id), { roomName: ev.name });
     log(`guests: spot card ${id} for ${next.name} (${ev.name})`);
@@ -612,7 +612,7 @@ export function createGuests(deps: GuestsDeps) {
     await db.update(guestSends).set({ subject, text, total: people.length, status: "waiting", cardId: id, updatedAt: new Date() }).where(eq(guestSends.id, s.id));
     const { platform } = await deps.room(crewRoomId);
     const who = owners.map((o) => mention(o, platform)).join(" ") || "Crew";
-    await loop.post(ev.communityId, crewRoomId, `${who}, the ${SEND_KIND_LABEL[s.kind]} for ${ev.name} (${plural(people.length, "guest", "guests")}, ${when}) needs your OK: “${subject}”. It's on the card above.`);
+    await loop.post(ev.communityId, crewRoomId, `${who}, the ${SEND_KIND_LABEL[s.kind]} for ${ev.name} (${plural(people.length, "guest", "guests")}, ${when}) needs your OK: “${subject}”. It's on the card in this room.`);
     const [row] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (row) loop.pocketNotify("open", row, owners.map((o) => o.id), { roomName: ev.name });
     log(`guests: card ${id} for the ${s.kind} to ${people.length} guests of ${ev.name}`);

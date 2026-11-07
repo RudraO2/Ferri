@@ -247,7 +247,7 @@ function summary(): void {
       "     Ferri answers with the time and its source.",
       "  2. In ferri-lab:   @ferri can I bring my dog?",
       "     Ferri does not know, says it is asking the crew, and opens a card in ferri-crew.",
-      '  3. In ferri-crew:  answer the card (a button, or type A1 "Yes, dogs are welcome")',
+      '  3. In ferri-crew:  type A1 "Yes, dogs are welcome" (the code the card shows)',
       "     Ferri answers the asker in ferri-lab and remembers it for next time.",
       "",
     );

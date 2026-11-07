@@ -192,7 +192,7 @@ export async function applySeedSpaces(db: Db, requests: SeedSpaceRequest[]): Pro
   for (const r of requests) {
     const [space] = await db.select().from(spaces).where(eq(spaces.name, r.room)).limit(1);
     if (!space) {
-      done.push(`${r.room}: not found (is Ferri in that room?)`);
+      done.push(`${r.room}: skipped, no such room on this install yet (connect its platform and add Ferri, then attach it in Desk)`);
       continue;
     }
     const [current] = await db

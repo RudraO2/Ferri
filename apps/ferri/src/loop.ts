@@ -320,7 +320,7 @@ export function createLoop(deps: LoopDeps) {
         : route.reason === "on_duty"
           ? "you're on duty, a question for you"
           : "a question for the crew";
-    await post(kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, ${why}: “${prep.question}” (${input.askerName} in ${input.roomName}). It's on the card above.`);
+    await post(kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, ${why}: “${prep.question}” (${input.askerName} in ${input.roomName}). It's on the card in this room.`);
     const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (opened) pocketNotify("open", opened, route.owners.map((o) => o.id), { waiting: 1, askerName: input.askerName, roomName: input.roomName });
     log(`card ${id} opened in ${crewRoomId} for ${route.owners.map((o) => o.name).join(", ") || "the crew"} (${route.reason}): "${prep.question}"`);
@@ -401,7 +401,7 @@ export function createLoop(deps: LoopDeps) {
       return null;
     }
     const who = route.owners.map((o) => mention(o, platform));
-    await post(input.kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, a reply in ${input.roomName} is waiting for your OK. It's on the card above.`);
+    await post(input.kb.community.id, crewRoomId, `${who.join(" ") || "Crew"}, a reply in ${input.roomName} is waiting for your OK. It's on the card in this room.`);
     const [opened] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (opened) pocketNotify("open", opened, route.owners.map((o) => o.id), { askerName: input.askerName, roomName: input.roomName });
     log(`reply card ${id} opened for question ${input.questionId}`);

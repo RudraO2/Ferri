@@ -455,7 +455,7 @@ export function createDesks(deps: DesksDeps) {
       return { ok: false, text: "I couldn't open the desk card in the crew room." };
     }
     const { platform } = await deps.room(crewRoomId);
-    await loop.post(ev.communityId, crewRoomId, `${route.owners.map((o) => mention(o, platform)).join(" ") || "Crew"}, ${input.question.charAt(0).toLowerCase()}${input.question.slice(1)} It's on the card above.`);
+    await loop.post(ev.communityId, crewRoomId, `${route.owners.map((o) => mention(o, platform)).join(" ") || "Crew"}, ${input.question.charAt(0).toLowerCase()}${input.question.slice(1)} It's on the card in this room.`);
     const [row] = await db.select().from(cards).where(eq(cards.id, id)).limit(1);
     if (row) loop.pocketNotify("open", row, route.owners.map((o) => o.id), { roomName: ev.name });
     log(`desks: card ${id} for ${input.title}`);

@@ -265,7 +265,7 @@ export function createSocial(deps: SocialDeps) {
     }
     const { platform } = await deps.room(crewRoomId);
     const who = route.owners.map((o) => mention(o, platform)).join(" ") || "Crew";
-    await loop.post(input.communityId, crewRoomId, `${who}, a social post needs your OK: “${draft.title}” on ${where}. It's on the card above.`);
+    await loop.post(input.communityId, crewRoomId, `${who}, a social post needs your OK: “${draft.title}” on ${where}. It's on the card in this room.`);
     const [opened] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
     if (opened) loop.pocketNotify("open", opened, route.owners.map((o) => o.id), { roomName: where });
     log(`social: card ${cardId} for ${targets.length} channel(s) "${draft.title}"${image ? " with the poster" : ""}`);
