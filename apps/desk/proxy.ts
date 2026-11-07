@@ -31,6 +31,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Pocket's sign-in, service worker, manifest and icons load without a session,
   // guests' own RSVP pages (/rsvp/<code>, spec 17), the public landing page and the
-  // character art (/welcome and /brand, spec 24).
-  matcher: ["/((?!login|api/site|api/email|rsvp/|welcome|brand/|m/login|m/sw\\.js|m/manifest\\.webmanifest|m/icon|m/splash|_next/|favicon.ico).*)"],
+  // character art and design system (/welcome, /brand, /design; spec 24).
+  matcher: ["/((?!login|api/site|api/email|rsvp/|welcome|design|brand/|m/login|m/sw\\.js|m/manifest\\.webmanifest|m/icon|m/splash|_next/|favicon.ico).*)"],
 };

@@ -412,7 +412,8 @@ async function fill() {
       name: `${first} ${last}`,
       sources: [i % 3 ? "site" : "luma"],
       status,
-      code: `${MARK}${i}-${Math.floor(rand() * 1e9).toString(36)}`,
+      // RSVP codes are letters and digits only (the public /rsvp/<code> page checks that).
+      code: `demo${String(i).padStart(2, "0")}${Math.floor(rand() * 1e9).toString(36)}`,
       registeredAt: minutesAgo(60 * 24 * (1 + (i % 9))),
       confirmedAt: status === "going" && i % 2 ? minutesAgo(60 * (2 + (i % 20))) : null,
       checkedInAt: status === "going" && i < 41 ? minutesAgo(30 + i * 9) : null,
