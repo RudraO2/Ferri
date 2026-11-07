@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarCheck, Flag, Hammer, Megaphone, Play, Radio } from "lucide-react";
-import { Ferri, FerriLogo, FerriAvatar } from "@/components/ferri";
+import { Art, Ferri, FerriAvatar, FerriLogo, FerriLoop } from "@/components/ferri";
 import { PlatformLogo } from "@/components/platform";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HowItWorks } from "./how-it-works";
@@ -101,7 +101,7 @@ export default function Welcome() {
           </div>
           <div className="relative flex justify-center">
             <div className="absolute inset-x-6 bottom-6 h-24 rounded-[50%] bg-brand-soft blur-2xl" aria-hidden />
-            <Ferri pose="main" size={420} alive priority className="relative h-auto w-[min(420px,80vw)]" />
+            <FerriLoop name="hero-loop" width={460} height={460} priority alt="Ferri, a friendly sea otter, floating with a message card" className="relative w-[min(460px,84vw)]" />
             <div className="hand absolute top-2 left-0 -rotate-6 text-[28px] leading-none text-zinc-800 sm:text-[32px]">
               Ferri.
               <br />
@@ -130,11 +130,25 @@ export default function Welcome() {
         {/* How it works */}
         <section id="how" className="scroll-mt-24 border-y border-zinc-200 bg-zinc-100/60 py-20">
           <div className="mx-auto max-w-[1160px] px-5 sm:px-8">
-            <div className="mb-10 max-w-[720px]">
+            <div className="mb-8 max-w-[720px]">
               <div className="mb-3 text-[13px] font-semibold tracking-[0.1em] text-brand-ink uppercase">How it works</div>
               <h2 className="display text-[clamp(34px,4.6vw,56px)] text-zinc-900">
                 The crew inside. The community outside. <span className="text-brand">Ferri carries it across.</span>
               </h2>
+            </div>
+            <div className="mb-10 grid grid-cols-[1fr_1.3fr_1fr] items-end gap-2 sm:gap-6" aria-hidden>
+              <figure className="text-center">
+                <Art name="shore-community" width={360} height={270} />
+                <figcaption className="hand mt-1 text-[20px] text-zinc-700 sm:text-[24px]">the community</figcaption>
+              </figure>
+              <div className="relative self-center">
+                <div className="absolute inset-x-0 top-[62%] h-[3px] rounded-full bg-[repeating-linear-gradient(90deg,var(--brand)_0_14px,transparent_14px_26px)] opacity-40" />
+                <FerriLoop name="carry-loop" fallback="carry" width={480} height={240} className="relative w-full" />
+              </div>
+              <figure className="text-center">
+                <Art name="shore-crew" width={360} height={270} />
+                <figcaption className="hand mt-1 text-[20px] text-zinc-700 sm:text-[24px]">the crew</figcaption>
+              </figure>
             </div>
             <HowItWorks />
           </div>
@@ -153,7 +167,7 @@ export default function Welcome() {
                 added two things Ferri needed.
               </p>
             </div>
-            <span className="hidden lg:block"><Ferri pose="main" size={150} decorative /></span>
+            <span className="hidden lg:block"><Ferri pose="switch" size={220} decorative /></span>
           </div>
           <Spine />
         </section>
@@ -168,6 +182,9 @@ export default function Welcome() {
             <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {STAGES.map((s, i) => (
                 <li key={s.name} className="card flex flex-col p-5">
+                  <div className="-mx-2 -mt-2 mb-1 flex justify-center rounded-[16px] bg-brand-soft/60">
+                    <Art name={s.art} width={180} height={180} className="w-[150px]" />
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] bg-brand-soft text-brand">
                       <s.icon size={18} aria-hidden />

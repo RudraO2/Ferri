@@ -50,6 +50,11 @@ Community groups often live on WhatsApp, and the Switch release we build on had 
 
 ## How it fits together
 
+<p align="center"><img src="images/how-it-fits.png" alt="How Ferri fits together: five chat apps, Switch as the spine, the Ferri service with Shield, Ferri Builder, Claude, outside services, Postgres, and Desk and Pocket." width="900"></p>
+
+<details>
+<summary>The same picture as text</summary>
+
 ```
  Discord   Slack   Telegram   Mattermost   WhatsApp (WAHA sidecar)    members and crew, on their own apps
     \        |        |          /           /
@@ -81,6 +86,8 @@ Community groups often live on WhatsApp, and the Switch release we build on had 
         |
   Desk (Next.js)  +  Ferri Pocket (PWA at /m, Web Push)  +  public /rsvp/<code>
 ```
+
+</details>
 
 ## The Docker stack
 

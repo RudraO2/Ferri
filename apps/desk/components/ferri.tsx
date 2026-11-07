@@ -49,11 +49,14 @@ export function BrandProvider({ files, children }: { files: string[]; children: 
   return <BrandFiles.Provider value={new Set(files)}>{children}</BrandFiles.Provider>;
 }
 
-/** False when the server says this pose's file is not there yet. */
-function useHasPose(pose: Pose) {
+/** False when the server says this art file is not there yet. */
+function useHasArt(name: string) {
   const files = useContext(BrandFiles);
-  return files ? files.has(`ferri-${pose}`) : true;
+  return files ? files.has(name) : true;
 }
+const useHasPose = (pose: Pose) => useHasArt(`ferri-${pose}`);
+
+export const artSrc = (name: string, ext = "png") => `/brand/src/${name}.${ext}`;
 
 /**
  * True once the image failed. An image can fail before React hydrates (onError never
@@ -103,10 +106,11 @@ export function Ferri({
   );
 }
 
-/** Round profile picture: Ferri on a soft sea-glass disc. */
-export function FerriAvatar({ size = 40, pose = "main", className = "" }: { size?: number; pose?: Pose; className?: string }) {
+/** Round profile picture: Ferri's face on a soft sea-glass disc (the same picture every app shows). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function FerriAvatar({ size = 40, pose, className = "" }: { size?: number; pose?: Pose; className?: string }) {
   const { ref, missing: failed, onError } = useMissing();
-  const has = useHasPose(pose);
+  const has = useHasArt("ferri-face");
   const missing = failed || !has;
   return (
     <span
@@ -119,7 +123,7 @@ export function FerriAvatar({ size = 40, pose = "main", className = "" }: { size
           F
         </span>
       ) : (
-        <Image ref={ref} src={poseSrc(pose)} alt="" width={size} height={size} className="scale-[1.18]" draggable={false} onError={onError} />
+        <Image ref={ref} src={artSrc("ferri-face")} alt="" width={size} height={size} draggable={false} onError={onError} />
       )}
     </span>
   );
@@ -128,7 +132,7 @@ export function FerriAvatar({ size = 40, pose = "main", className = "" }: { size
 /** Square logo tile: Ferri on the brand colour. */
 export function FerriMark({ size = 32, className = "" }: { size?: number; className?: string }) {
   const { ref, missing: failed, onError } = useMissing();
-  const has = useHasPose("main");
+  const has = useHasArt("ferri-face");
   const missing = failed || !has;
   return (
     <span
@@ -141,7 +145,7 @@ export function FerriMark({ size = 32, className = "" }: { size?: number; classN
           F
         </span>
       ) : (
-        <Image ref={ref} src={poseSrc("main")} alt="" width={size} height={size} className="scale-[1.12]" draggable={false} onError={onError} />
+        <Image ref={ref} src={artSrc("ferri-face")} alt="" width={size} height={size} className="translate-y-[6%] scale-[1.08]" draggable={false} onError={onError} />
       )}
     </span>
   );
@@ -157,6 +161,30 @@ export function FerriLogo({ size = 30, label = "Ferri", sub }: { size?: number; 
         {sub ? <span className="mt-1 block text-[11.5px] text-zinc-500">{sub}</span> : null}
       </span>
     </span>
+  );
+}
+
+/** Any other illustration in public/brand/src (stage art, shores), with the same placeholder. */
+export function Art({ name, width, height, alt = "", className = "", priority = false }: { name: string; width: number; height: number; alt?: string; className?: string; priority?: boolean }) {
+  const { ref, missing, onError } = useMissing();
+  const has = useHasArt(name);
+  if (missing || !has) return <Placeholder size={Math.min(width, height)} className={className} />;
+  return <Image ref={ref} src={artSrc(name)} alt={alt} width={width} height={height} priority={priority} className={`h-auto max-w-full select-none ${className}`} draggable={false} onError={onError} />;
+}
+
+/**
+ * An animated loop (animated WebP made from the artist's GIF). People who turn off
+ * motion get its still frame instead. Falls back to a pose while the loop is missing.
+ */
+export function FerriLoop({ name, fallback = "main", width, height, alt = "", className = "", priority = false }: { name: string; fallback?: Pose; width: number; height: number; alt?: string; className?: string; priority?: boolean }) {
+  const has = useHasArt(name);
+  if (!has) return <Ferri pose={fallback} size={Math.max(width, height)} decorative={!alt} priority={priority} className={className} />;
+  return (
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcSet={artSrc(`${name}-still`)} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={artSrc(name, "webp")} alt={alt} width={width} height={height} fetchPriority={priority ? "high" : undefined} className={`h-auto max-w-full select-none ${className}`} draggable={false} />
+    </picture>
   );
 }
 

@@ -1,5 +1,7 @@
 # Ferri
 
+<p align="center"><img src="docs/images/ferri-hero.png" alt="Ferri, a friendly sea otter: every question, answered once." width="760"></p>
+
 **The AI teammate for people who run community events.** Ferri answers your community on every platform, asks your crew only when it does not know, and turns what the crew decides into an update everywhere after one OK.
 
 [![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml)
@@ -118,6 +120,16 @@ Everything else, from ".env is a folder" to starting over, is in [docs/troublesh
 
 Built on [Switch](https://github.com/sandbox-quantum/switch) for the WeMakeDevs "Flip the Switch" hackathon (Track 1, best business workflow). Built by voice with Wispr Flow.
 
+<p align="center"><img src="docs/images/how-it-works.gif" alt="Two people ask on Telegram and Slack; Ferri asks the crew once; one answer reaches both, with its source." width="820"></p>
+
+<table>
+<tr>
+<td width="68%"><img src="docs/images/desk-overview.png" alt="Desk's Overview: the share of questions Ferri answered alone climbs by hour, questions per app, open cards, care cases, Shield blocks and a live feed."></td>
+<td width="32%"><img src="docs/images/pocket-card.png" alt="Ferri Pocket on a phone: a member's question, Ferri's holding reply and one big answer box."></td>
+</tr>
+<tr><td align="center">Desk, the crew's control room</td><td align="center">Pocket, the crew's phone app</td></tr>
+</table>
+
 It covers the whole life of an event, from the crew's first chat to the starter kit for the next one: answers with sources on Mattermost, Slack, Discord, Telegram and WhatsApp; a living plan; announcements edited in place everywhere; care cases for members who are stuck or upset; the guest list and RSVPs; posts on LinkedIn, X and Instagram through Buffer; desks for judging, check-in and help, with live sheets; a recap and a starter kit at the end; and a coding agent, Ferri Builder, that Switch runs to ship the event site, posters and listings. Every step that reaches people outside waits for one OK on a Switch card.
 
 ### The problem
@@ -164,6 +176,8 @@ Ferri is one agent that works in two directions, with a bridge between them.
 | Shield: safety on every message | [docs/shield.md](docs/shield.md) |
 
 ## How it is built
+
+<p align="center"><img src="docs/images/how-it-fits.png" alt="How Ferri fits together: five chat apps, Switch as the spine (rooms, cards, Trust, templates, managed agents, budgets, plus our agent message edit and WhatsApp bridge), the Ferri service with Shield, Ferri Builder, Claude, outside services, Postgres, and Desk and Pocket." width="820"></p>
 
 Ferri does not work without Switch. Every group on every platform is a Switch room, Ferri is one Switch agent in all of them, every approval is a Switch card, and every message passes Switch Trust. The full table of the Switch features Ferri uses, the diagram, the Docker stack and the repository layout are in [docs/architecture.md](docs/architecture.md).
 

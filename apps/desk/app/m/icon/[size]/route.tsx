@@ -6,9 +6,9 @@ const SIZES = new Set([32, 48, 96, 144, 180, 192, 256, 512, 1024]);
 const BRAND = "#0e7c7b";
 const SKY = "#d3f0ec";
 
-async function ferriPng(): Promise<string | null> {
+async function ferriPng(name: string): Promise<string | null> {
   try {
-    const file = await readFile(path.join(process.cwd(), "public", "brand", "src", "ferri-main.png"));
+    const file = await readFile(path.join(process.cwd(), "public", "brand", "src", name));
     return `data:image/png;base64,${file.toString("base64")}`;
   } catch {
     return null;
@@ -27,8 +27,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ size
   const q = new URL(request.url).searchParams;
   const maskable = q.has("maskable");
   const avatar = q.has("avatar");
-  const png = await ferriPng();
-  const inner = Math.round(size * (maskable ? 0.72 : avatar ? 0.9 : 0.94));
+  // The face crop is cut at its edges, so it fills the whole tile (the platform's circle
+  // or the icon's rounded corners trim it). A maskable icon must keep its art inside the
+  // middle 80%, so it shows the whole otter instead.
+  const png = await ferriPng(maskable ? "ferri-main.png" : "ferri-face.png");
+  const inner = maskable ? Math.round(size * 0.72) : size;
   return new ImageResponse(
     (
       <div
@@ -43,7 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ size
       >
         {png ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={png} width={inner} height={inner} alt="" style={{ marginTop: avatar ? size * 0.04 : 0 }} />
+          <img src={png} width={inner} height={inner} alt="" />
         ) : (
           <div style={{ display: "flex", color: avatar ? BRAND : "#ffffff", fontSize: size * 0.56, fontWeight: 800 }}>F</div>
         )}

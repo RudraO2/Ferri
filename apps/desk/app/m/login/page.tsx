@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useActionState } from "react";
 import { signIn } from "../../login/actions";
-import { Ferri } from "@/components/ferri";
+import { FerriLoop } from "@/components/ferri";
 
 function Form() {
   const next = useSearchParams().get("next") || "/m";
@@ -39,7 +39,7 @@ export default function PocketLogin() {
   return (
     <main className="flex min-h-dvh flex-col justify-center px-6 pt-[env(safe-area-inset-top)] pb-16">
       <div className="mb-8 flex flex-col items-center text-center">
-        <Ferri pose="wave" size={150} alive priority decorative />
+        <FerriLoop name="wave-loop" fallback="wave" width={170} height={170} priority />
         <h1 className="mt-3 font-display text-[30px] font-extrabold tracking-[-0.03em] text-zinc-900">Ferri Pocket</h1>
         <p className="mt-1 text-[15px] text-zinc-500">Your community, answered from your phone.</p>
       </div>

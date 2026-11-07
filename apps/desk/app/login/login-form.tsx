@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { ArrowRight } from "lucide-react";
-import { Ferri, FerriLogo } from "@/components/ferri";
+import { Ferri, FerriLogo, FerriLoop } from "@/components/ferri";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signIn } from "./actions";
 
@@ -19,7 +19,9 @@ export function LoginForm({ guest }: { guest: React.ReactNode }) {
           <h1 className="display max-w-[480px] text-[56px]">Your crew&apos;s side of Ferri.</h1>
           <p className="mt-4 max-w-[440px] text-[17px] leading-relaxed text-white/85">Cards, care cases, announcements and everything Ferri knows, in one place.</p>
         </div>
-        <Ferri pose="wave" size={300} alive decorative className="absolute -right-6 -bottom-4" />
+        <div className="absolute -right-4 -bottom-2 w-[340px]">
+          <FerriLoop name="wave-loop" fallback="wave" width={340} height={340} />
+        </div>
         <span className="text-[13px] text-white/70">Built on Switch.</span>
       </section>
 

@@ -11,8 +11,8 @@ import { PlatformLogo } from "@/components/platform";
  *  2. the answer is saved, so the next asker gets it at once with its source;
  *  3. a crew decision becomes an announcement on every app, then is edited in place;
  *  4. Shield blocks a scam link.
- * Plays while on screen; with reduced motion it shows each beat's end state, and the
- * beat buttons step through it.
+ * Plays while on screen; a beat button restarts that beat. With reduced motion it shows
+ * each beat's end state, and the beat buttons step through it.
  */
 
 type Msg = { who: string; text: string; ferri?: boolean; source?: string; edited?: boolean; blocked?: boolean; fresh?: boolean };
@@ -142,7 +142,6 @@ export function HowItWorks() {
   const [frame, setFrame] = useState(0);
   const [visible, setVisible] = useState(false);
   const [reduced, setReduced] = useState(false);
-  const [paused, setPaused] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -164,7 +163,7 @@ export function HowItWorks() {
     if (reduced) setFrame(BEATS[beat]!.frames.length - 1);
   }, [reduced, beat]);
   useEffect(() => {
-    if (reduced || !visible || paused) return;
+    if (reduced || !visible) return;
     const last = BEATS[beat]!.frames.length - 1;
     const t = setTimeout(
       () => {
@@ -177,13 +176,13 @@ export function HowItWorks() {
       frame < last ? STEP_MS : HOLD_MS,
     );
     return () => clearTimeout(t);
-  }, [beat, frame, visible, reduced, paused]);
+  }, [beat, frame, visible, reduced]);
 
   const b = BEATS[beat]!;
   const f = b.frames[Math.min(frame, b.frames.length - 1)]!;
 
   return (
-    <div ref={ref} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <div ref={ref}>
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="How Ferri works">
         {BEATS.map((x, i) => {
           const Icon = x.icon;
@@ -209,11 +208,11 @@ export function HowItWorks() {
               </span>
               {on && !reduced ? (
                 <span
-                  key={`${beat}-${visible}-${paused}`}
+                  key={`${beat}-${visible}-${frame === 0}`}
                   className="absolute bottom-0 left-0 h-[3px] bg-brand"
                   style={{
-                    animation: visible && !paused ? `hiw-progress ${(b.frames.length - 1) * STEP_MS + HOLD_MS}ms linear forwards` : undefined,
-                    width: visible && !paused ? undefined : "0%",
+                    animation: visible ? `hiw-progress ${(b.frames.length - 1) * STEP_MS + HOLD_MS}ms linear forwards` : undefined,
+                    width: visible ? undefined : "0%",
                   }}
                   aria-hidden
                 />
