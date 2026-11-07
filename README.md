@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml)
 
-Live demo: (link coming)
+**Live demo:** join the Lantern Labs Discord at https://discord.gg/5FWRzfCcNa, open `#build-night` and ask `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. The demo runs this repo's stack on a small server ([infra/demo](infra/demo/compose.demo.yml)); its Desk is at https://ferri-demo.rudratechie.xyz (crew sign-in only).
 
 Video: (link coming)
 
@@ -77,6 +77,7 @@ On Windows, use `.\ferri` (PowerShell) or `ferri` (cmd) instead of `./ferri`.
 | `./ferri connect discord --token <bot token> --guild <server id>` | Connect Discord |
 | `./ferri connect slack --bot-token xoxb-... --app-token xapp-...` | Connect Slack |
 | `./ferri connect list` | List the platform connections in Switch |
+| `./ferri space list`, `./ferri space attach <space> --mode auto` (or `--crew`) | See the rooms Ferri is in and attach one to the event, like Desk's Spaces page |
 | `./ferri smoke` | Ask Ferri through Mattermost and check that it answers with a source (CI runs this) |
 | `./ferri <script> [args]` | Run any `package.json` script inside the stack: `kb seed`, `kb list`, `kb ask "<question>"`, `shield:connect`, `email:setup`, `whatsapp:pair`, `crew:account`, `card:preview`, `push:keys`, `eval:answers`, ... |
 
@@ -173,7 +174,7 @@ We added two things to Switch core, in our fork ([`RudraO2/switch`, branch `ferr
 
 Both ship in Ferri's Switch core image, `ghcr.io/rudrao2/ferri-switch-core`, which `./ferri up` runs.
 
-To change Ferri's code, run it on the host while the rest stays in Docker: [docs/development.md](docs/development.md).
+To change Ferri's code, run it on the host while the rest stays in Docker: [docs/development.md](docs/development.md). To host it on a server for your community: [docs/hosting.md](docs/hosting.md).
 
 ## How we checked it
 
