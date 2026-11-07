@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml)
 
-**Live demo:** join the Lantern Labs Discord at https://discord.gg/5FWRzfCcNa, open `#build-night` and ask `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. The demo runs this repo's stack on a small server ([infra/demo](infra/demo/compose.demo.yml)); its Desk is at https://ferri-demo.rudratechie.xyz (crew sign-in only).
+**Live demo:** ask Ferri yourself, in Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. Look around its Desk at https://ferri-demo.rudratechie.xyz with "Look around (read-only)". The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
 
 Video: (link coming)
 
