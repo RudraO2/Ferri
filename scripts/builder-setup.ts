@@ -85,6 +85,16 @@ function installKit(kit: string): void {
 await ensureController(root, env);
 const status = cli(["status"]);
 let controllerId = /Controller:\s+([0-9a-f-]{36})/.exec(status.out)?.[1];
+// An enrollment with another Switch (an earlier stack) would hand the Builder to the wrong server.
+const enrolledServer = /Server:\s+(\S+)/.exec(status.out)?.[1];
+const sameServer = (a: string, b: string) => a.replace(/\/+$/, "").toLowerCase() === b.replace(/\/+$/, "").toLowerCase();
+if (controllerId && enrolledServer && !sameServer(enrolledServer, switchUrl)) {
+  throw new Error(
+    `This machine's agent controller is enrolled with ${enrolledServer}, not ${switchUrl} (SWITCH_URL). ` +
+      "Give it a separate data folder for this Switch: set SWITCH_CONTROLLER_DATA_DIR to a new folder in your shell, " +
+      "then run pnpm builder:setup again, and start pnpm builder:controller from a shell with the same value. The old enrollment stays as it is.",
+  );
+}
 if (!controllerId) {
   const code = await gw.call<{ code: string }>("POST", "/gateway/management/enrollment-codes", {});
   const enrolled = cli([

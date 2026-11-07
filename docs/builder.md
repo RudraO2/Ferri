@@ -29,6 +29,8 @@ The Builder runs on a real machine, not in Docker, because it is Claude Code wor
 
 Stopping the controller stops the Builder. The controller reads its env file only at start: restart it after `pnpm builder:setup` changes it. It is safe to run `pnpm builder:setup` again.
 
+One controller enrollment belongs to one Switch. To point the Builder at another stack on the same machine (a second checkout, a fresh test stack), set `SWITCH_CONTROLLER_DATA_DIR` to a new folder in your shell before `pnpm builder:setup` and before `pnpm builder:controller`; `pnpm builder:setup` stops with that advice when the existing enrollment names another server. The Builder's job folders in `~/.ferri/builder/jobs` stay; a new stack numbers its jobs from B1 again, so move old job folders aside if the new event reuses an old event's name (the site takes its look from that event's newest poster job).
+
 Settings in `.env` (re-run `pnpm builder:setup` after changing them):
 
 - `FERRI_BUILDER_MODEL`, `FERRI_BUILDER_EFFORT`: the Builder's model and effort (`claude-opus-5-5` and `high` by default, for real use; tests set `claude-haiku-5-5` and `low`). After a change, run `pnpm builder:setup` again and restart `pnpm builder:controller`.
