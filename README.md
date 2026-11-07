@@ -2,13 +2,37 @@
 
 <p align="center"><img src="docs/images/ferri-hero.png" alt="Ferri, a friendly sea otter: every question, answered once." width="760"></p>
 
-**The AI teammate for people who run community events.** Ferri answers your community on every platform, asks your crew only when it does not know, and turns what the crew decides into an update everywhere after one OK.
+**The AI teammate for people who host community events.** Every event has two sides: the crew that plans and decides, and the community that asks, in groups on Discord, Telegram, Slack, Mattermost and WhatsApp. Ferri is the bridge between them: it answers the community from what the crew knows, asks the crew only when it does not know, and turns each crew decision into an update in every group after one OK.
 
 [![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml)
 
 **Live demo:** ask Ferri yourself, in Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. Look around its Desk at https://ferri-demo.rudratechie.xyz with "Look around (read-only)". The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
 
 Video: (link coming)
+
+## How Ferri uses Switch
+
+### Which agents are connected
+
+- **Ferri**, our always-on custom agent. It speaks Switch's agent protocol through our TypeScript client in `packages/switch` (SSE down, HTTP up), and one connection serves every room on every platform. Claude Sonnet 5.5 writes its answers, plans and drafts; Claude Haiku 5.5 reads every message.
+- **Ferri Builder**, Claude Code run by Switch itself as a managed agent, on a Switch agent controller on the organizer's machine. Ferri creates it through Switch's agent management and hands it jobs in the crew room: the event site, posters, listings. Its permission prompts are Switch cards, and a Switch budget caps it. It runs Claude Opus 5.5 at high effort by default; our tests run it on Haiku 5.5 at low effort. The Builder runs on a real machine, so it is not part of the public demo server.
+
+### How the channels are set up
+
+- Every group on Discord, Telegram, Slack, Mattermost and WhatsApp is a Switch room. `./ferri connect` adds the Telegram, Discord or Slack bridge through Switch's Gateway. Mattermost comes connected in the local stack. WhatsApp goes through `whatsapp_web`, the bridge we added in our Switch fork.
+- Ferri joins a room with `!invite-agent @ferri` (or Add Ferri in Desk). Each room is then a space, attached to an event with a mode: Off, Listen, Approve or Auto. One room per event is the crew room, where cards land.
+- Question, approval and permission cards are Switch cards, answered in the room, in Desk or in Pocket.
+- Switch Trust sends every message to Shield, our Trust endpoint inside Ferri, once `./ferri shield:connect` turns it on.
+- Switch templates make desk and team rooms as real channels. Plans, recaps and sheets are Switch library documents. Announcements are edited in place through the agent message edit we added to our fork.
+
+Every Switch feature Ferri uses, and the code that uses it: [docs/architecture.md](docs/architecture.md).
+
+### How to run it
+
+1. [Quick start](#quick-start): `./ferri up` needs only Docker and an Anthropic key, and starts with Mattermost and a demo event.
+2. Connect your platforms: [docs/platforms.md](docs/platforms.md), and [docs/whatsapp.md](docs/whatsapp.md) for WhatsApp.
+3. Add the Builder on a machine with Node 22 and Claude Code: [docs/builder.md](docs/builder.md).
+4. Make it yours, with your community, your event and your FAQ in place of the demo: [docs/your-community.md](docs/your-community.md). The keys and accounts for each part are in [docs/accounts.md](docs/accounts.md).
 
 ## Quick start
 
@@ -24,7 +48,7 @@ On Windows, the last command is `.\ferri up` in PowerShell, or `ferri up` in cmd
 
 - Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.20 or newer (Linux).
 - About 4 GB of free RAM (8 GB is comfortable) and about 8 GB of disk.
-- An Anthropic API key (console.anthropic.com, API keys).
+- An Anthropic API key: platform.claude.com, Settings, API keys, Create key, with one workspace picked for it ([docs/accounts.md](docs/accounts.md) says why).
 - Nothing else: no Node, no Switch checkout.
 
 ### What `./ferri up` does
@@ -87,7 +111,7 @@ After you edit `.env`, restart Ferri and Desk so they read it: `docker compose r
 
 ## Optional parts
 
-Each one is off until you turn it on. `./ferri doctor` shows which are on, and the next step for each.
+Each one is off until you turn it on. `./ferri doctor` shows which are on, and the next step for each. Most need an account or a key of their own: [docs/accounts.md](docs/accounts.md) lists every one, where to get it, whether it is free, and its `.env` name.
 
 | Part | What it does | Turn it on | Guide |
 |---|---|---|---|
@@ -99,7 +123,8 @@ Each one is off until you turn it on. `./ferri doctor` shows which are on, and t
 | Pocket push | The crew's phones buzz when a card needs them | Keys are generated. Phones need HTTPS: set `FERRI_PUBLIC_URL` and run a tunnel | [pocket.md](docs/pocket.md) |
 | Email | Partner outreach and guest emails through Resend | Set `RESEND_API_KEY` and `FERRI_EMAIL_FROM`, then `./ferri email:setup` | [email.md](docs/email.md) |
 | Social | Posts on LinkedIn, X and Instagram through Buffer | Set `BUFFER_API_KEY`, and `FERRI_MEDIA_URL` and `FERRI_MEDIA_SECRET` for images | [social.md](docs/social.md) |
-| Builder | A coding agent Switch runs on your machine: the event site, posters, listings | On the host, with Node 22 and Claude Code: `pnpm install`, `pnpm builder:setup`, then `pnpm builder:controller` | [builder.md](docs/builder.md) |
+| Builder | Claude Code, run by Switch on a real machine of yours (not in Docker, not on the public demo): the event site, posters, listings | On the host, with Node 22, Claude Code and `FERRI_PUBLIC_URL` set: `pnpm install`, `pnpm builder:setup`, then `pnpm builder:controller` | [builder.md](docs/builder.md) |
+| Event site | The Builder ships the event's site on Supabase and Vercel | Sign in to the Supabase and Vercel CLIs on the Builder's machine, set `FERRI_SITE_SUPABASE_ORG` and `FERRI_PUBLIC_URL`, then `pnpm builder:setup` | [builder.md](docs/builder.md) |
 | Posters | Background art for the Builder's posters | Set `OPENAI_API_KEY`, then `pnpm builder:setup` | [builder.md](docs/builder.md) |
 | Luma API | Lists events through Luma's API instead of the Builder's browser | Set `LUMA_API_KEY` (Luma Plus only) | [builder.md](docs/builder.md) |
 
@@ -159,6 +184,8 @@ Ferri is one agent that works in two directions, with a bridge between them.
 
 | Area | Guide |
 |---|---|
+| Make it yours: your community and your event in place of the Lantern demo | [docs/your-community.md](docs/your-community.md) |
+| Bring your own accounts: every key Ferri can use, where to get it, free or paid | [docs/accounts.md](docs/accounts.md) |
 | How Ferri answers and learns, the demo knowledge, `kb` commands | [docs/knowledge.md](docs/knowledge.md) |
 | The plan before the event, and announcements inside to outside | [docs/plan-and-launch.md](docs/plan-and-launch.md) |
 | Desk, the organizers' dashboard | [docs/dashboard.md](docs/dashboard.md) |
