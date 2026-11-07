@@ -20,7 +20,7 @@ You can run the same smoke test on your own stack: `./ferri smoke`.
 
 ## The Builder in tests
 
-For real use the Builder runs on Claude Opus 5.5 at high effort, the defaults. Tests run it on Claude Haiku 5.5 at low effort. Set these in `.env`:
+For real use the Builder runs on Claude Sonnet 5.5 at medium effort, the defaults. Tests run it on Claude Haiku 5.5 at low effort. Set these in `.env`:
 
 ```bash
 FERRI_BUILDER_MODEL=claude-haiku-5-5

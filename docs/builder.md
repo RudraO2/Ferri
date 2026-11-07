@@ -2,7 +2,7 @@
 
 Some event work is making things: the event's one-page site, a day-of checklist, a sponsor one-pager, a poster. Ferri hands that to Ferri Builder, a second agent with its own sandbox.
 
-- The Builder is a Switch managed agent: Claude Code on a Switch agent controller on the organizer's machine (the headless controller runs natively on Windows with `run`). Ferri creates it through Switch's agent management. It works in its own folder (`~/.ferri/builder`, seeded from `builder/` in this repo) with its own Claude home, so the organizer's personal Claude settings never reach it. It runs Claude Opus 5.5 at high effort by default; our tests run it on Claude Haiku 5.5 at low effort ([testing.md](testing.md)).
+- The Builder is a Switch managed agent: Claude Code on a Switch agent controller on the organizer's machine (the headless controller runs natively on Windows with `run`). Ferri creates it through Switch's agent management. It works in its own folder (`~/.ferri/builder`, seeded from `builder/` in this repo) with its own Claude home, so the organizer's personal Claude settings never reach it. It runs Claude Sonnet 5.5 at medium effort by default; our tests run it on Claude Haiku 5.5 at low effort ([testing.md](testing.md)).
 - In the crew room: `@ferri get the builder to make a one-page site for Build Night`, `@ferri can you make us a day-of checklist with owners from the plan?`. Ferri records job B1, invites the Builder to the room and hands it over with `send_targeted_message`. Switch starts a Builder session, which posts a heads-up, shows its work as an activity card, reads the event's knowledge and plan from the room's Switch documents, and posts the files in the room. It reports "Job B1 done:" to Ferri, which closes the job and pushes the person who asked.
 - Nothing goes public without a yes. The Builder asks with a Switch card before any public step (deploy, push, email, post), and its permission rules make every such command a Claude Code permission prompt, which Switch shows as a card too. The card is answered in the room, in Desk or in Pocket; a no means nothing is published.
 - Its own budget in Switch (400k output tokens and 60 turns per 24 hours by default). When it is spent Switch stops the Builder, and Ferri holds new jobs until the reset.
@@ -33,7 +33,7 @@ One controller enrollment belongs to one Switch. To point the Builder at another
 
 Settings in `.env` (re-run `pnpm builder:setup` after changing them):
 
-- `FERRI_BUILDER_MODEL`, `FERRI_BUILDER_EFFORT`: the Builder's model and effort (`claude-opus-5-5` and `high` by default, for real use; tests set `claude-haiku-5-5` and `low`). After a change, run `pnpm builder:setup` again and restart `pnpm builder:controller`.
+- `FERRI_BUILDER_MODEL`, `FERRI_BUILDER_EFFORT`: the Builder's model and effort (`claude-sonnet-5-5` and `medium` by default, for real use; tests set `claude-haiku-5-5` and `low`). After a change, run `pnpm builder:setup` again and restart `pnpm builder:controller`.
 - `FERRI_BUILDER_BUDGET_OUTPUT`, `FERRI_BUILDER_BUDGET_TURNS`: its Switch budget per 24 hours.
 - `FERRI_BUILDER_NAME`, `FERRI_BUILDER_MACHINE`, `FERRI_BUILDER_HOME`: its name in Switch, the machine name, and its folders.
 

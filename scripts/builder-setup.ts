@@ -11,7 +11,7 @@
  *   5. Addressing: the owner, the owner's agents (Ferri) and the people in the crew room.
  *   6. The Builder's own budget in Switch.
  *
- * Model: FERRI_BUILDER_MODEL (default claude-opus-5-5) at FERRI_BUILDER_EFFORT (default high), for
+ * Model: FERRI_BUILDER_MODEL (default claude-sonnet-5-5) at FERRI_BUILDER_EFFORT (default medium), for
  * real use. Tests set claude-haiku-5-5 at low in .env (docs/testing.md).
  */
 import { spawnSync } from "node:child_process";
@@ -27,9 +27,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const env = { ...readEnvFile(path.join(root, ".env")), ...process.env } as Record<string, string | undefined>;
 const switchUrl = env.SWITCH_URL ?? "http://localhost:8000";
 const name = env.FERRI_BUILDER_NAME ?? "builder";
-// Real use runs the Builder on Opus at high effort; tests set Haiku at low in .env. An empty value means the default.
-const model = env.FERRI_BUILDER_MODEL?.trim() || "claude-opus-5-5";
-const effort = env.FERRI_BUILDER_EFFORT?.trim() || "high";
+// Real use runs the Builder on Sonnet at medium effort; tests set Haiku at low in .env. An empty value means the default.
+const model = env.FERRI_BUILDER_MODEL?.trim() || "claude-sonnet-5-5";
+const effort = env.FERRI_BUILDER_EFFORT?.trim() || "medium";
 const budgetOutput = Number(env.FERRI_BUILDER_BUDGET_OUTPUT ?? 400_000);
 const budgetTurns = Number(env.FERRI_BUILDER_BUDGET_TURNS ?? 60);
 const machineName = env.FERRI_BUILDER_MACHINE ?? "ferri-laptop";

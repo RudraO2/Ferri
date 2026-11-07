@@ -57,7 +57,7 @@ flowchart TB
 
 - **Ask Ferri yourself** in the live demo, on Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night, a made-up event. Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer.
 - **Look around Desk**, read-only: open https://ferri-demo.rudratechie.xyz and pick "Look around (read-only)". The landing page is https://ferri-demo.rudratechie.xyz/welcome. The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
-- **A site the Builder shipped**: https://lantern-build-night.vercel.app, made and deployed by Ferri Builder on Claude Opus 5.5 for the demo event, with registration, sign-in, schedule and FAQ, in the look of the posters it drew first.
+- **A site the Builder shipped**: https://lantern-build-night.vercel.app, made and deployed by Ferri Builder for the demo event, with registration, sign-in, schedule and FAQ, in the look of the posters it drew first.
 - **CI on every push**: a typecheck of nine packages, 298 unit tests, Desk's production build, and a smoke test that builds Ferri's image from the commit, starts the stack and asks Ferri through Mattermost.
 - **Quick start on every push**: a fresh GitHub runner, signed out of GHCR, runs `./ferri up` from scratch, then checks that Ferri answers with a source and opens a card for a question it cannot answer.
 - **Evals**: `pnpm eval:answers` passes 158 of 158 fixed cases against the real model (Claude Haiku 5.5 at low effort).
@@ -70,7 +70,7 @@ Video: (link coming)
 ### Which agents are connected
 
 - **Ferri**, our always-on custom agent. It speaks Switch's agent protocol through our TypeScript client in `packages/switch` (SSE down, HTTP up), and one connection serves every room on every platform. Claude Sonnet 5.5 writes its answers, plans and drafts; Claude Haiku 5.5 reads every message.
-- **Ferri Builder**, Claude Code run by Switch itself as a managed agent, on a Switch agent controller on the organizer's machine. Ferri creates it through Switch's agent management and hands it jobs in the crew room: the event site, posters, listings. Its permission prompts are Switch cards, and a Switch budget caps it. It runs Claude Opus 5.5 at high effort by default; our tests run it on Haiku 5.5 at low effort. The Builder runs on a real machine, so it is not part of the public demo server. What it made for the demo event, from two crew messages: [the event's site](https://lantern-build-night.vercel.app) (registration, sign-in, schedule, FAQ), in the look of the posters it drew first.
+- **Ferri Builder**, Claude Code run by Switch itself as a managed agent, on a Switch agent controller on the organizer's machine. Ferri creates it through Switch's agent management and hands it jobs in the crew room: the event site, posters, listings. Its permission prompts are Switch cards, and a Switch budget caps it. It runs Claude Sonnet 5.5 at medium effort by default; our tests run it on Haiku 5.5 at low effort. The Builder runs on a real machine, so it is not part of the public demo server. What it made for the demo event, from two crew messages: [the event's site](https://lantern-build-night.vercel.app) (registration, sign-in, schedule, FAQ), in the look of the posters it drew first.
 
 ### How the channels are set up
 
