@@ -4,7 +4,7 @@
 
 **The AI teammate for people who host community events.** Every event has two sides: the crew that plans and decides, and the community that asks, in groups on Discord, Telegram, Slack, Mattermost and WhatsApp. Ferri is the bridge between them: it answers the community from what the crew knows, asks the crew only when it does not know, and turns each crew decision into an update in every group after one OK.
 
-[![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml)
+[![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml) [![Quick start](https://github.com/RudraO2/Ferri/actions/workflows/quickstart.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/quickstart.yml)
 
 **Live demo:** ask Ferri yourself, in Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. Look around its Desk at https://ferri-demo.rudratechie.xyz with "Look around (read-only)". The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
 
@@ -46,7 +46,7 @@ On Windows, the last command is `.\ferri up` in PowerShell, or `ferri up` in cmd
 
 ### Requirements
 
-- Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.20 or newer (Linux).
+- Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.22 or newer (Linux).
 - About 4 GB of free RAM (8 GB is comfortable) and about 8 GB of disk.
 - An Anthropic API key: platform.claude.com, Settings, API keys, Create key, with one workspace picked for it ([docs/accounts.md](docs/accounts.md) says why).
 - Nothing else: no Node, no Switch checkout.
@@ -54,7 +54,7 @@ On Windows, the last command is `.\ferri up` in PowerShell, or `ferri up` in cmd
 ### What `./ferri up` does
 
 1. Asks for the Anthropic key once and generates every other secret into `.env`.
-2. Pulls the images (or builds Ferri's image from the checkout if it cannot pull it). The first run downloads about 3 GB and takes several minutes.
+2. Pulls the images. If it cannot pull one of Ferri's two images, it builds it: Ferri's from the checkout, Switch's core from our Switch fork at a pinned commit. The first run downloads about 3 GB and takes several minutes.
 3. Starts Switch (core, dashboard, Postgres), Mattermost, Ferri's Postgres, Ferri and Desk, and waits until they are healthy.
 4. Registers Ferri in Switch (a personal agent key, open addressing), creates the rooms `ferri-lab` and `ferri-crew`, the test people `meera`, `arjun` (members) and `priya` (crew), and loads the demo community Lantern Labs and its event, Lantern Build Night.
 5. Prints the addresses, the logins and three messages to try.

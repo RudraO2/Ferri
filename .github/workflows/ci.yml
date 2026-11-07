@@ -58,7 +58,8 @@ jobs:
           tag=$(val SWITCH_CORE_TAG= .env.example)
           image="ghcr.io/rudrao2/ferri-switch-core:$tag"
           if ! docker pull -q "$image"; then
-            ref=$(val '  SWITCH_FORK_REF: ' .github/workflows/images.yml)
+            # The pinned fork commit, the same one ./ferri up builds from (SWITCH_FORK_REF).
+            ref=$(val SWITCH_FORK_REF= .env.example)
             git init -q /tmp/switch && git -C /tmp/switch fetch -q --depth 1 https://github.com/RudraO2/switch.git "$ref" && git -C /tmp/switch checkout -q FETCH_HEAD
             docker build -q -f /tmp/switch/deploy/local/ferri/Dockerfile \
               --build-arg BASE=ghcr.io/sandbox-quantum/dev/switch-core:$(val SWITCH_VERSION= .env.example) \
@@ -69,6 +70,8 @@ jobs:
       - name: ./ferri up
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Keep the image built from this commit; without it, up pulls the published main image over it.
+          FERRI_BUILD: "1"
         run: ./ferri up
       - name: Ask Ferri through Mattermost
         run: ./ferri smoke

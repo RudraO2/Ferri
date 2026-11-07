@@ -22,6 +22,8 @@ permissions:
 
 env:
   # Switch release the fork is based on, and the fork commit that adds the agent message edit and WhatsApp.
+  # Keep in sync with SWITCH_VERSION, SWITCH_FORK_REF and SWITCH_CORE_TAG in .env.example, which
+  # ./ferri, ferri.cmd and ci.yml read (the launchers also carry the commit as a built-in default).
   SWITCH_VERSION: 0.31.1-dev.339.g86d5928
   SWITCH_FORK: RudraO2/switch
   SWITCH_FORK_REF: a3d560e0f1595e74e8456d01af30a6b6424b2048

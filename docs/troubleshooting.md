@@ -12,7 +12,7 @@ Start with `./ferri doctor` (Windows: `.\ferri doctor` in PowerShell, `ferri doc
 
 ### "Docker is not installed" or "Docker Compose v2 is missing"
 - **Cause**: there is no `docker` command, or it has no `docker compose` subcommand.
-- **Fix**: install Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.20 or newer (Linux): https://docs.docker.com/get-docker/
+- **Fix**: install Docker Desktop (Windows, macOS) or Docker Engine with the compose plugin v2.22 or newer (Linux): https://docs.docker.com/get-docker/
 
 ### A port is already in use
 - **Symptom**: `./ferri up` stops with "port is already allocated" or "address already in use".
@@ -34,8 +34,15 @@ Start with `./ferri doctor` (Windows: `.\ferri doctor` in PowerShell, `ferri doc
 - **Fix**: remove the folder with `rmdir .env`, then run `./ferri up`. It creates the file and fills it.
 
 ### The first `./ferri up` takes several minutes
-- **Cause**: the first start downloads about 3 GB (Switch, Mattermost, Postgres). If Ferri's image is not published for your version, it also builds Ferri's image from the checkout ("building it from this checkout (a few minutes, once)").
+- **Cause**: the first start downloads about 3 GB (Switch, Mattermost, Postgres). If it cannot pull one of Ferri's two images, it also builds that image: Ferri's from the checkout ("building it from this checkout (a few minutes, once)"), Switch's core from our Switch fork ("building it from the Switch fork on GitHub (a few minutes, once)").
 - **Fix**: nothing to fix. Later starts take seconds.
+
+### "pull access denied", "denied" or "unauthorized" for a ghcr.io image
+- **Cause**: Docker could not pull one of Ferri's two images: `ghcr.io/rudrao2/ferri` (Ferri, Desk and the commands) or `ghcr.io/rudrao2/ferri-switch-core` (Switch's core with our fork's changes). The image is not published for your version, the package is private, or Docker holds an old sign-in for ghcr.io.
+- **Fix**: run `./ferri up`. It builds what it cannot pull: Ferri's image from your checkout, and Switch's core image from our fork ([github.com/RudraO2/switch](https://github.com/RudraO2/switch)) at the commit in `SWITCH_FORK_REF` in `.env`, on top of Switch's published core. Each build takes a few minutes, once. Plain `docker compose up -d` does not build Switch's core image, so use `./ferri up` the first time. If the build fails too:
+  - An old sign-in makes even public pulls fail: run `docker logout ghcr.io`, then `./ferri up` again.
+  - The machine must reach github.com and ghcr.io. Behind a proxy or firewall, allow both.
+  - Docker fetches the fork with git. On Linux, install git where Docker runs (`sudo apt install git`).
 
 ### "the stack did not come up"
 - **Cause**: one of the services failed to start or did not get healthy within 15 minutes.

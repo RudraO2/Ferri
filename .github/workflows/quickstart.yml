@@ -1,0 +1,109 @@
+name: Quick start on a clean runner
+
+# The README's Quick start on a machine that has never signed in to GitHub or GHCR: a fresh
+# runner, no docker login, no cache, every pull and fetch anonymous. It runs ./ferri up the way a
+# newcomer does (Haiku at low effort), asks Ferri through Mattermost, and writes the time and the
+# memory the stack takes to the run's summary.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quickstart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quickstart:
+    name: ./ferri up from scratch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Leave no GitHub token on the machine.
+          persist-credentials: false
+      - name: No sign-in to GHCR
+        run: docker logout ghcr.io
+      - name: Settings for the test (Haiku at low effort)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "::error::Add the ANTHROPIC_API_KEY repository secret"; exit 1; fi
+          cat > .env <<EOF
+          FERRI_MODEL_MAIN=claude-haiku-5-5
+          FERRI_MODEL_FAST=claude-haiku-5-5
+          FERRI_EFFORT_MAIN=low
+          FERRI_EFFORT_FAST=low
+          FERRI_ROOM_GRACE_SECONDS=5
+          EOF
+      - name: ./ferri up (timed)
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          start=$(date +%s)
+          set +e
+          ./ferri up 2>&1 | tee up.log
+          rc=${PIPESTATUS[0]}
+          echo "UP_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+          echo "UP_RC=$rc" >> "$GITHUB_ENV"
+          exit "$rc"
+      - name: Ask Ferri through Mattermost
+        run: ./ferri smoke
+      - name: Time and memory
+        if: always()
+        shell: bash
+        run: |
+          up=${UP_SECONDS:-0}
+          stats=$(docker stats --no-stream --format '{{.Name}}|{{.MemUsage}}|{{.MemPerc}}')
+          total=$(printf '%s\n' "$stats" | awk -F'|' 'NF {
+            split($2, m, " "); v = m[1] + 0; u = m[1]; sub(/^[0-9.]+/, "", u)
+            if (u == "B") v /= 1048576; else if (u == "KiB" || u == "kB") v /= 1024; else if (u == "GiB" || u == "GB") v *= 1024
+            t += v } END { printf "%.0f", t }')
+          ferri_image=pulled; grep -q "building it from this checkout" up.log 2>/dev/null && ferri_image="built from the checkout"
+          core_image=pulled; grep -q "building it from the Switch fork" up.log 2>/dev/null && core_image="built from the Switch fork"
+          {
+            echo "## Quick start on a clean runner"
+            echo
+            if [ "${UP_RC:-1}" = "0" ]; then
+              printf '`./ferri up` took **%d min %02d s** (%d s) on a fresh `ubuntu-24.04` runner.\n' $((up / 60)) $((up % 60)) "$up"
+            else
+              printf '`./ferri up` failed after %d s.\n' "$up"
+            fi
+            echo
+            echo "- Ferri's image: $ferri_image"
+            echo "- Switch's core image: $core_image"
+            echo
+            echo "### Memory per container (docker stats --no-stream, after the smoke test)"
+            echo
+            echo "| Container | Memory | Share of RAM |"
+            echo "|---|---|---|"
+            printf '%s\n' "$stats" | awk -F'|' 'NF { printf "| %s | %s | %s |\n", $1, $2, $3 }'
+            echo "| **Total** | **${total} MiB** | |"
+            echo
+            echo "### free -m"
+            echo
+            echo '```'
+            free -m
+            echo '```'
+            echo
+            echo "### Disk (docker system df)"
+            echo
+            echo '```'
+            docker system df
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Doctor
+        if: failure()
+        run: ./ferri doctor || true
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 300 ferri ferri-setup desk switch mattermost-setup
+      - name: Stop
+        if: always()
+        run: docker compose --profile '*' down -v

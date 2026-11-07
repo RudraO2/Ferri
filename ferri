@@ -1,7 +1,8 @@
 #!/bin/sh
 # Ferri's one command (macOS, Linux, WSL, Git Bash). Windows PowerShell or cmd: ferri.cmd.
 #
-#   ./ferri up                 start everything (first run: asks for your Anthropic key, makes .env)
+#   ./ferri up                 start everything (first run: asks for your Anthropic key, makes .env;
+#                              builds an image from source when it cannot pull it)
 #   ./ferri down               stop (keeps your data)
 #   ./ferri reset              stop and delete all data (Switch, Mattermost, Ferri); keeps .env
 #   ./ferri logs [service]     follow logs (ferri, desk, switch, ...)
@@ -38,6 +39,28 @@ ensure_image() {
   fi
 }
 
+# Switch's core image (the switch service): the copy on this machine, else a pull, else a build
+# from our Switch fork at SWITCH_FORK_REF (.env) on top of Switch's published core. Compose reads
+# the extra file below with .env, so the build gets the exact image name the stack runs
+# (SWITCH_CORE_IMAGE, SWITCH_CORE_TAG) and the same Switch version as the gateway. Keep the
+# default commit in sync with .env.example and ferri.cmd.
+ensure_core() {
+  dc pull --quiet --policy missing switch >/dev/null 2>&1 && return 0
+  say "Switch's core image could not be pulled; building it from the Switch fork on GitHub (a few minutes, once)."
+  core_files="-f compose.yml"
+  [ -f compose.override.yml ] && core_files="$core_files -f compose.override.yml"
+  # shellcheck disable=SC2086
+  dc $core_files -f - build switch <<'EOF' || die "could not build Switch's core image. See \"pull access denied\" in docs/troubleshooting.md."
+services:
+  switch:
+    build:
+      context: https://github.com/RudraO2/switch.git#${SWITCH_FORK_REF:-a3d560e0f1595e74e8456d01af30a6b6424b2048}
+      dockerfile: deploy/local/ferri/Dockerfile
+      args:
+        BASE: ${SWITCH_REGISTRY:-ghcr.io}/${SWITCH_IMAGE_NAMESPACE:-sandbox-quantum/dev}/switch-core:${SWITCH_VERSION:-0.31.1-dev.339.g86d5928}
+EOF
+}
+
 cmd="${1:-help}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
@@ -45,6 +68,7 @@ case "$cmd" in
     ensure_image
     cli pnpm -s stack init
     say "Starting the stack (the first start downloads Switch and Mattermost, a few minutes) ..."
+    ensure_core
     dc up -d --wait --wait-timeout 900 || {
       dc ps -a
       die "the stack did not come up. See ./ferri logs ferri-setup (or switch, mattermost), and docs/troubleshooting.md."
@@ -63,6 +87,6 @@ case "$cmd" in
   ps) dc ps -a ;;
   build) FERRI_BUILD=1 ensure_image; dc build ;;
   pull) dc pull ;;
-  help|-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+  help|-h|--help) sed -n '2,/^set /s/^# \{0,1\}//p' "$0" ;;
   *) cli pnpm -s run "$cmd" "$@" ;;
 esac
