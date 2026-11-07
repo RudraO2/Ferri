@@ -1,6 +1,6 @@
 /**
  * Local test people in the Mattermost that ships with Switch's standalone compose.
- * Creates (or reuses) them with the admin account from ../switch/.env and puts
+ * Creates (or reuses) them with the Mattermost admin account from .env and puts
  * them in the right channels:
  *   meera, arjun   community members      -> ferri-lab
  *   priya          crew (food, venue, ...) -> ferri-lab, ferri-crew
@@ -27,15 +27,18 @@ function readEnv(file: string): Map<string, string> {
   return map;
 }
 
+// The process environment wins, then this repo's .env (the one-command stack keeps Switch's values
+// there too), then a sibling Switch checkout's .env (the older two-repo setup).
 const switchEnv = readEnv(path.join(root, "..", "switch", ".env"));
 const ferriEnv = readEnv(envPath);
-const base = `http://localhost:${switchEnv.get("MATTERMOST_HOST_PORT") || "8065"}/api/v4`;
-const adminUser = switchEnv.get("MATTERMOST_ADMIN_USER");
-const adminPassword = switchEnv.get("MATTERMOST_ADMIN_PASSWORD");
-const teamName = switchEnv.get("MATTERMOST_TEAM_NAME") || "switch";
-if (!adminUser || !adminPassword) throw new Error("MATTERMOST_ADMIN_USER / MATTERMOST_ADMIN_PASSWORD missing in ../switch/.env");
+const setting = (key: string) => process.env[key] || ferriEnv.get(key) || switchEnv.get(key) || "";
+const base = `${setting("MATTERMOST_URL") || `http://localhost:${setting("MATTERMOST_HOST_PORT") || "8065"}`}/api/v4`;
+const adminUser = setting("MATTERMOST_ADMIN_USER");
+const adminPassword = setting("MATTERMOST_ADMIN_PASSWORD");
+const teamName = setting("MATTERMOST_TEAM_NAME") || "switch";
+if (!adminUser || !adminPassword) throw new Error("MATTERMOST_ADMIN_USER / MATTERMOST_ADMIN_PASSWORD missing in .env");
 
-let password = ferriEnv.get("MM_TEST_PASSWORD");
+let password = setting("MM_TEST_PASSWORD");
 if (!password) {
   password = `Tm-${randomBytes(9).toString("hex")}`;
   fs.appendFileSync(envPath, `\n# Password of the local Mattermost test people (pnpm dev:mattermost).\nMM_TEST_PASSWORD=${password}\n`);
@@ -107,9 +110,10 @@ for (const p of people) {
   for (const ch of p.channels) await join(id, ch);
   console.log(`${p.username}: ${p.channels.join(", ")}`);
 }
-const lead = await mm<{ id: string }>("GET", `/users/username/${switchEnv.get("MATTERMOST_USER") || "user"}`);
+const leadName = setting("MATTERMOST_USER") || "user";
+const lead = await mm<{ id: string }>("GET", `/users/username/${leadName}`);
 if (lead.status === 200) {
   await join(lead.data.id, "ferri-crew");
-  console.log(`${switchEnv.get("MATTERMOST_USER") || "user"}: ferri-crew`);
+  console.log(`${leadName}: ferri-crew`);
 }
 console.log("done");

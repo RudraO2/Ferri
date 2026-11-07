@@ -1,0 +1,284 @@
+# Ferri and Switch in one stack. Start it with `./ferri up` (macOS, Linux, Git Bash) or
+# `ferri up` (Windows), which writes .env first. `docker compose up -d` alone works once .env exists.
+#
+# Services
+#   switch-db, switch-db-init, switch, gateway   Switch (the agent platform): API on API_HOST_PORT,
+#                                                dashboard on GATEWAY_HOST_PORT
+#   mattermost, mattermost-setup                 local chat for trying Ferri (profile "mattermost",
+#                                                on by default through COMPOSE_PROFILES in .env)
+#   ferri-db                                     Ferri's Postgres with pgvector
+#   ferri-setup                                  one-shot: registers Ferri, rooms, test people, demo knowledge
+#   ferri                                        the agent (and Shield, Switch Trust endpoint, on :3200)
+#   desk                                         Desk and Ferri Pocket on DESK_HOST_PORT
+#   ferri-cli                                    commands: `./ferri doctor`, `./ferri connect ...` (profile "cli")
+#   waha                                         WhatsApp sidecar (profile "whatsapp", see docs/whatsapp.md)
+#
+# Switch's services follow its standalone compose (sandbox-quantum/switch,
+# deploy/local/standalone-docker-compose.yml, release 0.31.1-dev.339.g86d5928), with Ferri's
+# core image: the published Switch core plus our fork's agent message edit and WhatsApp bridge
+# (github.com/RudraO2/switch, branch ferri/agent-message-edit).
+#
+# Every host port binds to SWITCH_BIND_ADDR (127.0.0.1 by default), so nothing is open to the network.
+
+name: ${COMPOSE_PROJECT_NAME:-ferri}
+
+x-ferri-app: &ferri-app
+  image: ${FERRI_IMAGE:-ghcr.io/rudrao2/ferri}:${FERRI_VERSION:-main}
+  build:
+    context: .
+    args:
+      POCKET_ALLOWED_ORIGINS: ${POCKET_ALLOWED_ORIGINS:-*.trycloudflare.com}
+  restart: unless-stopped
+  volumes:
+    # The one .env: secrets made by `./ferri up`, values written by setup (agent key, room ids).
+    - ./.env:/app/.env
+    # The Builder's folder on the host (set by `pnpm builder:setup`), so Ferri and Desk can read its job files.
+    - ${FERRI_BUILDER_ROOT:-./.ferri-state/builder}:/builder-home
+  environment: &ferri-env
+    SWITCH_URL: http://switch:8000
+    DATABASE_URL: postgres://ferri:ferri@ferri-db:5432/ferri
+    MATTERMOST_URL: http://mattermost:8065
+    SWITCH_ADMIN_EMAIL: ${GATEWAY_ADMIN_EMAIL:-admin@switch.local}
+    SWITCH_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-}
+    # Shield listens on the stack's network so Switch can reach it at http://ferri:3200.
+    SHIELD_HOST: 0.0.0.0
+    SHIELD_ENDPOINT: http://ferri:3200
+    FERRI_BUILDER_HOME: /builder-home
+    FERRI_IN_DOCKER: "1"
+
+services:
+  # ── Switch ────────────────────────────────────────────────────────────────
+  switch-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_OWNER_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:-}
+      POSTGRES_DB: ${DB_NAME:-switch}
+    volumes:
+      - switch-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_OWNER_USER:-postgres}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Creates the `mattermost` database and Switch's unprivileged runtime role (DB_USER).
+  switch-db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: switch-db
+      PGUSER: ${DB_OWNER_USER:-postgres}
+      PGPASSWORD: ${DB_OWNER_PASSWORD:-}
+      DB_USER: ${DB_USER:-switch_app}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='mattermost'" | grep -q 1 || psql -d postgres -c 'CREATE DATABASE mattermost;'
+        psql -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$$DB_USER'" | grep -q 1 || psql -d postgres -c "CREATE ROLE \"$$DB_USER\" LOGIN PASSWORD '$$DB_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;"
+        psql -d postgres -c "ALTER ROLE \"$$DB_USER\" PASSWORD '$$DB_PASSWORD';"
+    depends_on:
+      switch-db:
+        condition: service_healthy
+
+  switch:
+    image: ${SWITCH_CORE_IMAGE:-ghcr.io/rudrao2/ferri-switch-core}:${SWITCH_CORE_TAG:-0.31.1-dev.339.g86d5928-ferri.1}
+    restart: unless-stopped
+    ports:
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${API_HOST_PORT:-8800}:8000"
+    environment:
+      DB_HOST: switch-db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-switch_app}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_OWNER_USER: ${DB_OWNER_USER:-postgres}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-switch}
+      ID_SERVER_NAME: localhost
+      MATRIX_SERVER_NAME: localhost
+      AGENT_REGISTRATION_TOKEN: ${AGENT_REGISTRATION_TOKEN:-}
+      SECRET_KEYS: ${SECRET_KEYS:-}
+      GATEWAY_COOKIE_SECURE: ${GATEWAY_COOKIE_SECURE:-false}
+      # Private hosts Switch may call: Mattermost, Ferri's Shield, the WhatsApp sidecar.
+      OUTBOUND_ALLOWED_PRIVATE_HOSTS: mattermost,ferri,waha,${OUTBOUND_ALLOWED_PRIVATE_HOSTS:-}
+      AGENT_MANAGEMENT_ENABLED: "false"
+      CONTROLLER_TOKEN_SECRET: ${CONTROLLER_TOKEN_SECRET:-}
+      FEATURE_FLAGS_ENABLED: ${FEATURE_FLAGS_ENABLED:-agent_management,service_connections,follow_the_conversation}
+      DISABLED_SERVICES:
+      SERVICE_ACCESS_PROFILES:
+      GATEWAY_ADMIN_EMAIL: ${GATEWAY_ADMIN_EMAIL:-admin@switch.local}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-}
+      MESSAGING_PUBLIC_URL: ${MESSAGING_PUBLIC_URL:-}
+      TELEGRAM_APP_BOT_TOKEN: ${TELEGRAM_APP_BOT_TOKEN:-}
+      TELEGRAM_APP_WEBHOOK_SECRET: ${TELEGRAM_APP_WEBHOOK_SECRET:-}
+      DISCORD_APP_MESSAGE_CONTENT:
+      DISCORD_APP_MEMBERS:
+      LOG_FORMAT:
+      TELEMETRY_ENABLED:
+      THIRD_PARTY_AVATARS_ENABLED:
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    depends_on:
+      switch-db:
+        condition: service_healthy
+      switch-db-init:
+        condition: service_completed_successfully
+
+  gateway:
+    image: ${SWITCH_REGISTRY:-ghcr.io}/${SWITCH_IMAGE_NAMESPACE:-sandbox-quantum/dev}/gateway:${SWITCH_VERSION:-0.31.1-dev.339.g86d5928}
+    restart: unless-stopped
+    ports:
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${GATEWAY_HOST_PORT:-3300}:3000"
+    depends_on:
+      - switch
+
+  # ── Mattermost (local chat; profile "mattermost") ──────────────────────────
+  mattermost:
+    image: mattermost/mattermost-team-edition:11.9.0
+    # Published for amd64 only; Apple Silicon runs it emulated.
+    platform: linux/amd64
+    profiles: ["mattermost"]
+    restart: unless-stopped
+    ports:
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${MATTERMOST_HOST_PORT:-8065}:8065"
+    volumes:
+      - mattermost-data:/mattermost/data
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${DB_OWNER_USER:-postgres}:${DB_OWNER_PASSWORD:-}@switch-db:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: ${MATTERMOST_SITE_URL:-http://localhost:8065}
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEONBOARDINGFLOW: "false"
+      MM_DISPLAYSETTINGS_CUSTOMURLSCHEMES: switchdash
+      MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
+      MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS: switch
+      MM_TEAMSETTINGS_ENABLEOPENSERVER: "true"
+      MM_TEAMSETTINGS_TEAMMATENAMEDISPLAY: "full_name"
+      MM_LOGSETTINGS_ENABLEDIAGNOSTICS: "false"
+      MM_LOGSETTINGS_ENABLESENTRY: "false"
+      MM_SERVICESETTINGS_ENABLESECURITYFIXALERT: "false"
+      MM_ANNOUNCEMENTSETTINGS_ADMINNOTICESENABLED: "false"
+      MM_ANNOUNCEMENTSETTINGS_USERNOTICESENABLED: "false"
+      MM_PLUGINSETTINGS_ENABLEREMOTEMARKETPLACE: "false"
+      MM_PLUGINSETTINGS_PLUGINSTATES: |
+        {"mattermost-ai":{"Enable":false},"com.mattermost.calls":{"Enable":false}}
+    # No healthcheck: the image has no shell or HTTP client. mattermost-setup waits for it.
+    depends_on:
+      switch-db-init:
+        condition: service_completed_successfully
+
+  # Switch's seeder: Mattermost team, admin and `user`, and the Mattermost connection in Switch.
+  mattermost-setup:
+    image: ${SWITCH_REGISTRY:-ghcr.io}/${SWITCH_IMAGE_NAMESPACE:-sandbox-quantum/dev}/setup:${SWITCH_VERSION:-0.31.1-dev.339.g86d5928}
+    profiles: ["mattermost"]
+    restart: on-failure
+    environment:
+      SWITCH_URL: http://switch:8000
+      MATTERMOST_URL: http://mattermost:8065
+      MATTERMOST_URL_FOR_SWITCH: http://mattermost:8065
+      MATTERMOST_CALLBACK_BASE_URL: http://switch:8081
+      MATTERMOST_ADMIN_USER: ${MATTERMOST_ADMIN_USER:-admin}
+      MATTERMOST_ADMIN_PASSWORD: ${MATTERMOST_ADMIN_PASSWORD:-}
+      MATTERMOST_TEAM_NAME: ${MATTERMOST_TEAM_NAME:-switch}
+      MATTERMOST_USER: ${MATTERMOST_USER:-user}
+      MATTERMOST_USER_PASSWORD: ${MATTERMOST_USER_PASSWORD:-}
+      GATEWAY_ADMIN_EMAIL: ${GATEWAY_ADMIN_EMAIL:-admin@switch.local}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-}
+    depends_on:
+      mattermost:
+        condition: service_started
+      switch:
+        condition: service_healthy
+
+  # ── Ferri ─────────────────────────────────────────────────────────────────
+  ferri-db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ferri
+      POSTGRES_PASSWORD: ferri
+      POSTGRES_DB: ferri
+    ports:
+      # For running Ferri on the host (`pnpm dev`); the stack itself does not need it.
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${FERRI_DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - ferri-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferri -d ferri"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ferri-setup:
+    <<: *ferri-app
+    restart: "no"
+    command: ["pnpm", "-s", "stack", "setup"]
+    depends_on:
+      switch:
+        condition: service_healthy
+      ferri-db:
+        condition: service_healthy
+      mattermost-setup:
+        condition: service_completed_successfully
+        required: false
+
+  ferri:
+    <<: *ferri-app
+    command: ["pnpm", "start"]
+    depends_on:
+      ferri-setup:
+        condition: service_completed_successfully
+
+  desk:
+    <<: *ferri-app
+    command: ["pnpm", "--filter", "@ferri/desk", "start"]
+    ports:
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${DESK_HOST_PORT:-3100}:3100"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3100/login').then(r=>process.exit(r.status<500?0:1),()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    depends_on:
+      ferri-setup:
+        condition: service_completed_successfully
+
+  ferri-cli:
+    <<: *ferri-app
+    profiles: ["cli"]
+    restart: "no"
+    command: ["pnpm", "-s", "stack", "help"]
+
+  # ── WhatsApp sidecar (profile "whatsapp") ─────────────────────────────────
+  waha:
+    image: devlikeapro/waha:latest
+    profiles: ["whatsapp"]
+    restart: unless-stopped
+    environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WHATSAPP_DOWNLOAD_MEDIA: "true"
+      WAHA_PRINT_QR: "false"
+      WAHA_DASHBOARD_ENABLED: "false"
+      WHATSAPP_SWAGGER_ENABLED: "false"
+    volumes:
+      - waha-sessions:/app/.sessions
+      - waha-media:/app/.media
+
+volumes:
+  switch-pg:
+  mattermost-data:
+  ferri-pg:
+  waha-sessions:
+  waha-media:

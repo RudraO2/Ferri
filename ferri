@@ -1,0 +1,68 @@
+#!/bin/sh
+# Ferri's one command (macOS, Linux, WSL, Git Bash). Windows PowerShell or cmd: ferri.cmd.
+#
+#   ./ferri up                 start everything (first run: asks for your Anthropic key, makes .env)
+#   ./ferri down               stop (keeps your data)
+#   ./ferri reset              stop and delete all data (Switch, Mattermost, Ferri); keeps .env
+#   ./ferri logs [service]     follow logs (ferri, desk, switch, ...)
+#   ./ferri ps                 what is running
+#   ./ferri build              build Ferri's image from this checkout instead of pulling it
+#   ./ferri doctor             what is on, off or broken, with the next step for each
+#   ./ferri connect telegram --token <bot token>     (also discord, slack; see docs/platforms.md)
+#   ./ferri <script> [args]    any other package.json script, run inside the stack
+#                              (kb, shield:connect, email:setup, whatsapp:pair, builder:setup, ...)
+set -eu
+cd "$(dirname "$0")"
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'ferri: %s\n' "$*" >&2; exit 1; }
+
+command -v docker >/dev/null 2>&1 || die "Docker is not installed. Get Docker Desktop (https://docs.docker.com/get-docker/) or Docker Engine with the compose plugin."
+docker info >/dev/null 2>&1 || die "Docker is installed but not running. Start Docker Desktop (or the docker service) and try again."
+docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is missing (the 'docker compose' command). Update Docker."
+
+# A bind mount of a missing file would make Docker create a folder named .env.
+[ -d .env ] && die ".env is a folder (Docker made it). Remove it: rmdir .env"
+[ -f .env ] || : > .env
+
+dc() { docker compose "$@"; }
+tty_flag() { [ -t 0 ] && [ -t 1 ] || printf '%s' "-T"; }
+cli() { dc run --rm --no-deps $(tty_flag) -e ANTHROPIC_API_KEY ferri-cli "$@"; }
+
+ensure_image() {
+  if [ "${FERRI_BUILD:-0}" = "1" ]; then
+    dc --profile cli build ferri-cli
+  elif ! dc --profile cli pull --quiet ferri-cli >/dev/null 2>&1; then
+    say "Ferri's image is not published for this version yet; building it from this checkout (a few minutes, once)."
+    dc --profile cli build ferri-cli
+  fi
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  up)
+    ensure_image
+    cli pnpm -s stack init
+    say "Starting the stack (the first start downloads Switch and Mattermost, a few minutes) ..."
+    dc up -d --wait --wait-timeout 900 || {
+      dc ps -a
+      die "the stack did not come up. See ./ferri logs ferri-setup (or switch, mattermost), and docs/troubleshooting.md."
+    }
+    cli pnpm -s stack summary
+    ;;
+  down) dc --profile '*' down ;;
+  reset)
+    printf 'This deletes all Ferri, Switch and Mattermost data in this stack. Type yes to go on: '
+    read -r answer
+    [ "$answer" = "yes" ] || die "nothing deleted."
+    dc --profile '*' down -v
+    say "Deleted. ./ferri up starts fresh (your .env is kept)."
+    ;;
+  logs) dc logs -f --tail 200 "$@" ;;
+  ps) dc ps -a ;;
+  build) FERRI_BUILD=1 ensure_image; dc build ;;
+  pull) dc pull ;;
+  help|-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) cli pnpm -s run "$cmd" "$@" ;;
+esac

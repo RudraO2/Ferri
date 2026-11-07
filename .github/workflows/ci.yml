@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, tests, Desk build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm desk:build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  smoke:
+    name: One-command stack smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sign in to GHCR (Ferri's Switch core image)
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Settings for CI (Haiku at low effort)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "::error::Add the ANTHROPIC_API_KEY repository secret"; exit 1; fi
+          cat > .env <<EOF
+          FERRI_MODEL_MAIN=claude-haiku-5-5
+          FERRI_MODEL_FAST=claude-haiku-5-5
+          FERRI_EFFORT_MAIN=low
+          FERRI_EFFORT_FAST=low
+          FERRI_ROOM_GRACE_SECONDS=5
+          EOF
+      - name: Build Ferri's image from this commit
+        run: FERRI_BUILD=1 ./ferri build
+      - name: ./ferri up
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ./ferri up
+      - name: Ask Ferri through Mattermost
+        run: ./ferri smoke
+      - name: Doctor
+        if: always()
+        run: ./ferri doctor || true
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 300 ferri ferri-setup desk switch mattermost-setup
+      - name: Stop
+        if: always()
+        run: docker compose --profile '*' down -v

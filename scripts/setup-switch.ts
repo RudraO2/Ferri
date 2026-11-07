@@ -38,11 +38,15 @@ function writeEnv(updates: Record<string, string>): void {
 }
 
 const env = readEnv(envPath);
-const switchUrl = env.get("SWITCH_URL") || "http://localhost:8000";
-const email = env.get("SWITCH_ADMIN_EMAIL") || "admin@switch.local";
-// Fall back to the sibling Switch checkout's .env (the local standalone setup).
+// The process environment wins (inside the Docker stack it points at the containers), then .env.
+const setting = (key: string) => process.env[key] || env.get(key) || "";
+const switchUrl = setting("SWITCH_URL") || "http://localhost:8000";
+const email = setting("SWITCH_ADMIN_EMAIL") || "admin@switch.local";
+// Then the stack's own admin password, then a sibling Switch checkout's .env (the older two-repo setup).
 const password =
-  env.get("SWITCH_ADMIN_PASSWORD") || readEnv(path.join(root, "..", "switch", ".env")).get("GATEWAY_ADMIN_PASSWORD");
+  setting("SWITCH_ADMIN_PASSWORD") ||
+  setting("GATEWAY_ADMIN_PASSWORD") ||
+  readEnv(path.join(root, "..", "switch", ".env")).get("GATEWAY_ADMIN_PASSWORD");
 if (!password) throw new Error("Set SWITCH_ADMIN_PASSWORD in .env (the Switch GATEWAY_ADMIN_PASSWORD).");
 
 let cookie = "";
@@ -76,8 +80,8 @@ if (health.status !== 200) throw new Error(`Switch is not reachable at ${switchU
 must(await call("POST", "/gateway/auth/login", { email, password }), "sign in");
 console.log(`signed in to ${switchUrl} as ${email}`);
 
-let agentId = env.get("FERRI_AGENT_ID") || "";
-let agentKey = env.get("FERRI_AGENT_KEY") || "";
+let agentId = setting("FERRI_AGENT_ID");
+let agentKey = setting("FERRI_AGENT_KEY");
 
 const agents = must(await call<any[]>("GET", "/gateway/agents"), "list agents");
 const existing = (Array.isArray(agents) ? agents : (agents as any).agents ?? []).find((a: any) => a.name === "ferri");

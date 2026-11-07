@@ -19,7 +19,7 @@ import { createDb, crewMembers } from "@ferri/db";
 import fs from "node:fs";
 import path from "node:path";
 import { GatewayClient, GatewayError, SwitchAgent, gatewayFromEnv } from "@ferri/switch";
-import { builderPaths, controllerCli, readEnvFile } from "./builder-paths.ts";
+import { builderPaths, controllerCli, ensureController, readEnvFile } from "./builder-paths.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 const env = { ...readEnvFile(path.join(root, ".env")), ...process.env } as Record<string, string | undefined>;
@@ -31,6 +31,15 @@ const budgetOutput = Number(env.FERRI_BUILDER_BUDGET_OUTPUT ?? 400_000);
 const budgetTurns = Number(env.FERRI_BUILDER_BUDGET_TURNS ?? 60);
 const machineName = env.FERRI_BUILDER_MACHINE ?? "ferri-laptop";
 const paths = builderPaths(env);
+// The event site reports to Desk's public address, so the Builder needs it before anything else.
+const publicUrlRaw = env.FERRI_PUBLIC_URL?.trim();
+if (!publicUrlRaw) {
+  throw new Error("FERRI_PUBLIC_URL is not set. Set it in .env to Desk's public https address (the event site reports to <FERRI_PUBLIC_URL>/api/site), then run pnpm builder:setup again.");
+}
+const siteEmailFrom = env.FERRI_SITE_EMAIL_FROM?.trim() || env.FERRI_GUEST_EMAIL_FROM?.trim();
+if (env.FERRI_SITE_SMTP_PASS && !siteEmailFrom) {
+  throw new Error("FERRI_SITE_SMTP_PASS is set but no sender is: set FERRI_SITE_EMAIL_FROM (or FERRI_GUEST_EMAIL_FROM) in .env to an address on your Resend domain, then run pnpm builder:setup again.");
+}
 
 function need(key: string): string {
   const v = env[key];
@@ -49,13 +58,8 @@ function cli(args: string[]): { status: number | null; out: string } {
 }
 
 // ── 1. The machine ───────────────────────────────────────────────────────
-if (!fs.existsSync(controllerCli(root, env))) {
-  throw new Error(
-    `The Switch agent controller is not built: ${controllerCli(root, env)}\n` +
-      "Build it in ../switch/console: npx pnpm@10.28.2 install --filter \"@switch-console/agent-controller...\" && " +
-      "npx pnpm@10.28.2 -r --filter \"@switch-console/agent-controller...\" run build",
-  );
-}
+// The controller: the published release, downloaded once (or SWITCH_CONTROLLER_CLI, or a local build).
+await ensureController(root, env);
 const status = cli(["status"]);
 let controllerId = /Controller:\s+([0-9a-f-]{36})/.exec(status.out)?.[1];
 if (!controllerId) {
@@ -93,7 +97,7 @@ if (!hookSecret) {
   hookSecret = randomBytes(24).toString("base64url");
   fs.appendFileSync(path.join(root, ".env"), `\n# The event site's hook into Ferri (spec 12), written by pnpm builder:setup.\nFERRI_SITE_HOOK_SECRET=${hookSecret}\n`);
 }
-const publicUrl = (env.FERRI_PUBLIC_URL ?? "https://ferri.rudratechie.xyz").replace(/\/+$/, "");
+const publicUrl = publicUrlRaw.replace(/\/+$/, "");
 const { db, close } = createDb(env.DATABASE_URL);
 const crewEmails = (await db.select({ handles: crewMembers.handles }).from(crewMembers))
   .map((c) => (c.handles as Record<string, string> | null)?.switch)
@@ -106,7 +110,7 @@ const siteSettings = {
   hook: { url: `${publicUrl}/api/site`, secret: hookSecret },
   admins,
   // Real email on the site (spec 15): Supabase's SMTP through a Resend key that may only send.
-  email: env.FERRI_SITE_SMTP_PASS ? { from: env.FERRI_SITE_EMAIL_FROM ?? "events@rudratechie.xyz", smtpPass: env.FERRI_SITE_SMTP_PASS } : null,
+  email: env.FERRI_SITE_SMTP_PASS && siteEmailFrom ? { from: siteEmailFrom, smtpPass: env.FERRI_SITE_SMTP_PASS } : null,
 };
 fs.mkdirSync(path.join(paths.dir, ".ferri"), { recursive: true });
 fs.writeFileSync(path.join(paths.dir, ".ferri", "site.json"), JSON.stringify(siteSettings, null, 2), { mode: 0o600 });
@@ -275,4 +279,20 @@ for (const [metric, limit] of [
   }
 }
 console.log(`Budget: ${budgetOutput.toLocaleString()} output tokens and ${budgetTurns} turns per 24 h.`);
+// Ferri in the Docker stack reads the Builder's job files through a mount of this folder.
+{
+  const base = path.dirname(paths.dir);
+  const envPath = path.join(root, ".env");
+  if (fs.existsSync(envPath)) {
+    const text = fs.readFileSync(envPath, "utf8");
+    const line = `FERRI_BUILDER_ROOT=${base}`;
+    if (!text.split(/\r?\n/).includes(line)) {
+      const next = /^FERRI_BUILDER_ROOT=.*$/m.test(text)
+        ? text.replace(/^FERRI_BUILDER_ROOT=.*$/m, () => line)
+        : `${text.trimEnd()}\n# The Builder's folder on this machine, mounted into the stack (written by builder:setup).\n${line}\n`;
+      fs.writeFileSync(envPath, next);
+      console.log(`Wrote ${line} to .env. If Ferri runs in Docker, run \`./ferri up\` once so it sees the Builder's files.`);
+    }
+  }
+}
 console.log("\nDone. Keep `pnpm builder:controller` running; Ferri hands jobs to the Builder in the crew room.");

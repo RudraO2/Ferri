@@ -6,11 +6,11 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { builderPaths, controllerCli } from "./builder-paths.ts";
+import { builderPaths, ensureController } from "./builder-paths.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { envFile } = builderPaths();
-const args = ["--no-warnings", controllerCli(root), "run", "--no-self-update"];
+const args = ["--no-warnings", await ensureController(root), "run", "--no-self-update"];
 if (fs.existsSync(envFile)) args.push("--env-file", envFile);
 else console.warn(`No ${envFile} yet: run \`pnpm builder:setup\` (the Builder gets its own Claude home and key there).`);
 
