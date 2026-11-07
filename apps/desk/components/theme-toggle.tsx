@@ -3,7 +3,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-/** Light/dark switch. Remembers the choice on this device; the system decides until then. */
+/** Light/dark switch. Light by default; a dark choice is remembered on this device. */
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   useEffect(() => {
