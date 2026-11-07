@@ -43,19 +43,20 @@ const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 const PEOPLE = ["Priya", "Arjun", "Meera", "Kabir", "Sana", "Rohan", "Ishita", "Dev", "Ananya", "Vikram", "Zoya", "Neel", "Tara", "Aditya", "Riya", "Farhan", "Leela", "Omar", "Nisha", "Karan"];
 
 /** Questions members ask, by topic, with what Ferri answered when it knew. */
+// Every answer matches the seeded Build Night knowledge (seed/events/build-night).
 const KNOWN = [
-  ["schedule", "when does hacking start?", "Hacking starts at 11:00 AM, right after the opening talk in Hall B."],
-  ["schedule", "what time is the closing ceremony?", "Demos start at 9:00 AM tomorrow and the closing ceremony is at 10:30 AM."],
-  ["venue", "where is the venue?", "Lantern Labs, 4th floor, 12 MG Road. Take the lift on the left of the lobby."],
-  ["venue", "is there parking near the venue?", "Yes, the basement parking is free for participants. Show your badge at the gate."],
-  ["food", "is dinner included?", "Yes. Dinner is at 8:00 PM in the cafeteria, with veg and vegan options."],
-  ["food", "will there be vegan food?", "Yes, every meal has a vegan option, marked with a green tag."],
-  ["teams", "can I join without a team?", "Yes. Team matching is at 10:30 AM in Hall A, and solo hackers are welcome."],
+  ["schedule", "when does hacking start?", "Hacking starts at 11:00 AM on Saturday, right after team formation."],
+  ["schedule", "when do submissions close?", "Submissions close at 7:00 AM on Sunday."],
+  ["venue", "where is the venue?", "Koramangala Makerspace, 3rd floor, 80 Feet Road, Koramangala. The entrance is next to the blue bakery."],
+  ["venue", "how do I get there by metro?", "Take the Pink Line to Koramangala station; the venue is a 10 minute walk."],
+  ["food", "what time is dinner?", "Dinner is at 8:30 PM on Saturday, and there is a midnight snack at 12:30 AM."],
+  ["food", "will there be vegan food?", "Yes. All meals are vegetarian, with vegan and Jain options on request at registration."],
+  ["teams", "can I join without a team?", "Yes. You can come solo; team formation is at 10:30 AM on Saturday."],
   ["teams", "how many people per team?", "Teams have 2 to 4 people."],
-  ["wifi", "what's the wifi password?", "Network LanternGuest, password buildnight2026."],
-  ["rules", "can we use code we wrote before?", "You can use open-source libraries and your own boilerplate, but the project itself must be built during the event."],
-  ["prizes", "what are the prizes?", "Three team prizes (₹50k, ₹30k, ₹20k) and a best first-time hackers prize."],
-  ["schedule", "when is the submission deadline?", "Submissions close at 8:00 AM tomorrow on the event site."],
+  ["tech", "what's the wifi password?", "The network is LanternGuest and the password is buildnight2026."],
+  ["rules", "can we use code we wrote before?", "Projects must be started at the event; you may use open-source libraries."],
+  ["prizes", "what are the prizes?", "First place wins ₹40,000, second ₹25,000 and third ₹10,000. Every team that demos gets swag."],
+  ["judging", "how long is each demo?", "Each team gets 4 minutes to demo and 2 minutes of questions."],
 ] as const;
 const ASK_STYLE = (q: string) => pick([`@ferri ${q}`, `@ferri ${q}`, `hey @ferri ${q}`, `${q.charAt(0).toUpperCase()}${q.slice(1)} @ferri`]);
 
@@ -131,22 +132,22 @@ async function fill() {
   // A question Ferri does not know opens a card; the crew answers it within minutes,
   // everyone who asked gets the answer, and Ferri knows it from then on.
   const ANSWERS: Record<string, string> = {
-    "is there a quiet room for prayer?": "Yes, room 4C on the 4th floor is a quiet room all night.",
-    "can i get a jain meal?": "Yes. Tell the food desk your name and they will set one aside.",
-    "are there showers at the venue?": "Yes, two showers on the 3rd floor. Towels at the help desk.",
-    "will the talks be recorded?": "Yes, the talks go up on our YouTube channel next week.",
+    "are there showers at the venue?": "Yes, two showers on the 3rd floor. Towels are at the help desk.",
+    "will the talks be recorded?": "Yes, the opening talk goes up on our YouTube channel next week.",
     "can a team have members from two colleges?": "Yes, teams can mix colleges and companies.",
     "is the hardware lab open all night?": "Yes, the 2nd floor hardware lab is open all night. Sign the sheet at the door.",
-    "can we sleep at the venue?": "Yes, the nap room on the 3rd floor has mats. Bring a blanket.",
     "is there a printer we can use?": "Yes, at the help desk. Up to 10 pages per team.",
     "are mentors around after midnight?": "Two mentors stay all night; find them at the help desk.",
     "can we use the rooftop?": "The rooftop is open until 11:00 PM.",
+    "is there a locker for bags?": "Yes, lockers are at check-in. Bring your own lock.",
+    "can my friend come watch the demos?": "Yes, visitors can watch from 8:00 AM on Sunday. They need a photo ID at the door.",
+    "is there a first aid kit?": "Yes, at the help desk on the 3rd floor.",
   };
   const LEARNABLE = Object.keys(ANSWERS);
   const OPEN = [
     { text: "can we bring our own monitor?", topic: "venue", askers: 2 },
     { text: "can I bring my dog?", topic: "rules", askers: 1 },
-    { text: "is there a quiet room near Hall B?", topic: "venue", askers: 1 },
+    { text: "is there bike parking?", topic: "venue", askers: 1 },
   ];
   let qn = 0;
   const qRows: (typeof questions.$inferInsert)[] = [];
@@ -313,8 +314,8 @@ async function fill() {
 
   // ── Announcements: two posted everywhere (one edited in place), one waiting ──
   const posted = [
-    { title: "Lunch moves to 1:30 PM", text: "Lunch moves to 1:30 PM today, same place: the cafeteria on the 3rd floor.", v: 2, m: 300, by: crewNames[0]! },
-    { title: "Doors open at 10:00", text: "Doors open at 10:00 AM. Bring your ID for the badge desk.", v: 1, m: 560, by: crewNames[1] ?? crewNames[0]! },
+    { title: "Lunch moves to 1:30 PM", text: "Lunch moves to 1:30 PM today, on the 3rd floor.", v: 2, m: 300, by: crewNames[0]! },
+    { title: "Doors open at 9:00 AM", text: "Doors open at 9:00 AM for check-in. Bring a government photo ID that matches your registration.", v: 1, m: 560, by: crewNames[1] ?? crewNames[0]! },
   ];
   for (const [i, a] of posted.entries()) {
     const at = minutesAgo(a.m);
@@ -345,7 +346,7 @@ async function fill() {
   const waitAt = minutesAgo(4);
   const [waiting] = await db
     .insert(announcements)
-    .values({ communityId: c.id, eventId: ev.id, title: "Demos start at 9:00 AM sharp", status: "waiting", origin: "decision", requestedBy: "Ferri", sourceMessageId: `${MARK}ann:3`, createdAt: waitAt, updatedAt: waitAt })
+    .values({ communityId: c.id, eventId: ev.id, title: "Judging starts at 8:00 AM sharp", status: "waiting", origin: "decision", requestedBy: "Ferri", sourceMessageId: `${MARK}ann:3`, createdAt: waitAt, updatedAt: waitAt })
     .returning({ id: announcements.id });
   const [annCard] = await db
     .insert(cards)
@@ -356,7 +357,7 @@ async function fill() {
       switchSessionId: `${MARK}cards`,
       kind: "announce",
       topic: "schedule",
-      question: "Demos start at 9:00 AM sharp",
+      question: "Judging starts at 8:00 AM sharp",
       announcementId: waiting!.id,
       announcementVersion: 1,
       status: "open",
@@ -367,8 +368,8 @@ async function fill() {
   await db.insert(announcementVersions).values({
     announcementId: waiting!.id,
     version: 1,
-    title: "Demos start at 9:00 AM sharp",
-    draft: "Demos start at 9:00 AM sharp tomorrow in Hall B. Each team gets 3 minutes; be there by 8:45.",
+    title: "Judging starts at 8:00 AM sharp",
+    draft: "Judging starts at 8:00 AM sharp on Sunday, right after breakfast. Each team gets 4 minutes to demo and 2 minutes of questions.",
     status: "waiting",
     reason: "the crew decided it in ferri-crew",
     proposedBy: "Ferri",

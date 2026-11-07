@@ -33,8 +33,8 @@ const Q2 = { who: "Arjun", text: "@ferri are monitors allowed at the venue?" };
 // Ferri's real holding reply (HOLDING_REPLY in packages/knowledge/src/answer.ts).
 const HOLD: Msg = { who: "Ferri", text: "I don't have that yet. I'm checking with the team.", ferri: true };
 const ANSWER = "Yes, bring it. There are power strips at every table.";
-const LUNCH1 = "Lunch is at 1:00 PM in the cafeteria, 3rd floor.";
-const LUNCH2 = "Lunch moves to 1:30 PM in the cafeteria, 3rd floor.";
+const LUNCH1 = "Lunch is at 1:00 PM today, on the 3rd floor.";
+const LUNCH2 = "Lunch moves to 1:30 PM today, on the 3rd floor.";
 const all = (m: Msg): Rows => Object.fromEntries(APPS.map((a) => [a.key, [m]]));
 
 const BEATS: { title: string; line: string; icon: typeof Users; frames: Frame[] }[] = [
