@@ -23,7 +23,7 @@ Pocket also shows the other cards that need the crew: announcements and `+ Annou
   Open the `https://….trycloudflare.com/m` link on the phone. Put that address in `.env` as `FERRI_PUBLIC_URL` and restart Desk and Ferri (`docker compose restart ferri desk`).
 
 - **A stable address**: for real use, put Desk on a stable hostname with a named tunnel (example config: `infra/cloudflared.example.yml`), because push subscriptions belong to one web address. For example `https://ferri.example.com/m`. Set `FERRI_PUBLIC_URL` to it.
-- **Allowed origins**: the hosts allowed to post Pocket's forms are baked into Ferri's image at build time from `POCKET_ALLOWED_ORIGINS` (default `*.trycloudflare.com`). For your own host name, add it there, then `./ferri build` and `./ferri up`.
+- **Allowed origins**: the hosts allowed to post Pocket's forms are baked into Ferri's image at build time from `POCKET_ALLOWED_ORIGINS` (default `*.trycloudflare.com`). For your own host name, add it there and set `FERRI_VERSION=local` in `.env`, then run `./ferri up`. No image is published under that tag, so `./ferri up` builds Ferri's image from your checkout with your hosts, every time, instead of pulling the published one over it.
 - **iPhone**: add Pocket to the Home Screen first, then allow notifications from it.
 
 `FERRI_PUBLIC_URL` also serves the public RSVP page ([rsvp.md](rsvp.md)), Resend's webhook ([email.md](email.md)) and the event site's reports ([builder.md](builder.md)). `./ferri doctor` checks that it is reachable.

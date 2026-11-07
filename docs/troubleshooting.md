@@ -89,7 +89,7 @@ Start with `./ferri doctor` (Windows: `.\ferri doctor` in PowerShell, `ferri doc
 
 ### Pocket's forms are refused on your own host name
 - **Cause**: the origins allowed to post Pocket's forms are baked into Ferri's image at build time from `POCKET_ALLOWED_ORIGINS` (default `*.trycloudflare.com`).
-- **Fix**: add your host to `POCKET_ALLOWED_ORIGINS` in `.env`, then `./ferri build` and `./ferri up`.
+- **Fix**: add your host to `POCKET_ALLOWED_ORIGINS` in `.env`, set `FERRI_VERSION=local` there too, then run `./ferri up`. With that tag `./ferri up` builds Ferri's image from your checkout (no image is published under it) instead of pulling the published one, which has only the default hosts.
 
 ### The Builder: "Waiting for the controller"
 - **Cause**: `pnpm builder:setup` waits until the Switch agent controller on your machine is online.

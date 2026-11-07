@@ -32,6 +32,9 @@ x-ferri-app: &ferri-app
   volumes:
     # The one .env: secrets made by `./ferri up`, values written by setup (agent key, room ids).
     - ./.env:/app/.env
+    # Your community, event and FAQ files (docs/your-community.md): setup and `./ferri kb seed`
+    # read the checkout's seed/, so an edit there needs no rebuild.
+    - ./seed:/app/seed:ro
     # The Builder's folder on the host (set by `pnpm builder:setup`), so Ferri and Desk can read its job files.
     - ${FERRI_BUILDER_ROOT:-./.ferri-state/builder}:/builder-home
     # Files a command leaves for you (the WhatsApp QR code).

@@ -19,7 +19,7 @@
 
 `./ferri up` loads `seed/`: a made-up community, Lantern Labs, and its event, Lantern Build Night. It writes them into Postgres and mirrors the knowledge into a Switch library document attached to `ferri-lab`. Loading again is safe: only changed sections get a new version, and an edit made in Desk is never overwritten.
 
-To serve your own community, edit the markdown in `seed/` (and the crew and topics in `seed/events/<event>/event.yaml`), then run `./ferri kb seed`. Or edit the knowledge in Desk.
+To put your own community, event and FAQ in place of the demo, in Desk or in `seed/`, follow [your-community.md](your-community.md).
 
 ## Knowledge commands
 
