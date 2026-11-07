@@ -81,6 +81,8 @@ services:
       - -c
       - |
         set -e
+        # pg_isready can pass during the first boot's temporary server; wait until a real query works.
+        i=0; until psql -d postgres -c "SELECT 1" >/dev/null 2>&1; do i=$$((i+1)); [ $$i -ge 60 ] && { psql -d postgres -c "SELECT 1"; exit 1; }; sleep 1; done
         psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='mattermost'" | grep -q 1 || psql -d postgres -c 'CREATE DATABASE mattermost;'
         psql -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$$DB_USER'" | grep -q 1 || psql -d postgres -c "CREATE ROLE \"$$DB_USER\" LOGIN PASSWORD '$$DB_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;"
         psql -d postgres -c "ALTER ROLE \"$$DB_USER\" PASSWORD '$$DB_PASSWORD';"
