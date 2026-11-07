@@ -1,6 +1,8 @@
+import { firstRunChecklist, firstRunFacts } from "@/lib/checklist";
 import { runDoctor, type DoctorCheck } from "@/lib/ferri";
 import { requireUser } from "@/lib/session";
 import { Empty, Fold, PageHead, Section } from "../ui";
+import { FirstRun } from "./first-run";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,9 @@ function Checks({ checks }: { checks: DoctorCheck[] }) {
 
 export default async function SetupPage() {
   await requireUser();
-  const report = await runDoctor(process.env);
+  // The doctor reads Switch; the checklist's other facts come from Ferri's tables at the same time.
+  const [report, facts] = await Promise.all([runDoctor(process.env), firstRunFacts()]);
+  const firstRun = firstRunChecklist({ ...facts, bridges: report.bridges ?? null });
   const core = report.checks.filter((c) => c.area === "core");
   const integrations = report.checks.filter((c) => c.area === "integration");
   const working = integrations.filter((c) => c.status !== "off");
@@ -50,9 +54,15 @@ export default async function SetupPage() {
     <>
       <PageHead
         title="Setup"
-        sub="What is on, off or broken, and the next step for each."
-        about={<p>The same report as ./ferri doctor. Reload the page after a change. Checked {new Date(report.at).toLocaleString("en-GB")}.</p>}
+        sub="Your first run, then what is on, off or broken, with the next step for each."
+        about={
+          <>
+            <p>First run ticks itself from Switch and Ferri&apos;s own data. The built-in test chat (Mattermost) and the Lantern demo count as demo, not done.</p>
+            <p>Below it, the same report as ./ferri doctor. Reload the page after a change. Checked {new Date(report.at).toLocaleString("en-GB")}.</p>
+          </>
+        }
       />
+      <FirstRun list={firstRun} />
       <Section title="Core" aside={<span className={`text-[12.5px] ${brokenCore ? "font-medium text-red-700" : "text-zinc-500"}`}>{brokenCore ? `${brokenCore} broken` : "all good"}</span>}>
         <Checks checks={core} />
       </Section>

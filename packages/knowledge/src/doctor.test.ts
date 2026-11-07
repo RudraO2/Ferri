@@ -70,6 +70,8 @@ describe("runDoctor", () => {
     expect(byId(r, "telegram").next).toBe("./ferri connect telegram --token <bot token from BotFather>");
     // No model call: only the free models list.
     expect(calls.filter((c) => c.includes("anthropic.com"))).toEqual(["GET https://api.anthropic.com/v1/models?limit=1"]);
+    // Switch's connections ride along for Desk's first-run checklist.
+    expect(r.bridges?.map((b) => b.bridge_type)).toEqual(["mattermost"]);
   });
 
   it("never throws when Switch is down, and marks core broken", async () => {
@@ -83,6 +85,7 @@ describe("runDoctor", () => {
     expect(byId(r, "db").status).toBe("broken");
     expect(byId(r, "telegram").status).toBe("broken");
     expect(byId(r, "telegram").next).toBe("Fix the core checks first.");
+    expect(r.bridges).toBeNull();
   });
 
   it("turns a hanging call into broken after the timeout", async () => {

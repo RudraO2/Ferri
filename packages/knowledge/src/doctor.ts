@@ -11,6 +11,9 @@ import { GatewayClient } from "@ferri/switch";
 import { sql } from "drizzle-orm";
 import { builderName } from "./builder.ts";
 
+// Desk's first-run checklist (spec 25) builds on this report's connections.
+export * from "./checklist.ts";
+
 export type CheckStatus = "on" | "off" | "broken";
 export type CheckArea = "core" | "integration";
 
@@ -30,6 +33,8 @@ export interface DoctorReport {
   checks: DoctorCheck[];
   /** False when any core check is broken. */
   ok: boolean;
+  /** Switch's connections as read for the checks; null when they could not be read. Desk's first-run checklist uses them. */
+  bridges?: BridgeInfo[] | null;
 }
 
 export interface DoctorDeps {
@@ -489,7 +494,7 @@ export async function runDoctor(env: Env = process.env, deps: DoctorDeps = {}): 
   ]);
   checks.push(emailC, socialC, postersC, builderCheck(env, managedR.value, gw ? managedR.error : { status: null, message: "Switch admin sign-in failed" }, cmd), publicC, lumaC);
 
-  return { at: new Date().toISOString(), checks, ok: !checks.some((c) => c.area === "core" && c.status === "broken") };
+  return { at: new Date().toISOString(), checks, ok: !checks.some((c) => c.area === "core" && c.status === "broken"), bridges: bridgesR.value };
 }
 
 async function defaultCheckDb(url: string): Promise<{ communities: number }> {
