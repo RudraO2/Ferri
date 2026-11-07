@@ -24,7 +24,7 @@ env:
   # Switch release the fork is based on, and the fork commit that adds the agent message edit and WhatsApp.
   SWITCH_VERSION: 0.31.1-dev.339.g86d5928
   SWITCH_FORK: RudraO2/switch
-  SWITCH_FORK_REF: a3d560e0f
+  SWITCH_FORK_REF: a3d560e0f1595e74e8456d01af30a6b6424b2048
   CORE_TAG: 0.31.1-dev.339.g86d5928-ferri.1
 
 jobs:
@@ -74,7 +74,7 @@ jobs:
         with:
           repository: ${{ env.SWITCH_FORK }}
           ref: ${{ env.SWITCH_FORK_REF }}
-          fetch-depth: 0
+          fetch-depth: 1
       - if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
       - if: steps.check.outputs.skip != 'true'

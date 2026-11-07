@@ -1,0 +1,39 @@
+# Hosting Ferri on a small always-on server, public through a Cloudflare named tunnel
+# (no open ports, works next to whatever else the server runs). Used for our live demo.
+#
+# On the server, in .env:
+#   COMPOSE_FILE=compose.yml:infra/demo/compose.demo.yml
+#   COMPOSE_PROFILES=                     (no Mattermost: people use Telegram or Discord)
+#   CLOUDFLARE_TUNNEL_ID=<tunnel id>      (cloudflared tunnel create <name>, on any machine)
+#   CLOUDFLARE_TUNNEL_CREDENTIALS=./.ferri-state/tunnel.json   (the tunnel's credentials file)
+#   FERRI_PUBLIC_URL=https://<the hostname routed to the tunnel>
+#   GATEWAY_COOKIE_SECURE=true
+# Then ./ferri up. Desk and Pocket are served at FERRI_PUBLIC_URL.
+#
+# Memory limits keep the stack inside about 3 GB and protect other services on the server.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--cred-file", "/etc/cloudflared/tunnel.json", "--url", "http://desk:3100", "${CLOUDFLARE_TUNNEL_ID:?set CLOUDFLARE_TUNNEL_ID in .env}"]
+    volumes:
+      - ${CLOUDFLARE_TUNNEL_CREDENTIALS:-./.ferri-state/tunnel.json}:/etc/cloudflared/tunnel.json:ro
+    mem_limit: 128m
+    depends_on:
+      - desk
+
+  switch:
+    mem_limit: 900m
+  switch-db:
+    mem_limit: 384m
+  gateway:
+    mem_limit: 128m
+  ferri-db:
+    mem_limit: 384m
+  ferri:
+    mem_limit: 640m
+  desk:
+    mem_limit: 640m
+  ferri-setup:
+    mem_limit: 640m
