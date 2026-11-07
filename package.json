@@ -11,6 +11,7 @@
     "smoke": "tsx --env-file-if-exists=.env scripts/smoke.ts",
     "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
     "connect": "tsx --env-file-if-exists=.env scripts/connect.ts",
+    "space": "tsx --env-file-if-exists=.env scripts/space.ts",
     "setup:switch": "tsx --env-file-if-exists=.env scripts/setup-switch.ts",
     "dev": "pnpm --filter @ferri/agent dev",
     "start": "pnpm --filter @ferri/agent start",

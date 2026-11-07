@@ -16,6 +16,8 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:2025.11.1
     restart: unless-stopped
+    # Root in the container, so it can read a credentials file only its owner may read.
+    user: "0:0"
     command: ["tunnel", "--no-autoupdate", "run", "--cred-file", "/etc/cloudflared/tunnel.json", "--url", "http://desk:3100", "${CLOUDFLARE_TUNNEL_ID:?set CLOUDFLARE_TUNNEL_ID in .env}"]
     volumes:
       - ${CLOUDFLARE_TUNNEL_CREDENTIALS:-./.ferri-state/tunnel.json}:/etc/cloudflared/tunnel.json:ro

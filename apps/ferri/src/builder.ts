@@ -123,6 +123,7 @@ export function createBuilder(deps: BuilderDeps) {
   }
 
   /** The Builder's id and state, from Switch's agent management (Ferri may manage its owner's agents). */
+  let saidOff = false;
   async function builder(fresh = false): Promise<BuilderAgent | null> {
     if (!fresh && Date.now() - cached.at < 30_000) return cached.agent;
     try {
@@ -133,7 +134,12 @@ export function createBuilder(deps: BuilderDeps) {
         agent: a ? { agentId: a.agent_id, name: a.name, model: a.model, machine: a.machine, process: a.actual?.process ?? null } : null,
       };
     } catch (err) {
-      log(`builder: list_managed_agents failed: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      // Not set up (Ferri may not manage agents yet): say so once, not every 30 seconds.
+      const notSetUp = /not allowed to manage agents|HTTP 403/.test(message);
+      if (!notSetUp) log(`builder: list_managed_agents failed: ${message}`);
+      else if (!saidOff) log("builder: off (run `pnpm builder:setup` on the machine that will run it; docs/builder.md)");
+      saidOff = saidOff || notSetUp;
       cached = { at: Date.now(), agent: cached.agent };
     }
     return cached.agent;
