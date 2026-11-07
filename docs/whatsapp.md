@@ -1,6 +1,13 @@
 # WhatsApp
 
-WhatsApp goes through the `whatsapp_web` bridge in our Switch fork, linked to the organizer's own number. How the bridge works is in [architecture.md](architecture.md#what-we-added-to-switch-a-whatsapp-bridge). It ships in the Switch core image that `./ferri up` already runs; only the sidecar is extra.
+WhatsApp goes through the `whatsapp_web` bridge in our Switch fork, linked to a WhatsApp number the way WhatsApp Web is. How the bridge works is in [architecture.md](architecture.md#what-we-added-to-switch-a-whatsapp-bridge). It ships in the Switch core image that `./ferri up` already runs; only the sidecar is extra.
+
+## Before you start
+
+This route is unofficial and carries a risk under WhatsApp's terms. Ferri does not use the official WhatsApp Business API: the WAHA sidecar signs in to a number as a linked device, the way WhatsApp Web does, and our fork's `whatsapp_web` bridge carries the chats you name into Switch.
+
+- Use a spare number, not your personal one. WhatsApp may restrict or ban a number that acts like a bot.
+- Every post is paced so the number behaves like a person: a typing indicator first, a pause of one to two seconds, at least 3 seconds between posts in one chat, and at most 30 posts an hour for the whole connection. Past that cap, a post is refused until the hour has passed, not queued.
 
 ## Turn it on
 
@@ -15,7 +22,7 @@ WhatsApp goes through the `whatsapp_web` bridge in our Switch fork, linked to th
 
 2. Start the sidecar: `./ferri up`.
 
-3. Link your phone:
+3. Link the phone:
 
    ```bash
    ./ferri whatsapp:pair --code <phone number>
@@ -25,7 +32,7 @@ WhatsApp goes through the `whatsapp_web` bridge in our Switch fork, linked to th
 
    Without `--code`, the command saves a QR code as `.ferri-state/shared/ferri-whatsapp-qr.png` in this folder, refreshed every few seconds; open it and scan it from WhatsApp, Linked devices, Link a device. (Run on the host with `pnpm whatsapp:pair`, it goes to the system temp folder, and the sidecar is reached at `FERRI_WAHA_URL`.)
 
-4. A chat becomes a room with its first message. Then use Add Ferri in Desk and attach the space to an event.
+4. A chat becomes a room with its first message. Then use Add Ferri in Desk and attach the space to an event ([platforms.md](platforms.md#attach-your-groups-and-choose-the-crew-room)).
 
 `./ferri doctor` shows WhatsApp as on once the connection exists.
 
@@ -33,5 +40,5 @@ WhatsApp goes through the `whatsapp_web` bridge in our Switch fork, linked to th
 
 - Only the chats you name become rooms: groups by name, and `me` for the "Message yourself" chat, which is a handy private test room. The rest of the phone's chats never reach Switch.
 - From there a WhatsApp group is a space like any other: Add Ferri in Desk, attach it to an event, pick a mode. Ferri answers with its sources, unknown questions become cards in the crew room, and announcements reach the group after the same one OK.
-- Ferri's posts start with "*Ferri:*" and are paced (typing first, a gap per chat, a cap per hour), so the linked number behaves like a person.
+- Ferri's posts start with "*Ferri:*" and are paced (typing first, a gap per chat, a cap per hour; the numbers are in [Before you start](#before-you-start)), so the linked number behaves like a person.
 - A card shown on WhatsApp is answered by typing (`A1 1`, `A1 "text"`); WhatsApp gets no buttons for it.
