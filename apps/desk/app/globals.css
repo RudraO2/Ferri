@@ -21,11 +21,13 @@
   --font-sans: var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: var(--font-display-face), var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-hand: var(--font-hand-face), "Comic Sans MS", cursive;
+  --font-serif: var(--font-serif-face), Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
 
   --color-brand: var(--brand);
   --color-brand-lip: var(--brand-lip);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-line: var(--brand-line);
   --color-brand-ink: var(--brand-ink);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
@@ -172,12 +174,7 @@
   --rose-800: #a3203f;
 }
 
-/* Dark: deep sea at night. Neutrals invert; tints become translucent glows. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-  }
-}
+/* Dark: deep sea at night, only when chosen with the toggle (light is the default). */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --brand: #2fb3ad;
@@ -241,28 +238,6 @@
   --rose-100: rgba(255, 90, 130, 0.16);
   --rose-800: #ffa6bb;
 }
-/* Before the theme script runs (or without it), follow the system. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --brand: #2fb3ad;
-    --brand-lip: #1b7f7a;
-    --brand-soft: rgba(47, 179, 173, 0.16);
-    --brand-ink: #8fe0da;
-    --paper: #0d1b1e;
-    --surface: #14272b;
-    --white: #14272b;
-    --ink: #eef3f2;
-    --n-50: #0d1b1e;
-    --n-100: #18292d;
-    --n-200: #223a3f;
-    --n-400: #6b8a8d;
-    --n-500: #9db5b6;
-    --n-700: #d2dfde;
-    --n-900: #eef3f2;
-  }
-}
-
-
 html {
   background: var(--paper);
 }
@@ -507,4 +482,155 @@ body {
   padding: 0 0.12em;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+/* ── Public site (landing and sibling pages) ─────────────────────────────── */
+:root {
+  --sky-top: #dff1ef;
+  --sky-mid: #fdeee2;
+  --sky-peach: rgba(255, 196, 166, 0.55);
+  --sky-glass: rgba(170, 225, 219, 0.6);
+  --cloud: rgba(255, 255, 255, 0.85);
+  --sea-1: #bfe5df;
+  --sea-2: #8fd0c7;
+  --grain-opacity: 0.22;
+}
+:root[data-theme="dark"] {
+  --sky-top: #0c2427;
+  --sky-mid: #13252a;
+  --sky-peach: rgba(255, 140, 100, 0.12);
+  --sky-glass: rgba(47, 179, 173, 0.18);
+  --cloud: rgba(140, 200, 196, 0.08);
+  --sea-1: rgba(47, 179, 173, 0.18);
+  --sea-2: rgba(47, 179, 173, 0.3);
+  --grain-opacity: 0.12;
+}
+.font-serif-display {
+  font-family: var(--font-serif-face), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.02em;
+}
+
+/* Dawn over the sea: a soft painted sky behind the hero, clouds, paper grain. */
+.hero-sky {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(55% 45% at 12% 18%, var(--sky-peach), transparent 70%),
+    radial-gradient(45% 40% at 90% 12%, var(--sky-peach), transparent 70%),
+    radial-gradient(70% 55% at 50% -5%, var(--sky-glass), transparent 70%),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 42%, var(--paper) 78%);
+}
+.hero-sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.38 0 0 0 0 0.3 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.cloud {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--cloud);
+  filter: blur(28px);
+  animation: cloud-drift 38s ease-in-out infinite alternate;
+}
+@keyframes cloud-drift {
+  from {
+    transform: translateX(-3%);
+  }
+  to {
+    transform: translateX(3%);
+  }
+}
+.sea-band {
+  position: absolute;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  z-index: -1;
+  background: linear-gradient(180deg, transparent, var(--sea-1) 30%, var(--sea-2) 100%);
+  opacity: 0.55;
+  mask-image: radial-gradient(60% 70% at 50% 55%, black 40%, transparent 100%);
+}
+
+/* The rotating word in the hero chip. */
+@keyframes rot-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.rot-in {
+  animation: rot-in 520ms var(--ease-out) both;
+}
+
+/* Hero entrance: one orchestrated moment. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 800ms var(--ease-out) both;
+}
+
+/* Playground */
+@keyframes pg-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.pg-dot {
+  animation: pg-dot 1s ease-in-out infinite;
+}
+@keyframes pg-live {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 157, 92, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(31, 157, 92, 0);
+  }
+}
+.pg-live {
+  animation: pg-live 2s ease-in-out infinite;
+}
+.pg-bubbles {
+  background-color: var(--n-50);
+  background-image: radial-gradient(var(--n-200) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Section rhythm on the public site. */
+.site-section {
+  @apply mx-auto max-w-[1160px] px-5 sm:px-8;
+}
+.kicker {
+  @apply mb-3 text-[14px] font-semibold text-brand-ink;
+}
+.lede {
+  @apply mt-5 max-w-[620px] text-[17.5px] leading-[1.65] text-zinc-600;
 }

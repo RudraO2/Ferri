@@ -4,11 +4,11 @@ import { PlatformLogo } from "@/components/platform";
 
 const SWITCH_PARTS = [
   { icon: MessagesSquare, name: "Rooms", line: "Every chat on every app is one room. Ferri reads one stream." },
-  { icon: SquareCheckBig, name: "Cards", line: "Approval cards with buttons, answered where the crew already is." },
-  { icon: ShieldCheck, name: "Trust", line: "Every message passes Shield before it is relayed." },
+  { icon: SquareCheckBig, name: "Cards", line: "Question and approval cards with buttons, answered where the crew already is." },
+  { icon: ShieldCheck, name: "Trust", line: "Every message passes Shield, our Switch Trust endpoint, before it is relayed." },
   { icon: LayoutTemplate, name: "Templates", line: "Desks and team rooms become real private channels." },
   { icon: Bot, name: "Managed agent", line: "The Builder: a Claude Code agent with permission cards." },
-  { icon: Coins, name: "Budgets", line: "Switch caps the Builder's spend; Ferri holds jobs when it runs out." },
+  { icon: Coins, name: "Spending cap", line: "Switch caps the Builder's tokens and turns per 24 hours; Ferri holds jobs until it resets." },
 ];
 const OUR_CHANGES = [
   { icon: PencilLine, name: "Agent message edit", line: "Announcements are edited in place on every platform." },
