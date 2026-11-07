@@ -7,12 +7,26 @@
   "venue": "Riverside Library, Hall 2, Pune",
   "url": "https://example.org/game-night",
   "cta": "Save your seat",
-  "highlights": ["Free entry", "₹500 game vouchers", "Snacks"],
+  "highlights": [
+    "Free entry",
+    "₹500 game vouchers",
+    "Snacks"
+  ],
   "community": "Example Club",
   "logo": "logo.svg",
   "photo": null,
   "accent": "#22C55E",
   "art": "art/background.png",
-  "artPrompt": "A cosy room with a big wooden table, scattered dice and cards, warm lamp light, soft focus",
-  "formats": ["poster", "square", "portrait", "story", "link", "x"]
+  "theme": "dark",
+  "ink": "#0d1410",
+  "artStyle": "illustration",
+  "artPrompt": "a few board game pieces, a die and a pawn, as simple flat shapes",
+  "formats": [
+    "poster",
+    "square",
+    "portrait",
+    "story",
+    "link",
+    "x"
+  ]
 }

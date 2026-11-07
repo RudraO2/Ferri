@@ -10,6 +10,15 @@
  * generated art (art/background.png), a community photo, or, when neither is
  * there, a background the kit draws itself (said so in the output).
  *
+ * The layout: the art (or photo) is one full-bleed block, and every word sits on
+ * a solid panel in the event's colours (theme "dark" on `ink`, or "light" on
+ * `paper`), never on the picture itself, so the text reads on any art. Tall
+ * formats stack art over panel; wide ones put the panel left and the art right.
+ * One margin and one spacing scale per format; the title is measured with the
+ * font and set as large as the width allows on at most two lines (three on wide
+ * cards); then date and place, then one call to action with the address and the
+ * QR code. The community's logo and name (or the kicker) sit on a small tag.
+ *
  * Checks, and the render fails when one does not pass:
  *   - every character of every text is in the fonts (no missing glyph boxes);
  *   - the QR code on every image reads back as exactly the design's URL.
@@ -54,10 +63,26 @@ const wanted = (only ?? design.formats ?? Object.keys(FORMATS)).filter((f) => {
   return true;
 });
 
+/**
+ * The grid of each format, in units of 1/1080 of the short side: margin (m),
+ * panel padding above (top) and below (bottom) the text, the title's largest
+ * size and line count, the type sizes (strong for date and place, soft for the
+ * second lines), the QR code, and what the format has room for.
+ */
+const SPEC = {
+  poster: { m: 80, top: 64, bottom: 80, title: 132, lines: 2, tagline: 30, strong: 33, soft: 27, facts: 26, cta: 30, url: 27, tag: 26, logo: 56, qr: 196, showTagline: true, showFacts: true },
+  portrait: { m: 64, top: 56, bottom: 64, title: 112, lines: 2, tagline: 28, strong: 29, soft: 25, facts: 24, cta: 28, url: 25, tag: 25, logo: 50, qr: 170, showTagline: true, showFacts: false },
+  story: { m: 72, top: 64, bottom: 236, tagTop: 216, title: 128, lines: 2, tagline: 30, strong: 32, soft: 27, facts: 26, cta: 31, url: 27, tag: 27, logo: 56, qr: 200, showTagline: true, showFacts: true },
+  square: { m: 60, top: 48, bottom: 56, title: 96, lines: 2, tagline: 0, strong: 28, soft: 24, facts: 0, cta: 27, url: 24, tag: 24, logo: 46, qr: 150, showTagline: false, showFacts: false },
+  link: { wide: true, panel: 0.58, m: 64, top: 64, bottom: 64, title: 150, lines: 3, strong: 30, soft: 26, cta: 28, url: 26, tag: 26, logo: 52, qr: 170 },
+  x: { wide: true, panel: 0.56, m: 72, top: 72, bottom: 72, title: 150, lines: 3, strong: 30, soft: 26, cta: 28, url: 26, tag: 26, logo: 52, qr: 170 },
+};
+
 // ── Fonts (latin and latin-ext: ₹ lives in latin-ext) ───────────────────────
 const fontFile = (pkg, subset, weight) => path.join(kit, "node_modules", "@fontsource", pkg, "files", `${pkg}-${subset}-${weight}-normal.woff`);
 const fonts = [];
 const families = { Inter: [], Display: [] };
+const faces = { Inter: {}, Display: {} }; // family -> weight -> [latin, latin-ext], for measuring
 for (const [family, pkg, weights] of [
   ["Inter", "inter", [400, 600, 700]],
   ["Display", "space-grotesk", [700]],
@@ -67,12 +92,25 @@ for (const [family, pkg, weights] of [
       const data = fs.readFileSync(fontFile(pkg, subset, weight));
       // Satori falls back across families, not across fonts of one family: latin-ext gets its own name.
       fonts.push({ name: subset === "latin" ? family : `${family}Ext`, data, weight, style: "normal" });
-      families[family].push(opentype.parse(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)));
+      const parsed = opentype.parse(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+      families[family].push(parsed);
+      (faces[family][weight] ??= []).push(parsed);
     }
   }
 }
 const missingGlyphs = (text, family) =>
   [...new Set([...text].filter((c) => !/\s/.test(c) && !families[family].some((f) => f.charToGlyphIndex(c) > 0)))];
+
+/** Width of a line of text in px, from the font's own advances (kerning left out, so a little generous). */
+function textWidth(text, family, weight, size, tracking = 0) {
+  const list = faces[family][weight] ?? Object.values(faces[family])[0];
+  let w = 0;
+  for (const ch of text) {
+    const f = list.find((x) => x.charToGlyphIndex(ch) > 0) ?? list[0];
+    w += (f.charToGlyph(ch).advanceWidth / f.unitsPerEm) * size + tracking * size;
+  }
+  return w;
+}
 
 // ── The design ──────────────────────────────────────────────────────────────
 const str = (v) => (typeof v === "string" ? v.trim() : "");
@@ -92,7 +130,12 @@ const texts = {
   highlights: (Array.isArray(design.highlights) ? design.highlights : []).map(str).filter(Boolean).slice(0, 3),
 };
 if (!texts.event) fail('design.json needs "event" (the event name).');
-const accent = /^#[0-9a-f]{6}$/i.test(str(design.accent)) ? str(design.accent) : "#F5A524";
+const HEX = /^#[0-9a-f]{6}$/i;
+const accent = HEX.test(str(design.accent)) ? str(design.accent) : "#F5A524";
+// The same defaults as the event site kit's poster-look.mjs, which reads ink too.
+const ink = HEX.test(str(design.ink)) ? str(design.ink) : "#0b0b10";
+const paper = HEX.test(str(design.paper)) ? str(design.paper) : "#f4efe6";
+const theme = str(design.theme) === "light" ? "light" : "dark";
 
 // Every character must exist in the fonts, or the image would show a box where a letter should be.
 const problems = [];
@@ -105,6 +148,36 @@ for (const [key, value] of Object.entries(texts)) {
 if (problems.length) fail(`Change these texts in design.json:\n- ${problems.join("\n- ")}`);
 const placeholders = [];
 for (const [key, value] of Object.entries(texts)) for (const v of [].concat(value)) if (/\[[^\]]+\]/.test(v)) placeholders.push(`${key}: ${v}`);
+
+// What goes where. The tag carries the logo and one name: the kicker when it already
+// names the community ("Lantern Labs presents"), else the community. A kicker that
+// says something else sits above the title instead.
+const kickerNamesCommunity = !!(texts.kicker && texts.community && texts.kicker.toLowerCase().includes(texts.community.toLowerCase()));
+const tagText = kickerNamesCommunity ? texts.kicker : texts.community || texts.kicker;
+const panelKicker = texts.kicker && tagText !== texts.kicker ? texts.kicker : "";
+const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+const timeLine = capFirst(texts.time);
+// "Koramangala Makerspace, 3rd floor, 80 Feet Road" -> the place in bold, the address under it.
+const venueComma = texts.venue.indexOf(",");
+const place = venueComma > 0 ? texts.venue.slice(0, venueComma).trim() : texts.venue;
+const address = venueComma > 0 ? texts.venue.slice(venueComma + 1).trim() : "";
+
+// ── Colours ─────────────────────────────────────────────────────────────────
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const rgba = (hex, a) => `rgba(${rgb(hex).join(",")},${a})`;
+const mix = (a, b, t) => `#${rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
+const luminance = (hex) => {
+  const c = rgb(hex).map((v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a, b) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+const WHITE = "#f7f4ee";
+const C = theme === "dark" ? { bg: ink, fg: WHITE, soft: rgba(WHITE, 0.7), hair: rgba(WHITE, 0.16) } : { bg: paper, fg: ink, soft: rgba(ink, 0.68), hair: rgba(ink, 0.16) };
+C.accentText = contrast(accent, C.bg) >= 4.5 ? accent : C.fg;
+C.onAccent = contrast(accent, ink) >= contrast(accent, "#ffffff") ? ink : "#ffffff";
 
 // ── Images: art, photo, logo ────────────────────────────────────────────────
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml" };
@@ -125,182 +198,262 @@ if (str(design.logo) && !logo) fail(`design.json "logo" points to ${design.logo}
 const photoAsInset = !!(photo && art && design.photoInset);
 const background = photo && !photoAsInset ? photo : art;
 const backgroundKind = photo && !photoAsInset ? "community photo" : art ? "generated art" : "the kit's own background (no art file)";
+// Where the art is cropped from ("center", "top", "50% 30%", ...).
+const artFocus = str(design.artFocus) || "center";
+// How the picture meets the panel: a clean cut for flat art (geometric, illustration,
+// riso: its shapes are meant to be cropped), a short fade for photos and gradient light.
+const FLAT_STYLES = new Set(["geometric", "illustration", "riso"]);
+const artEdge = ["cut", "fade"].includes(str(design.artEdge))
+  ? str(design.artEdge)
+  : !background || (background === art && FLAT_STYLES.has(str(design.artStyle).toLowerCase()))
+    ? "cut"
+    : "fade";
 
 // ── Layout ──────────────────────────────────────────────────────────────────
-const h = (type, style, ...children) => ({ type, props: { style, children: children.flat().filter((c) => c !== null && c !== undefined && c !== false) } });
+const h = (type, style, ...children) => ({ type, props: { style, children: children.flat().filter((c) => c !== null && c !== undefined && c !== false && c !== "") } });
 const img = (src, style) => ({ type: "img", props: { src, style } });
+const text = (value, style) => h("div", { display: "flex", ...style }, value);
 
-/** Title size so the event name sits on about two lines. */
-function titleSize(width, max) {
-  const words = texts.event.split(/\s+/);
-  let best = texts.event.length;
-  for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(" ").length;
-    const b = words.slice(i).join(" ").length;
-    best = Math.min(best, Math.max(a, b));
+const TITLE_TRACKING = -0.025;
+/** All the ways to break the words into n lines, in order. */
+function splits(words, n) {
+  if (n === 1) return [[words.join(" ")]];
+  const out = [];
+  for (let i = 1; i <= words.length - n + 1; i++) for (const rest of splits(words.slice(i), n - 1)) out.push([words.slice(0, i).join(" "), ...rest]);
+  return out;
+}
+/**
+ * The title's lines and size: measured with the display font, as large as the
+ * width allows up to `max`, on at most `maxLines` lines. More lines only when
+ * that makes the title clearly bigger (15%); ties go to the most even lines.
+ */
+function fitTitle(maxW, max, maxLines) {
+  const words = texts.event.split(/\s+/).filter(Boolean);
+  let pick = null;
+  for (let n = 1; n <= Math.min(maxLines, words.length, 4); n++) {
+    let best = null;
+    for (const lines of splits(words, n)) {
+      const widths = lines.map((l) => textWidth(l, "Display", 700, 100, TITLE_TRACKING) / 100);
+      const widest = Math.max(...widths);
+      const size = Math.min(max, (maxW * 0.97) / widest);
+      const spread = widest - Math.min(...widths);
+      if (!best || size > best.size + 0.5 || (Math.abs(size - best.size) <= 0.5 && spread < best.spread)) best = { lines, size, spread };
+    }
+    if (!pick || best.size > pick.size * 1.15) pick = best;
   }
-  return Math.floor(Math.min(max, width / (best * 0.6)));
+  return { lines: pick.lines, size: Math.floor(pick.size) };
+}
+
+/** The kit's own art when there is no art file: a few flat shapes in the accent, like the geometric style. */
+function kitArt(D, px) {
+  const disc = (d, style) => h("div", { position: "absolute", display: "flex", width: Math.round(d), height: Math.round(d), borderRadius: 9999, ...style });
+  return h(
+    "div",
+    { position: "absolute", left: 0, top: 0, width: "100%", height: "100%", display: "flex", backgroundColor: mix(C.bg, accent, theme === "dark" ? 0.07 : 0.12) },
+    disc(D * 1.15, { left: -D * 0.25, bottom: -D * 0.62, backgroundColor: mix(accent, C.bg, 0.35) }),
+    disc(D, { right: -D * 0.1, top: D * 0.12, backgroundColor: accent }),
+    disc(D * 0.5, { left: "20%", top: D * 0.2, border: `${Math.max(2, px(4))}px solid ${rgba(C.fg, 0.35)}` }),
+    disc(D * 0.17, { left: "47%", top: D * 0.5, backgroundColor: theme === "dark" ? WHITE : ink }),
+  );
 }
 
 function qrSize(fmt) {
-  const { w, h: H, shape } = FORMATS[fmt];
-  return Math.round((shape === "wide" || shape === "square" ? 170 : 230) * (Math.min(w, H) / 1080));
+  const { w, h: H } = FORMATS[fmt];
+  return Math.round(SPEC[fmt].qr * (Math.min(w, H) / 1080));
 }
 
 function card(fmt) {
   const { w: W, h: H, shape } = FORMATS[fmt];
+  const S = SPEC[fmt];
   const u = Math.min(W, H) / 1080;
-  const wide = shape === "wide";
-  const pad = Math.round(72 * u);
-  const padY = shape === "story" ? Math.round(240 * u) : pad;
-  const contentW = wide ? Math.round(W * 0.6) - pad : W - pad * 2;
-  // Square and wide cards have about 930 units of height for everything: no tagline or chips there.
-  const dense = wide || shape === "square";
-  const T = titleSize(contentW, (dense ? 104 : 140) * u);
+  const px = (v) => Math.round(v * u);
+  const wide = !!S.wide;
+  const m = px(S.m);
+  const panelW = wide ? Math.round(W * S.panel) : W;
+  const innerW = panelW - m * 2;
+  const T = fitTitle(innerW, px(S.title), S.lines);
   const qr = qrSize(fmt);
-  const gap = Math.round((dense ? 18 : 26) * u);
 
-  const bg = background
-    ? img(background, { position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover" })
-    : h("div", {
-        position: "absolute",
-        left: 0,
-        top: 0,
-        width: W,
-        height: H,
-        backgroundImage: `radial-gradient(circle at 78% 18%, ${accent}d9 0%, ${accent}00 46%), radial-gradient(circle at 12% 70%, #6d5bd0aa 0%, #6d5bd000 52%), linear-gradient(160deg, #1c1733 0%, #0b0b10 100%)`,
-      });
-  const scrim = h("div", {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: W,
-    height: H,
-    backgroundImage: wide
-      ? "linear-gradient(90deg, rgba(8,8,12,0.94) 0%, rgba(8,8,12,0.86) 48%, rgba(8,8,12,0.15) 85%)"
-      : "linear-gradient(180deg, rgba(8,8,12,0.55) 0%, rgba(8,8,12,0.05) 22%, rgba(8,8,12,0.10) 38%, rgba(8,8,12,0.86) 62%, rgba(8,8,12,0.96) 100%)",
-  });
-
-  const top = h(
-    "div",
-    { display: "flex", alignItems: "center", gap: Math.round(20 * u) },
-    logo ? img(logo, { width: Math.round(64 * u), height: Math.round(64 * u), borderRadius: Math.round(14 * u) }) : null,
-    texts.community ? h("div", { fontSize: Math.round(30 * u), fontWeight: 600, letterSpacing: "0.01em" }, texts.community) : null,
-  );
-
-  const infoLine = (label, value) =>
-    value
-      ? h(
-          "div",
-          { display: "flex", alignItems: "baseline", gap: Math.round(16 * u), fontSize: Math.round((dense ? 30 : 34) * u), lineHeight: 1.25 },
-          h("div", { color: accent, fontWeight: 700, fontSize: Math.round(22 * u), letterSpacing: "0.12em", width: Math.round(110 * u), flexShrink: 0 }, label),
-          h("div", { fontWeight: 600, display: "flex", flex: 1 }, value),
-        )
-      : null;
-
-  const chips = texts.highlights.length
+  // ── Pieces ──
+  const logoImg = (size) => (logo ? img(logo, { width: size, height: size, borderRadius: Math.round(size * 0.22) }) : null);
+  const tagRow = tagText || logo
     ? h(
         "div",
-        { display: "flex", flexWrap: "wrap", gap: Math.round(12 * u) },
-        texts.highlights.map((t) =>
-          h(
-            "div",
-            {
-              display: "flex",
-              fontSize: Math.round(26 * u),
-              fontWeight: 600,
-              padding: `${Math.round(8 * u)}px ${Math.round(18 * u)}px`,
-              borderRadius: 999,
-              border: `${Math.max(1, Math.round(2 * u))}px solid rgba(255,255,255,0.35)`,
-              backgroundColor: "rgba(255,255,255,0.08)",
-            },
-            t,
-          ),
-        ),
+        { display: "flex", alignItems: "center", gap: px(14) },
+        logoImg(px(S.logo)),
+        tagText ? text(tagText, { fontSize: px(S.tag), fontWeight: 600, lineHeight: 1.2, color: C.fg }) : null,
       )
     : null;
 
-  const cta = h(
+  const title = h(
     "div",
-    { display: "flex", flexDirection: "column", gap: Math.round(14 * u), flex: 1 },
-    h(
+    { display: "flex", flexDirection: "column" },
+    T.lines.map((line) =>
+      text(line, { fontFamily: "Display, DisplayExt, Inter, InterExt", fontWeight: 700, fontSize: T.size, lineHeight: 1.02, letterSpacing: `${TITLE_TRACKING}em`, whiteSpace: "nowrap", color: C.fg }),
+    ),
+  );
+
+  const kicker = panelKicker ? text(panelKicker, { fontSize: px(S.tag), fontWeight: 600, color: C.accentText, marginBottom: px(16) }) : null;
+  const tagline =
+    S.showTagline && texts.tagline
+      ? text(texts.tagline, { fontSize: px(S.tagline), lineHeight: 1.38, color: C.soft, marginTop: px(24), maxWidth: Math.round(innerW * 0.92), textWrap: "balance" })
+      : null;
+
+  // Date and place: two columns, the strong line over a soft one.
+  const infoCol = (strong, soft) =>
+    strong || soft
+      ? h(
+          "div",
+          { display: "flex", flexDirection: "column", flexGrow: 1, flexBasis: 0, minWidth: 0, gap: px(6) },
+          strong ? text(strong, { fontSize: px(S.strong), fontWeight: 600, lineHeight: 1.25, color: C.fg, textWrap: "balance" }) : null,
+          soft ? text(soft, { fontSize: px(S.soft), lineHeight: 1.35, color: C.soft, textWrap: "balance" }) : null,
+        )
+      : null;
+  const info = h(
+    "div",
+    { display: "flex", gap: px(40), alignItems: "flex-start" },
+    infoCol(texts.date, timeLine),
+    infoCol(place, address),
+  );
+
+  const facts =
+    S.showFacts && texts.highlights.length
+      ? h(
+          "div",
+          { display: "flex", flexWrap: "wrap", columnGap: px(36), rowGap: px(12), marginTop: px(36) },
+          texts.highlights.map((t) =>
+            h(
+              "div",
+              { display: "flex", alignItems: "center", gap: px(12) },
+              h("div", { display: "flex", width: px(12), height: px(12), borderRadius: 999, backgroundColor: accent }),
+              text(t, { fontSize: px(S.facts), fontWeight: 600, color: C.fg }),
+            ),
+          ),
+        )
+      : null;
+
+  const ctaBlock = h(
+    "div",
+    { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: px(14), flexShrink: 1, minWidth: 0 },
+    text(texts.cta, {
+      fontSize: px(S.cta),
+      fontWeight: 700,
+      lineHeight: 1.1,
+      color: C.onAccent,
+      backgroundColor: accent,
+      padding: `${px(16)}px ${px(28)}px`,
+      borderRadius: px(10),
+    }),
+    text(texts.url, { fontSize: px(S.url), fontWeight: 600, color: C.fg, lineHeight: 1.2 }),
+  );
+  const qrTile = h(
+    "div",
+    {
+      display: "flex",
+      flexShrink: 0,
+      padding: px(12),
+      backgroundColor: "#ffffff",
+      borderRadius: px(12),
+      ...(theme === "light" ? { border: `${Math.max(1, px(2))}px solid ${C.hair}` } : {}),
+    },
+    img(qrImages[fmt], { width: qr, height: qr }),
+  );
+  const footer = h(
+    "div",
+    { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: px(32) },
+    ctaBlock,
+    qrTile,
+  );
+
+  // ── The picture block ──
+  const artFill = background
+    ? img(background, { position: "absolute", left: 0, top: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: artFocus })
+    : kitArt(wide ? Math.min(H * 0.62, (W - panelW - m) * 0.72) : W * 0.46, px);
+  const fade = (edge) =>
+    h("div", {
+      position: "absolute",
+      display: "flex",
+      ...(edge === "left"
+        ? { left: 0, top: 0, width: px(150), height: "100%", backgroundImage: `linear-gradient(90deg, ${C.bg} 0%, ${rgba(C.bg, 0)} 100%)` }
+        : { left: 0, bottom: 0, width: "100%", height: px(110), backgroundImage: `linear-gradient(180deg, ${rgba(C.bg, 0)} 0%, ${C.bg} 100%)` }),
+    });
+  const inset =
+    photoAsInset && !wide && shape !== "square"
+      ? img(photo, {
+          position: "absolute",
+          right: m,
+          bottom: m,
+          width: Math.round(innerW * 0.46),
+          height: Math.round(innerW * 0.32),
+          objectFit: "cover",
+          borderRadius: px(16),
+          border: `${px(6)}px solid ${C.bg}`,
+        })
+      : null;
+
+  if (wide) {
+    // Panel left (logo and name, then title and facts, then the call to action), art right.
+    return h(
       "div",
-      { display: "flex" },
+      { width: W, height: H, display: "flex", backgroundColor: C.bg, color: C.fg, fontFamily: "Inter, InterExt" },
       h(
         "div",
         {
           display: "flex",
-          backgroundColor: accent,
-          color: "#0b0b10",
-          fontWeight: 700,
-          fontSize: Math.round(32 * u),
-          padding: `${Math.round(14 * u)}px ${Math.round(28 * u)}px`,
-          borderRadius: Math.round(14 * u),
+          flexDirection: "column",
+          justifyContent: "space-between",
+          width: panelW,
+          flexShrink: 0,
+          paddingLeft: m,
+          paddingRight: m,
+          paddingTop: px(S.top),
+          paddingBottom: px(S.bottom),
         },
-        texts.cta,
+        tagRow ?? h("div", { display: "flex" }),
+        h("div", { display: "flex", flexDirection: "column" }, kicker, title, h("div", { display: "flex", flexDirection: "column", marginTop: px(32) }, info)),
+        footer,
       ),
-    ),
-    h("div", { display: "flex", fontSize: Math.round(30 * u), fontWeight: 600, color: "rgba(255,255,255,0.92)" }, texts.url),
-  );
-  const qrTile = h(
-    "div",
-    { display: "flex", padding: Math.round(14 * u), backgroundColor: "#ffffff", borderRadius: Math.round(18 * u) },
-    img(qrImages[fmt], { width: qr, height: qr }),
-  );
+      artEdge === "cut"
+        ? // Flat art as a framed block on the panel's grid, so its own background never meets the panel edge to edge.
+          h(
+            "div",
+            { display: "flex", flexGrow: 1, paddingTop: px(S.top), paddingRight: m, paddingBottom: px(S.bottom) },
+            h("div", { display: "flex", flexGrow: 1, position: "relative", overflow: "hidden", borderRadius: px(20) }, artFill),
+          )
+        : h("div", { display: "flex", flexGrow: 1, position: "relative", overflow: "hidden" }, artFill, fade("left")),
+    );
+  }
 
-  const inset =
-    photoAsInset && !wide && shape !== "square"
-      ? h(
-          "div",
-          { display: "flex", marginTop: Math.round(40 * u) },
-          img(photo, {
-            width: Math.round(contentW * 0.55),
-            height: Math.round(contentW * 0.38),
-            objectFit: "cover",
-            borderRadius: Math.round(20 * u),
-            border: `${Math.round(4 * u)}px solid rgba(255,255,255,0.85)`,
-          }),
-        )
-      : null;
-
-  const bottom = h(
-    "div",
-    { display: "flex", flexDirection: "column", gap, width: contentW },
-    texts.kicker ? h("div", { display: "flex", color: accent, fontWeight: 700, fontSize: Math.round(26 * u), letterSpacing: "0.14em" }, texts.kicker.toUpperCase()) : null,
-    h("div", { display: "flex", fontFamily: "Display, DisplayExt, Inter, InterExt", fontWeight: 700, fontSize: T, lineHeight: 1.0, letterSpacing: "-0.02em" }, texts.event),
-    texts.tagline && !dense
-      ? h("div", { display: "flex", fontSize: Math.round(32 * u), lineHeight: 1.35, color: "rgba(255,255,255,0.86)" }, texts.tagline)
-      : null,
-    h(
-      "div",
-      { display: "flex", flexDirection: "column", gap: Math.round(8 * u), paddingLeft: Math.round(22 * u), borderLeft: `${Math.round(5 * u)}px solid ${accent}` },
-      infoLine("WHEN", [texts.date, texts.time].filter(Boolean).join(", ")),
-      infoLine("WHERE", texts.venue),
-    ),
-    dense ? null : chips,
-    h("div", { display: "flex", alignItems: "flex-end", gap: Math.round(28 * u), marginTop: Math.round(10 * u) }, cta, qrTile),
-  );
-
+  // Tall and square: the art on top, the panel under it at its natural height.
+  const tagChip = tagRow
+    ? h(
+        "div",
+        {
+          position: "absolute",
+          left: m,
+          top: px(S.tagTop ?? S.m),
+          display: "flex",
+          padding: `${px(10)}px ${px(tagText ? 22 : 10)}px ${px(10)}px ${px(10)}px`,
+          backgroundColor: C.bg,
+          borderRadius: px(16),
+        },
+        tagRow,
+      )
+    : null;
   return h(
     "div",
-    { width: W, height: H, display: "flex", position: "relative", backgroundColor: "#0b0b10", color: "#ffffff", fontFamily: "Inter, InterExt" },
-    bg,
-    scrim,
+    { width: W, height: H, display: "flex", flexDirection: "column", backgroundColor: C.bg, color: C.fg, fontFamily: "Inter, InterExt" },
+    h("div", { display: "flex", flexGrow: 1, flexShrink: 1, minHeight: Math.round(H * 0.22), position: "relative", overflow: "hidden" }, artFill, artEdge === "fade" ? fade("bottom") : null, inset, tagChip),
     h(
       "div",
-      {
-        // Sized without padding: Satori would add padding to a full-size box and push the bottom off the image.
-        position: "absolute",
-        left: pad,
-        top: padY,
-        width: W - pad * 2,
-        height: H - padY * 2,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-      },
-      h("div", { display: "flex", flexDirection: "column" }, top, inset),
-      bottom,
+      { display: "flex", flexDirection: "column", flexShrink: 0, paddingLeft: m, paddingRight: m, paddingTop: px(S.top), paddingBottom: px(S.bottom), backgroundColor: C.bg },
+      kicker,
+      title,
+      tagline,
+      facts,
+      h("div", { display: "flex", flexDirection: "column", marginTop: px(shape === "square" ? 28 : 40) }, info),
+      h("div", { display: "flex", height: Math.max(1, px(2)), backgroundColor: C.hair, marginTop: px(shape === "square" ? 28 : 36), marginBottom: px(shape === "square" ? 28 : 36) }),
+      footer,
     ),
   );
 }
@@ -350,19 +503,19 @@ for (const fmt of wanted) {
 const drawn = {
   event: texts.event,
   ...(texts.kicker ? { kicker: texts.kicker } : {}),
-  ...(texts.tagline ? { tagline: texts.tagline } : {}),
-  when: [texts.date, texts.time].filter(Boolean).join(", "),
+  ...(texts.tagline && wanted.some((f) => SPEC[f].showTagline) ? { tagline: texts.tagline } : {}),
+  when: [texts.date, timeLine].filter(Boolean).join(", "),
   where: texts.venue,
   button: texts.cta,
   url: texts.url,
   qr: url,
-  ...(texts.highlights.length ? { highlights: texts.highlights.join(" | ") } : {}),
-  ...(texts.community ? { community: texts.community } : {}),
+  ...(texts.highlights.length && wanted.some((f) => SPEC[f].showFacts) ? { highlights: texts.highlights.join(" | ") } : {}),
+  ...(texts.community && tagText === texts.community ? { community: texts.community } : {}),
 };
-const manifest = { event: texts.event, url, background: backgroundKind, logo: !!logo, photo: photo ? (photoAsInset ? "inset" : "background") : null, text: drawn, placeholders, formats: made };
+const manifest = { event: texts.event, url, background: backgroundKind, logo: !!logo, photo: photo ? (photoAsInset ? "inset" : "background") : null, theme, accent, ink, text: drawn, placeholders, formats: made };
 fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
-console.log(`\nBackground: ${backgroundKind}.`);
+console.log(`\nBackground: ${backgroundKind}. Theme: ${theme} (accent ${accent}, ${theme === "dark" ? `ink ${ink}` : `paper ${paper}`}).`);
 console.log("Exact text on every image:");
 for (const [k, v] of Object.entries(drawn)) console.log(`  ${k}: ${v}`);
 if (placeholders.length) console.log(`\nPlaceholders still to fill: ${placeholders.join("; ")}`);
