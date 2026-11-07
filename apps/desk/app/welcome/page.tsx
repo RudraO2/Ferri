@@ -65,7 +65,7 @@ export default function Welcome() {
         <section className="mx-auto grid max-w-[1160px] items-center gap-10 px-5 pt-16 pb-14 sm:px-8 lg:grid-cols-[1.2fr_0.8fr] lg:pt-24 [&>*]:min-w-0">
           <div>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-medium text-zinc-600 shadow-[0_2px_0_var(--n-200)]">
-              <span className="inline-flex h-5 items-center rounded-full bg-brand px-2 text-[11px] font-semibold text-white">Built on Switch</span>
+              <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-brand px-2 text-[11px] font-semibold whitespace-nowrap text-white">Built on Switch</span>
               for the WeMakeDevs Flip the Switch hackathon
             </div>
             <h1 className="display text-[clamp(44px,6.4vw,78px)] text-zinc-900">
