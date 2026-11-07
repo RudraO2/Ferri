@@ -1,12 +1,67 @@
 # Ferri
 
-<p align="center"><img src="docs/images/ferri-hero.png" alt="Ferri, a friendly sea otter: every question, answered once." width="760"></p>
+<p align="center"><img src="docs/images/ferri-hero.png" alt="Ferri, a friendly sea otter: host the event, Ferri runs the rest, with your crew inside and your community outside." width="760"></p>
 
-**The AI teammate for people who host community events.** Every event has two sides: the crew that plans and decides, and the community that asks, in groups on Discord, Telegram, Slack, Mattermost and WhatsApp. Ferri is the bridge between them: it answers the community from what the crew knows, asks the crew only when it does not know, and turns each crew decision into an update in every group after one OK.
+**Ferri is an AI teammate for people who host community events**, like hackathons, meetups and festival nights. Members ask the same questions in groups on several apps, and what the crew decides in its own chat often never reaches them. Ferri sits in every group of the event and in the crew's own room. It answers members with sources, brings the crew only what needs a person, and turns each crew decision into an update in every group after one OK. A second agent, Ferri Builder, makes the event's site, posters and Luma listing. Both run on [Switch](https://github.com/sandbox-quantum/switch).
+
+## Two sides of every event
+
+| With your crew, inside | With your community, outside |
+|---|---|
+| **Plan.** Ferri reads the crew's own chat and keeps the plan: decisions, owners, tasks with deadlines, open questions. | **Answers.** On Discord, Telegram, Slack, WhatsApp and Mattermost, only from the event's knowledge, with the source under every answer. |
+| **Cards on Pocket.** A question only the crew can answer, a reply waiting for an OK or a member who needs care reaches the right person's phone. | **Care.** A member who is stuck, upset or unsafe becomes a case for the right person on the crew. |
+| **Site and posters.** Ferri Builder makes the event site on Vercel and Supabase, and the posters and social cards, when the crew asks in its room. | **Shared everywhere.** After one OK, the site link and the poster go to every group, the poster as a real image. |
+| **Luma and registrations.** The Builder lists the event on Luma after a card. Ferri keeps one guest list from the site, Luma and CSV files. | **Reminders.** Guests get reminders by email, and a freed spot goes to the next person on the waitlist, each after one OK. |
+| **Announcements.** "@ferri tell everyone lunch moves to 1:30" drafts it, and one card shows the text and every group it will reach. | **Updates in place.** A later version edits the post in every group, so nobody sees the old time. |
+| **Shield alerts.** The crew room hears what was stopped, and the leads get a push. | **Shield.** Scam links and link floods are blocked, and leaked keys are redacted, on every message before anyone sees them. |
+
+**The bridge:** a crew decision becomes an update on every app after one OK. A question Ferri cannot answer becomes a card for the right crew member, and their answer reaches everyone who asked, on their own app.
+
+How the pieces connect:
+
+```mermaid
+flowchart TB
+  subgraph outside["Your community, outside"]
+    discord["Discord"]
+    telegram["Telegram"]
+    slack["Slack"]
+    whatsapp["WhatsApp"]
+    mattermost["Mattermost"]
+  end
+  subgraph sw["Switch"]
+    rooms["Rooms on every app"]
+    cards["Cards"]
+    trust["Trust on every message"]
+  end
+  subgraph inside["Your crew, inside"]
+    crewroom["Crew room"]
+    pocket["Pocket on their phones"]
+  end
+  ferri["Ferri, the agent"]
+  builder["Ferri Builder: Claude Code, managed by Switch"]
+  subgraph makes["What the Builder makes"]
+    site["Event site on Vercel and Supabase"]
+    posters["Posters and social cards"]
+    luma["Luma listing"]
+  end
+  outside <-->|"questions, answers, updates"| sw
+  sw <-->|"cards and decisions"| inside
+  sw <--> ferri
+  ferri -->|"hands jobs"| builder
+  builder --> makes
+```
+
+## Proof you can check
 
 [![CI](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/ci.yml) [![Quick start](https://github.com/RudraO2/Ferri/actions/workflows/quickstart.yml/badge.svg)](https://github.com/RudraO2/Ferri/actions/workflows/quickstart.yml)
 
-**Live demo:** ask Ferri yourself, in Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night (a made-up event). Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer. Shield checks every message. Look around its Desk at https://ferri-demo.rudratechie.xyz with "Look around (read-only)". The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
+- **Ask Ferri yourself** in the live demo, on Discord (https://discord.gg/5FWRzfCcNa, channel `#build-night`) or Telegram (https://t.me/+-7EpwBLi8QxlNDJl). Try `@ferri when does hacking start?` or anything about Lantern Build Night, a made-up event. Ferri answers with its source. When it does not know, it asks the crew in a private room and comes back to you with their answer.
+- **Look around Desk**, read-only: open https://ferri-demo.rudratechie.xyz and pick "Look around (read-only)". The landing page is https://ferri-demo.rudratechie.xyz/welcome. The demo runs this repo's stack on a small server ([docs/hosting.md](docs/hosting.md)).
+- **A site the Builder shipped**: https://lantern-build-night.vercel.app, made and deployed by Ferri Builder on Claude Opus 5.5 for the demo event, with registration, sign-in, schedule and FAQ, in the look of the posters it drew first.
+- **CI on every push**: a typecheck of nine packages, 298 unit tests, Desk's production build, and a smoke test that builds Ferri's image from the commit, starts the stack and asks Ferri through Mattermost.
+- **Quick start on every push**: a fresh GitHub runner, signed out of GHCR, runs `./ferri up` from scratch, then checks that Ferri answers with a source and opens a card for a question it cannot answer.
+- **Evals**: `pnpm eval:answers` passes 158 of 158 fixed cases against the real model (Claude Haiku 5.5 at low effort).
+- **End to end**: every feature ran on the real local stack, with Mattermost, Slack, Discord, Telegram and WhatsApp connected, before the next one started. What we ran, and what is not done yet: [docs/testing.md](docs/testing.md).
 
 Video: (link coming)
 
@@ -155,52 +210,28 @@ Built on [Switch](https://github.com/sandbox-quantum/switch) for the WeMakeDevs 
 <tr><td align="center">Desk, the crew's control room</td><td align="center">Pocket, the crew's phone app</td></tr>
 </table>
 
-It covers the whole life of an event, from the crew's first chat to the starter kit for the next one: answers with sources on Mattermost, Slack, Discord, Telegram and WhatsApp; a living plan; announcements edited in place everywhere; care cases for members who are stuck or upset; the guest list and RSVPs; posts on LinkedIn, X and Instagram through Buffer; desks for judging, check-in and help, with live sheets; a recap and a starter kit at the end; and a coding agent, Ferri Builder, that Switch runs to ship the event site, posters and listings. Every step that reaches people outside waits for one OK on a Switch card.
+Ferri covers the whole life of an event, from the crew's first chat to the starter kit for the next one. Every step that reaches people outside waits for one OK on a Switch card.
 
-### The problem
-
-A hackathon, a meetup or a festival night has members on Discord, Telegram, Slack and a Mattermost or WhatsApp group, and a small crew of volunteers running it. The same three questions arrive forty times on five apps. Answers given in one group never reach the others. The crew decides something in their own chat ("lunch moves to 1:30") and half the members never hear it, or hear the old time. A fake "free nitro" link lands in the busiest channel at the worst moment. Every organizer we know runs this by hand, at night, on their phone.
-
-### Three pillars
-
-Ferri is one agent that works in two directions, with a bridge between them.
-
-**1. Outward: answers on every platform, with sources.** Ferri sits in every group of the event, on Mattermost, Slack, Discord, Telegram and WhatsApp. It answers only from the event's knowledge and names the source under every answer, in the tone and language the crew set for that space. It also notices questions nobody addressed to it ("does anyone know the wifi password?"), waits a moment so a person can answer first, and steps in only when it has a sourced answer. Each space has a mode: Off, Listen, Approve (every reply waits for an organizer) or Auto. Ferri also notices people, not only questions: a member who is confused, stuck, upset or unsafe becomes a care case for the right person on the crew, and a technical problem can go to the Builder, which helps the member in their own room.
-
-**2. Inward: the crew plans and decides, Ferri learns.** Before the event, Ferri follows the crew's own chat and keeps a living plan: what is decided, who owns what, tasks with deadlines, what is still open. "@ferri draft the agenda" gives a run of show plus one approval card per key decision. Owners named in the plan ("Priya will handle food") take over the routing, so food questions go to Priya. During the event, when Ferri does not know, the member hears "I'm checking with the team" at once, and a Switch question card opens in the crew room for the person who owns that topic (food, venue, judging). The owner's phone buzzes through Ferri Pocket. One answer, on the card, from Desk, or from the phone, reaches everyone who was waiting, on their own app, with a real mention. The answer is saved, so the next person gets it instantly. Nobody answers: Ferri nudges the owner, then the whole crew, and never invents an answer. "@ferri make a judging desk with arjun" makes a private channel for that job, with its own instructions and a live sheet Ferri keeps from what people say there ("Team Alpha 8 for innovation"). After the event, Ferri counts what happened in a recap, saves the partners, and builds a starter kit that the next event starts from.
-
-**3. The bridge: a decision inside becomes an update outside.** "@ferri tell everyone lunch moves to 1:30" drafts an announcement and opens one approval card with the draft and every space it will reach. One OK posts it to every space of the event on every platform and saves it as knowledge. "@ferri change the lunch announcement, it's 1:45 now" and one more OK **edits the post in place** on Mattermost, Slack, Discord and Telegram. Ferri also follows the crew's own chat: when the crew settles something members need to know ("ok let's push judging to 4pm"), it offers the announcement on a card, credited to whoever decided, and never posts without the OK. Announcements can be scheduled; one not approved by its time is not sent, and the crew is told. A space with its own language gets its own translation, shown on the same card. The same one-card rule covers the guest list (reminders and spot offers by email) and social posts on LinkedIn, X and Instagram through Buffer.
-
-### Around the pillars
-
-- **Shield** keeps scam links, link floods and leaked API keys out of every room, on every platform, before anyone sees them. It is our own Switch Trust endpoint and answers in 2 to 9 ms, with no model in the path. [docs/shield.md](docs/shield.md)
-- **Desk** is the organizers' dashboard: spaces and modes, master pause, cards, the plan, events and crew, knowledge with versions, announcements, care cases, guests, social posts, desks and sheets, contacts, wrap, skills and settings, the Builder, Shield, and a Setup page. [docs/dashboard.md](docs/dashboard.md)
-- **Ferri Pocket** is the crew's phone app (a PWA with Web Push): the cards that need you (answers, announcements, care cases, guest sends, social posts, desks, wrap), Post, Edit, Don't post, who is stuck, and a `+ Announce` button. [docs/pocket.md](docs/pocket.md)
-- **Customization**: the crew edits Ferri's skills in Desk and sets tone, language and timing per community, event or space, from Desk or by chat ("@ferri reply in Hindi in team-alpha"). The source check, the cards and the pause are in code, so no edit can turn them off. [docs/customization.md](docs/customization.md)
-- **Ferri Builder** is Ferri's second pair of hands: a Claude Code agent that Switch itself runs on the organizer's machine, with its own folder, its own Claude home and its own token budget. "@ferri get the builder to make a one-page site for Build Night" hands it the job in the crew room; it reads the event's facts from the room's Switch documents, posts the page there, and asks on a card before anything goes public. [docs/builder.md](docs/builder.md)
-- **Crew helpers**: "@ferri remind me at 5 to order the pizza", and "@ferri make team rooms for Team Alpha with meera and arjun", which makes real private channels on the platform from a Switch template. [docs/plan-and-launch.md](docs/plan-and-launch.md)
-
-### Every feature, in detail
-
-| Area | Guide |
-|---|---|
-| Make it yours: your community and your event in place of the Lantern demo | [docs/your-community.md](docs/your-community.md) |
-| Bring your own accounts: every key Ferri can use, where to get it, free or paid | [docs/accounts.md](docs/accounts.md) |
-| How Ferri answers and learns, the demo knowledge, `kb` commands | [docs/knowledge.md](docs/knowledge.md) |
-| The plan before the event, and announcements inside to outside | [docs/plan-and-launch.md](docs/plan-and-launch.md) |
-| Desk, the organizers' dashboard | [docs/dashboard.md](docs/dashboard.md) |
-| Ferri Pocket, push and a public address | [docs/pocket.md](docs/pocket.md) |
-| Telegram, Slack and Discord | [docs/platforms.md](docs/platforms.md) |
-| WhatsApp | [docs/whatsapp.md](docs/whatsapp.md) |
-| Ferri Builder: the event site, posters, listings on Luma | [docs/builder.md](docs/builder.md) |
-| Partner outreach by email | [docs/email.md](docs/email.md) |
-| Care for members who are stuck or upset | [docs/care.md](docs/care.md) |
-| RSVP and the guest list | [docs/rsvp.md](docs/rsvp.md) |
-| Social posts through Buffer | [docs/social.md](docs/social.md) |
-| Desks, rooms for each job, with sheets | [docs/desks.md](docs/desks.md) |
-| Wrap: recap, partners, starter kit, closing | [docs/wrap.md](docs/wrap.md) |
-| Customization: skills, tone, languages, settings | [docs/customization.md](docs/customization.md) |
-| Shield: safety on every message | [docs/shield.md](docs/shield.md) |
+| Area | What Ferri does | Guide |
+|---|---|---|
+| Make it yours | Your community, your event and your FAQ in place of the Lantern demo. | [your-community.md](docs/your-community.md) |
+| Your own accounts | Every key Ferri can use, where to get it, and whether it is free. | [accounts.md](docs/accounts.md) |
+| Answers and learning | Answers only from the event's knowledge, with a source line. Notices questions nobody tagged it in ("does anyone know the wifi password?") and waits so a person can answer first. An unknown question gets "I'm checking with the team" and a card for the person who owns that topic; their answer reaches everyone who asked, with a real mention, and is saved for the next person. If nobody answers, Ferri nudges the owner, then the whole crew, and never invents an answer. | [knowledge.md](docs/knowledge.md) |
+| Plan | A living plan from the crew's own chat. "@ferri draft the agenda" gives a run of show with one card per key decision. Owners named in the plan ("Priya will handle food") take over the routing of questions, and deadlines get reminders. | [plan-and-launch.md](docs/plan-and-launch.md) |
+| Announcements | One card, then a post in every space on every platform, saved as knowledge. "@ferri change the lunch announcement, it's 1:45 now" and one more OK edits the posts in place. When the crew settles something in its chat ("ok let's push judging to 4pm"), Ferri offers the announcement on a card, credited to whoever decided. Scheduled posts (one not approved in time is not sent, and the crew is told), crew reminders ("@ferri remind me at 5 to order the pizza") and team rooms as real private channels from a Switch template. | [plan-and-launch.md](docs/plan-and-launch.md) |
+| Desk | The organizers' dashboard: spaces and their modes (Off, Listen, Approve where every reply waits for an organizer, Auto), a master pause, cards, the plan, events and crew, knowledge with versions, announcements, care cases, guests, social posts, desks and sheets, contacts, wrap, skills and settings, the Builder, Shield, and a Setup page. | [dashboard.md](docs/dashboard.md) |
+| Ferri Pocket | The crew's phone app, a PWA with Web Push: the cards that need you, Post, Edit, Don't post, who is stuck, and `+ Announce`. | [pocket.md](docs/pocket.md) |
+| Telegram, Slack and Discord | One command per platform, then `!invite-agent @ferri` in each group. | [platforms.md](docs/platforms.md) |
+| WhatsApp | WhatsApp groups through a linked phone, with the `whatsapp_web` bridge in our Switch fork. | [whatsapp.md](docs/whatsapp.md) |
+| Ferri Builder | Claude Code that Switch runs on your machine, with its own folder, Claude home and token budget. It reads the event's facts from the crew room's Switch documents, posts its work in the room, and asks on a card before anything goes public: the event site (registration, sign-in, schedule, FAQ, sponsor credits), posters and social cards in six sizes, and listings on Luma and other sites. | [builder.md](docs/builder.md) |
+| Partner outreach | Finds sponsors and partners (a Builder job), drafts each email from the knowledge, sends it after a card, reads the replies and keeps a light CRM. A "no thanks" stops every later email. | [email.md](docs/email.md) |
+| Care | A member who is confused, stuck, upset or unsafe becomes a case for the right person on the crew, with check-ins until it is solved. A technical problem can go to the Builder, which helps the member in their own room. | [care.md](docs/care.md) |
+| RSVP and the guest list | One guest list from the site, Luma and CSV files. Reminders and spot offers by email after one card, a public RSVP page, and a freed spot for the next person on the waitlist. | [rsvp.md](docs/rsvp.md) |
+| Social posts | Posts on LinkedIn, X and Instagram through Buffer, after one card. | [social.md](docs/social.md) |
+| Desks | "@ferri make a judging desk with arjun" makes a private channel with its own instructions and a live sheet Ferri keeps from what people say there ("Team Alpha 8 for innovation"). Judging, check-in, help and eight more kinds, and packs for six kinds of event. | [desks.md](docs/desks.md) |
+| Wrap | A recap with numbers counted from the data, partners saved to contacts, a starter kit the next event starts from, and closing the event. | [wrap.md](docs/wrap.md) |
+| Customization | The crew edits Ferri's skills in Desk and sets tone, language and timing per community, event or space, from Desk or by chat ("@ferri reply in Hindi in team-alpha"). A space with its own language gets its own translation of each announcement. The source check, the cards and the pause stay in code, so no edit can turn them off. | [customization.md](docs/customization.md) |
+| Shield | Our own Switch Trust endpoint: it blocks scam and lookalike links and link floods and redacts leaked keys, in 2 to 9 ms with no model in the path, and tells the crew what it stopped. | [shield.md](docs/shield.md) |
 
 ## How it is built
 
@@ -216,15 +247,6 @@ We added two things to Switch core, in our fork ([`RudraO2/switch`, branch `ferr
 Both ship in Ferri's Switch core image, `ghcr.io/rudrao2/ferri-switch-core`, which `./ferri up` runs.
 
 To change Ferri's code, run it on the host while the rest stays in Docker: [docs/development.md](docs/development.md). To host it on a server for your community: [docs/hosting.md](docs/hosting.md).
-
-## How we checked it
-
-- 255 unit tests, a typecheck of nine packages and Desk's production build pass.
-- `pnpm eval:answers`: 158 of 158 fixed cases pass against the real model (Claude Haiku 5.5 at low effort).
-- CI boots the whole stack with `./ferri up` on a clean runner and asks Ferri through Mattermost.
-- Every feature was run end to end on the real local stack, with Mattermost, Slack, Discord, Telegram and WhatsApp connected, before the next one started.
-
-What we ran, and what is not done yet: [docs/testing.md](docs/testing.md).
 
 ## License
 
