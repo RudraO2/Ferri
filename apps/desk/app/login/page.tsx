@@ -1,6 +1,9 @@
 import { LoginForm } from "./login-form";
 import { viewAsGuest } from "./actions";
 
+// Read DESK_GUEST_VIEW when the page is served, not when the image is built.
+export const dynamic = "force-dynamic";
+
 /**
  * Desk's sign-in. With DESK_GUEST_VIEW=on (our public demo), anyone can also look around
  * read-only: every page opens, nothing can be changed.
