@@ -11,4 +11,4 @@ export const DEMO_DESK = "https://ferri-demo.rudratechie.xyz/demo";
  * The demo video (a YouTube or Loom link). While it is empty, every "Watch the video" button on
  * the site is hidden. Paste the link here, or set NEXT_PUBLIC_FERRI_VIDEO_URL when Desk is built.
  */
-export const VIDEO = process.env.NEXT_PUBLIC_FERRI_VIDEO_URL || "";
+export const VIDEO = process.env.NEXT_PUBLIC_FERRI_VIDEO_URL || "https://www.youtube.com/watch?v=oegjJE3IC6w";

@@ -68,7 +68,7 @@ flowchart TB
 - **Evals**: `pnpm eval:answers` passes 158 of 158 fixed cases against the real model (Claude Haiku 5.5 at low effort).
 - **End to end**: every feature ran on the real local stack, with Mattermost, Slack, Discord, Telegram and WhatsApp connected, before the next one started. What we ran, and what is not done yet: [docs/testing.md](docs/testing.md).
 
-Video: (link coming)
+**Demo video (under 3 minutes):** https://www.youtube.com/watch?v=oegjJE3IC6w
 
 ## How Ferri uses Switch
 
