@@ -523,8 +523,19 @@ export default function Welcome() {
                 </Link>
               </div>
             </div>
-            <div className="hidden lg:block">
-              <Ferri pose="party" size={250} alive decorative />
+            <div className="hidden gap-4 lg:flex" aria-label="Scan to join the live demo groups">
+              {[
+                { href: DISCORD, img: "/site/qr-discord.svg", platform: "discord" as const, label: "Discord" },
+                { href: TELEGRAM, img: "/site/qr-telegram.svg", platform: "telegram" as const, label: "Telegram" },
+              ].map((g) => (
+                <a key={g.label} href={g.href} className="rounded-[22px] bg-white p-3 text-center text-zinc-900 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.35)] transition hover:-translate-y-0.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.img} alt={`QR code to join the live demo on ${g.label}`} width={150} height={150} className="block rounded-[10px]" />
+                  <span className="mt-2 inline-flex items-center gap-1.5 text-[14px] font-semibold">
+                    <PlatformLogo platform={g.platform} size={15} /> Scan to join on {g.label}
+                  </span>
+                </a>
+              ))}
             </div>
           </div>
         </div>

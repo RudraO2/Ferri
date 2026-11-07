@@ -69,9 +69,20 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
       />
       <div className="min-w-0 flex-1">
         {user.readonly ? (
-          <div className="flex items-center gap-2 bg-amber-50 px-5 py-1.5 text-[12.5px] text-amber-800 lg:px-10">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 px-5 py-1.5 text-[12.5px] text-amber-800 lg:px-10">
             <Eye size={15} className="shrink-0" aria-hidden />
-            Guest view: look around freely. Changes are switched off.
+            <span>Guest view: look around freely. Changes are switched off.</span>
+            <span className="ml-auto">
+              Talk to the live Ferri on{" "}
+              <a href="https://discord.gg/5FWRzfCcNa" className="font-semibold underline underline-offset-2">
+                Discord
+              </a>{" "}
+              or{" "}
+              <a href="https://t.me/+-7EpwBLi8QxlNDJl" className="font-semibold underline underline-offset-2">
+                Telegram
+              </a>
+              , and watch this page change.
+            </span>
           </div>
         ) : null}
         {c.paused ? (
