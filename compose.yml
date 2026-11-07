@@ -34,6 +34,8 @@ x-ferri-app: &ferri-app
     - ./.env:/app/.env
     # The Builder's folder on the host (set by `pnpm builder:setup`), so Ferri and Desk can read its job files.
     - ${FERRI_BUILDER_ROOT:-./.ferri-state/builder}:/builder-home
+    # Files a command leaves for you (the WhatsApp QR code).
+    - ./.ferri-state/shared:/shared
   environment: &ferri-env
     SWITCH_URL: http://switch:8000
     DATABASE_URL: postgres://ferri:ferri@ferri-db:5432/ferri
@@ -44,6 +46,8 @@ x-ferri-app: &ferri-app
     SHIELD_HOST: 0.0.0.0
     SHIELD_ENDPOINT: http://ferri:3200
     FERRI_BUILDER_HOME: /builder-home
+    FERRI_WAHA_URL: http://waha:3000
+    FERRI_QR_DIR: /shared
     FERRI_IN_DOCKER: "1"
 
 services:
@@ -265,6 +269,9 @@ services:
     image: devlikeapro/waha:latest
     profiles: ["whatsapp"]
     restart: unless-stopped
+    ports:
+      # For `pnpm whatsapp:pair` on the host (FERRI_WAHA_URL defaults to this).
+      - "${SWITCH_BIND_ADDR:-127.0.0.1}:${WAHA_HOST_PORT:-3010}:3000"
     environment:
       WHATSAPP_DEFAULT_ENGINE: GOWS
       WAHA_API_KEY: ${WAHA_API_KEY:-}

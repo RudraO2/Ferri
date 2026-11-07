@@ -77,7 +77,8 @@ interface Session {
   status: string;
   me?: { id: string; pushName?: string } | null;
 }
-const qrFile = path.join(os.tmpdir(), "ferri-whatsapp-qr.png");
+// In the Docker stack FERRI_QR_DIR is a folder shared with the host (.ferri-state in the repo).
+const qrFile = path.join(env.FERRI_QR_DIR || os.tmpdir(), "ferri-whatsapp-qr.png");
 let shown = "";
 for (let i = 0; i < 180; i++) {
   const s = await waha<Session>("GET", `/api/sessions/${session}`);
@@ -99,7 +100,7 @@ for (let i = 0; i < 180; i++) {
       if (qr.bytes) {
         fs.writeFileSync(qrFile, qr.bytes);
         if (shown !== "qr") {
-          console.log(`QR code: ${qrFile} (refreshed every few seconds). On the phone: WhatsApp, Linked devices, Link a device, then scan it.`);
+          console.log(`QR code: ${env.FERRI_QR_DIR ? ".ferri-state/shared/ferri-whatsapp-qr.png in the repo" : qrFile} (refreshed every few seconds). On the phone: WhatsApp, Linked devices, Link a device, then scan it.`);
           shown = "qr";
         }
       }

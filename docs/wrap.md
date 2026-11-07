@@ -1,0 +1,11 @@
+# Wrap: recap, partners, starter kit, closing
+
+When the event is over, Ferri helps the crew finish it and start the next one.
+
+- `@ferri how did build night go?` posts a recap in the crew room: questions asked and answered (by Ferri at once, by the crew on cards, still unanswered), median answer time, cards, cases, guests and check-ins, sends, outreach, listings, Builder jobs and Shield. Every number is counted in code from the database. A short "lessons" part is written by Haiku, and any sentence in it with a number that is not in the counts is dropped. The recap is a Switch library document in the crew room.
+- `@ferri save the partners` saves the organizations that worked with the event (from contacts, the knowledge and the plan) to Contacts, linked to the event. Nobody is emailed. Someone marked "do not contact" stays out.
+- `@ferri make a starter kit from build night` sorts the event's knowledge into "keep" (rules, venue facts) and "check" (dates, prizes, people), and adds the most asked and the unanswered questions, the plan's tasks, the spaces with their modes, the desks, the partners and the lessons. Desk downloads it as markdown.
+- `@ferri start Lantern Build Night 2 on 12 December at 10 AM from the Build Night kit` makes the next event in the plan stage, with the crew, the "keep" knowledge, and each "check" entry and unanswered question as a plan question to settle. Nothing is posted outside.
+- Closing is a card: "Close, spaces Off", "Close and move the spaces to <next event>" (with their modes), or "Not yet". `@ferri close build night` opens the same card; chat alone never closes an event. Closing posts a goodbye line, closes the event's open cards, cancels its scheduled sends, takes the Builder out of its help rooms, and turns the spaces Off or moves them. Reopen (Desk or `@ferri reopen build night`) puts them back with their modes.
+- An hour after the event ends, Ferri does this itself, once: the recap, the close card, and a thank-you announcement card for members. Each waits for its OK.
+- Desk's Wrap page shows the numbers as tiles, the recap and lessons, the partners, the kit with its download, Close and Reopen. The Events page lists closed events and starts a new one from a kit. Pocket shows the wrap card.
