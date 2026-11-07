@@ -1,16 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { unseal } from "./lib/seal";
 
 /**
  * Sends anyone without a session cookie to the sign-in page (Pocket's own for
  * /m). The cookie itself is checked (decrypted, expiry) on the server by every
  * page and action.
+ *
+ * A read-only guest (the public demo's "Look around") may open every page but
+ * change nothing: every request that is not a plain read (server actions are
+ * POSTs) is refused here, before any action runs.
  */
 export function proxy(request: NextRequest) {
-  if (!request.cookies.get("ferri_desk")) {
+  const cookie = request.cookies.get("ferri_desk");
+  if (!cookie) {
     const pocket = request.nextUrl.pathname === "/m" || request.nextUrl.pathname.startsWith("/m/");
     const to = new URL(pocket ? "/m/login" : "/login", request.url);
     if (pocket && request.nextUrl.pathname !== "/m") to.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(to);
+  }
+  if (request.method !== "GET" && request.method !== "HEAD" && unseal(cookie.value)?.readonly) {
+    return new NextResponse("This is a read-only guest view of Ferri's demo. Nothing can be changed here.", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
   }
   return NextResponse.next();
 }
@@ -18,5 +30,5 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Pocket's sign-in, service worker, manifest and icons load without a session,
   // and so do guests' own RSVP pages (/rsvp/<code>, spec 17).
-  matcher: ["/((?!login|api/site|api/email|rsvp/|m/login|m/sw\.js|m/manifest\.webmanifest|m/icon|_next/|favicon.ico).*)"],
+  matcher: ["/((?!login|api/site|api/email|rsvp/|m/login|m/sw\\.js|m/manifest\\.webmanifest|m/icon|_next/|favicon.ico).*)"],
 };

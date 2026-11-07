@@ -45,13 +45,24 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
           </form>
           <div className="mt-3 flex items-center justify-between">
             <span className="truncate text-[12px] text-zinc-500">{user.name}</span>
-            <form action={signOut}>
-              <button className="text-[12px] text-zinc-500 hover:text-zinc-900">Sign out</button>
-            </form>
+            {user.readonly ? (
+              <a href="/logout" className="text-[12px] text-zinc-500 hover:text-zinc-900">
+                Leave
+              </a>
+            ) : (
+              <form action={signOut}>
+                <button className="text-[12px] text-zinc-500 hover:text-zinc-900">Sign out</button>
+              </form>
+            )}
           </div>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
+        {user.readonly ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-8 py-2 text-[13px] text-amber-800">
+            Guest view of Ferri&apos;s live demo: look around freely. Buttons that change something are refused.
+          </div>
+        ) : null}
         {c.paused ? (
           <div className="border-b border-red-200 bg-red-50 px-8 py-2 text-[13px] text-red-700">
             Ferri is paused{c.pausedBy ? ` by ${c.pausedBy}` : ""}: it posts nothing anywhere. Questions are still logged; answered cards go out when you resume.

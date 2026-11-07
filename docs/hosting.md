@@ -30,6 +30,8 @@ Our live demo runs exactly this way: the same `./ferri up`, on a small always-on
    FERRI_PUBLIC_URL=https://ferri.example.com
    GATEWAY_COOKIE_SECURE=true
    POCKET_ALLOWED_ORIGINS=ferri.example.com
+   # Optional: let visitors look around Desk read-only (our demo does).
+   DESK_GUEST_VIEW=on
    ```
 
 3. Start it: `./ferri up`. Desk and Pocket are at `FERRI_PUBLIC_URL`. `infra/demo/compose.demo.yml` adds the tunnel and memory limits (about 3 GB in all).

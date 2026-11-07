@@ -29,6 +29,22 @@ export async function signIn(_prev: { error?: string } | undefined, form: FormDa
   redirect(next === "/m" || /^\/m\/[A-Za-z0-9/_-]*$/.test(next) ? next : "/");
 }
 
+/**
+ * The public demo's guest view (DESK_GUEST_VIEW=on): a read-only session that reads through the
+ * Switch admin's Gateway session. proxy.ts refuses every change (any non-GET request) for it.
+ */
+export async function viewAsGuest(): Promise<void> {
+  if (process.env.DESK_GUEST_VIEW !== "on") redirect("/login");
+  const email = process.env.SWITCH_ADMIN_EMAIL || "admin@switch.local";
+  const password = process.env.SWITCH_ADMIN_PASSWORD || process.env.GATEWAY_ADMIN_PASSWORD;
+  if (!password) redirect("/login");
+  const gateway = new GatewayClient(switchUrl(), email, password);
+  await gateway.login();
+  const me = await gateway.me();
+  await startSession({ uid: me.id, email: "guest", name: "Guest (read-only)", gw: gateway.session, readonly: true });
+  redirect("/");
+}
+
 export async function signOut(form?: FormData): Promise<void> {
   await endSession();
   redirect(form?.get("next") === "/m" ? "/m/login" : "/login");
