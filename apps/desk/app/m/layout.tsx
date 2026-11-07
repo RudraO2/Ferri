@@ -32,10 +32,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf7f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d1b1e" },
-  ],
+  // Light, like the page: Pocket opens in light whatever the phone's own setting is.
+  themeColor: "#fbf7f0",
 };
 
 export default function PocketRoot({ children }: { children: React.ReactNode }) {

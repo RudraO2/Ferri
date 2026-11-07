@@ -3,6 +3,9 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
+/** The key a dark choice is remembered under. v2: light for everyone again; earlier saved choices are not read. */
+export const THEME_KEY = "ferri-theme-v2";
+
 /** Light/dark switch. Light by default; a dark choice is remembered on this device. */
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -18,7 +21,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       onClick={() => {
         document.documentElement.dataset.theme = next;
         try {
-          localStorage.setItem("ferri-theme", next);
+          localStorage.setItem(THEME_KEY, next);
         } catch {
           // Private mode: the choice lasts for this page only.
         }

@@ -30,7 +30,8 @@ export const viewport: Viewport = {
 };
 
 // Sets the theme before the first paint: light, unless the visitor chose dark with the toggle.
-const THEME_SCRIPT = `try{document.documentElement.dataset.theme=localStorage.getItem("ferri-theme")==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}`;
+// The key matches THEME_KEY in components/theme-toggle.tsx (v2: choices saved before 7 Nov are not read).
+const THEME_SCRIPT = `try{document.documentElement.dataset.theme=localStorage.getItem("ferri-theme-v2")==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
