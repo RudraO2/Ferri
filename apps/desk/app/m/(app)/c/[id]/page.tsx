@@ -106,7 +106,7 @@ export default async function CardPage({ params, searchParams }: { params: Promi
             <div className="mt-3 flex items-start gap-2.5">
               <FerriAvatar size={36} pose="thinking" />
               <div className="rounded-[18px] rounded-tl-[6px] bg-brand-soft px-3.5 py-2.5 text-[14px] leading-snug text-zinc-800">
-                <b className="font-semibold">Ferri</b> told {card.waiting.length === 1 ? "them" : `all ${card.waiting.length}`}: “Checking with the team, back shortly.”
+                <b className="font-semibold">Ferri</b> told {card.waiting.length === 1 ? "them" : `all ${card.waiting.length}`}: “I don&apos;t have that yet. I&apos;m checking with the team.”
               </div>
             </div>
           </section>

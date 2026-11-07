@@ -166,7 +166,7 @@ async function fill() {
       text: ASK_STYLE(text),
       addressed: true,
       outcome: alone ? "answered" : "unknown",
-      replyText: alone ? reply : "Checking with the team, back shortly.",
+      replyText: alone ? reply : "I don't have that yet. I'm checking with the team.",
       model: "claude-haiku-5-5",
       latencyMs: 900 + Math.floor(rand() * 1600),
       askedAt: at,

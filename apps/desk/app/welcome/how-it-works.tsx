@@ -30,7 +30,8 @@ const APPS = [
 
 const Q1 = { who: "Priya", text: "@ferri can we bring our own monitor?" };
 const Q2 = { who: "Arjun", text: "@ferri are monitors allowed at the venue?" };
-const HOLD: Msg = { who: "Ferri", text: "Checking with the team, back shortly.", ferri: true };
+// Ferri's real holding reply (HOLDING_REPLY in packages/knowledge/src/answer.ts).
+const HOLD: Msg = { who: "Ferri", text: "I don't have that yet. I'm checking with the team.", ferri: true };
 const ANSWER = "Yes, bring it. There are power strips at every table.";
 const LUNCH1 = "Lunch is at 1:00 PM in the cafeteria, 3rd floor.";
 const LUNCH2 = "Lunch moves to 1:30 PM in the cafeteria, 3rd floor.";
@@ -61,8 +62,8 @@ const BEATS: { title: string; line: string; icon: typeof Users; frames: Frame[] 
       },
       {
         rows: {
-          telegram: [Q1, { who: "Ferri", text: ANSWER, ferri: true, source: "From the crew (Sam)", fresh: true }],
-          slack: [Q2, { who: "Ferri", text: ANSWER, ferri: true, source: "From the crew (Sam)", fresh: true }],
+          telegram: [Q1, { who: "Ferri", text: ANSWER, ferri: true, source: "Source: Build Night crew answers (Bringing a monitor)", fresh: true }],
+          slack: [Q2, { who: "Ferri", text: ANSWER, ferri: true, source: "Source: Build Night crew answers (Bringing a monitor)", fresh: true }],
         },
         crew: { lines: [{ who: "Sam", text: ANSWER }], card: { title: "Can we bring our own monitor?", meta: "Sent to 2 people", state: "done", action: "Answered" } },
         status: "Both answered at once.",
@@ -78,7 +79,7 @@ const BEATS: { title: string; line: string; icon: typeof Users; frames: Frame[] 
       { rows: {}, crew: { lines: [], note: "Saved to knowledge: “Bringing a monitor”" }, status: "Saved for next time.", pose: "main", chip: "Bringing a monitor" },
       { rows: { discord: [{ who: "Meera", text: "@ferri is it ok to bring a monitor?" }] }, crew: { lines: [], note: "Saved to knowledge: “Bringing a monitor”" }, status: "I know this one now.", pose: "main", chip: "Bringing a monitor" },
       {
-        rows: { discord: [{ who: "Meera", text: "@ferri is it ok to bring a monitor?" }, { who: "Ferri", text: ANSWER, ferri: true, source: "Event FAQ · Bringing a monitor", fresh: true }] },
+        rows: { discord: [{ who: "Meera", text: "@ferri is it ok to bring a monitor?" }, { who: "Ferri", text: ANSWER, ferri: true, source: "Source: Build Night crew answers (Bringing a monitor)", fresh: true }] },
         crew: { lines: [], note: "Nobody was pinged." },
         status: "Answered in 1.2 s, with its source.",
         pose: "party",
