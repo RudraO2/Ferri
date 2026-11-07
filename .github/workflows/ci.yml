@@ -54,13 +54,16 @@ jobs:
           EOF
       - name: Switch core image (pull, else build from the fork)
         run: |
-          tag=$(sed -n 's/^SWITCH_CORE_TAG=//p' .env.example)
+          tag=$(sed -n 's/^SWITCH_CORE_TAG=//p' .env.example | tr -d '
+')
           image="ghcr.io/rudrao2/ferri-switch-core:$tag"
           if ! docker pull -q "$image"; then
-            ref=$(sed -n 's/^  SWITCH_FORK_REF: //p' .github/workflows/images.yml)
+            ref=$(sed -n 's/^  SWITCH_FORK_REF: //p' .github/workflows/images.yml | tr -d '
+')
             git init -q /tmp/switch && git -C /tmp/switch fetch -q --depth 1 https://github.com/RudraO2/switch.git "$ref" && git -C /tmp/switch checkout -q FETCH_HEAD
             docker build -q -f /tmp/switch/deploy/local/ferri/Dockerfile \
-              --build-arg BASE=ghcr.io/sandbox-quantum/dev/switch-core:$(sed -n 's/^SWITCH_VERSION=//p' .env.example) \
+              --build-arg BASE=ghcr.io/sandbox-quantum/dev/switch-core:$(sed -n 's/^SWITCH_VERSION=//p' .env.example | tr -d '
+') \
               -t "$image" /tmp/switch
           fi
       - name: Build Ferri's image from this commit
