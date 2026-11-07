@@ -160,7 +160,10 @@ function CardRow({ card }: { card: PocketCard }) {
         ) : first ? null : (
           <span className="text-[12.5px] text-zinc-500">nobody waiting any more</span>
         )}
-        <span className="text-[12.5px] text-zinc-400">{card.kind === "question" && first ? card.why : `· ${card.why}`}</span>
+        <span className="text-[12.5px] text-zinc-400">
+          {card.kind === "question" && first ? "" : "· "}
+          {card.why === "open" ? "for the crew" : card.why}
+        </span>
       </div>
     </Link>
   );

@@ -202,7 +202,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
       </div>
 
       <Section title="Add to the plan">
-        <form action={addPlanItem} className="card grid grid-cols-[160px_1fr] gap-3 p-4">
+        <form action={addPlanItem} className="card grid gap-3 p-4 sm:grid-cols-[160px_1fr] [&>*]:min-w-0">
           {hidden}
           <input type="hidden" name="eventId" value={ev.id} />
           <div>
