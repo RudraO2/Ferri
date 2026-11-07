@@ -9,6 +9,11 @@ You make one design and the kit renders every size from it. The background is ar
 
 Never write a key, a password or a secret into the room, a report or a file.
 
+One look per event: the event site takes its look from the newest poster job (the accent, the fonts, the art as its hero, the link card as its preview image), and the listing uses the square card as its cover. So the posters set the event's look; make them with care.
+
+## When the job also asks for the site
+Make the posters first, in this job's folder. Point the QR code and the address at `https://<slug>.vercel.app` (the slug is the event name in lowercase with dashes), the site's address once it is live. Post the images (step 7), but do not report yet: then call your `ship-event-site` skill with the Skill tool and follow it. Its report covers both.
+
 ## 0. Ready?
 - The kit is `kits/posters` in your working folder. If `kits/posters/node_modules` is missing, run `npm ci` in `kits/posters` once.
 - `.ferri/studio.json` has the image model, quality and the call limit. You do not need to read it; the scripts do.
@@ -28,7 +33,7 @@ Read the room's documents with `load_internal_documents` (Ferri's knowledge and 
 - `venue`: place and area, short enough for one or two lines ("Koramangala Makerspace, 80 Feet Road, Bengaluru").
 - `url`: the full address with https://. `cta`: "Register free" if registration is free, else "Register".
 - `highlights`: up to 3 short facts from the documents (prizes, "24 hours", food), each under about 22 characters.
-- `community`, `accent` (a hex colour that suits the art), `logo`: the community logo from `assets/community/` in your working folder (an absolute path).
+- `community`, `accent` (a hex colour that suits the art; the event site uses it too, for its buttons and links), `logo`: the community logo from `assets/community/` in your working folder (an absolute path).
 - `art`: `art/background.png`. `artPrompt`: what the background shows, from the event's theme and place: mood, light, colours, a scene. No words in it.
 - Characters: letters, digits, normal punctuation and ₹ are fine. No emoji, no arrows; the render refuses characters the fonts cannot draw.
 

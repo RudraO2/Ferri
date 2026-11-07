@@ -1,0 +1,13 @@
+{
+  "name": "ferri-page-check-kit",
+  "private": true,
+  "type": "module",
+  "description": "Ferri Builder's page check: screenshots of its own pages at desktop and phone width, light and dark, with console errors, failed requests and layout problems, from a headless run of the installed Chrome or Edge.",
+  "scripts": {
+    "shots": "node scripts/shots.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.65.0"
+  }
+}

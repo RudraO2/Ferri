@@ -16,7 +16,18 @@ You can run the same smoke test on your own stack: `./ferri smoke`.
 - Desk's production build (`pnpm desk:build`, Next.js `next build`) passes with every page, Pocket and the public RSVP page.
 - `pnpm eval:answers`: 158 of 158 fixed cases pass against the real model (Claude Haiku 5.5 at low effort): answers only with a valid source, room triage, card matching, crew intents, announcement drafts, the crew decision check, plan intents and the agenda, build requests, outreach intents and partner replies, care readings and care intents, guest intents, guest replies and a reminder draft, social intents with their times, and the desk cases (sheet readings and a custom desk skill). The clock is fixed at 10:00 AM in Bengaluru, so time cases do not depend on when it runs.
 - The fork's `whatsapp_web` adapter has 26 tests of its own in our Switch fork (`core/tests/switch_core/bridges/collaboration/test_whatsapp_web_adapter.py`).
-- The Builder's kits check themselves: `node scripts/render.mjs --example` in `builder/kits/posters` (every format, every QR code read back) and `node scripts/check.mjs` in `builder/kits/listings` (times, listing checks, and the Luma API path against a stand-in server).
+- The Builder's kits check themselves: `node scripts/render.mjs --example` in `builder/kits/posters` (every format, every QR code read back), `node scripts/check.mjs` in `builder/kits/listings` (times, listing checks, and the Luma API path against a stand-in server) and `node scripts/check.mjs` in `builder/kits/page-check` (the page check finds every problem planted in an example page, with headless Chrome or Edge).
+
+## The Builder in tests
+
+For real use the Builder runs on Claude Opus 5.5 at high effort, the defaults. Tests run it on Claude Haiku 5.5 at low effort. Set these in `.env`:
+
+```bash
+FERRI_BUILDER_MODEL=claude-haiku-5-5
+FERRI_BUILDER_EFFORT=low
+```
+
+Then run `pnpm builder:setup` again (it updates the Builder's model and effort in Switch) and restart `pnpm builder:controller`. Do the same after you set them back for real use.
 
 ## End to end on the real stack
 

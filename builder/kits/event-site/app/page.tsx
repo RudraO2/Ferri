@@ -1,5 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { capacity, event, isPlaceholder } from "@/lib/event";
+import { hasLook, look } from "@/lib/look";
 
 /** A fact, with a placeholder the Builder could not fill shown as such. */
 function T({ v }: { v: string }) {
@@ -8,9 +10,12 @@ function T({ v }: { v: string }) {
 
 export default function Home() {
   const e = event;
+  // The poster's background (its art or the community photo) behind the hero, over the poster's own gradient.
+  const art = hasLook ? (look.hero ?? null) : null;
   return (
     <>
-      <section className="hero">
+      <section className={art ? "hero has-art" : "hero"} style={art ? { ["--hero-bg" as string]: art.background } : undefined}>
+        {art?.image ? <Image className="hero-art" src={art.image} alt="" fill preload sizes="100vw" /> : null}
         <div className="wrap">
           <div className="eyebrow">
             <T v={e.community} />

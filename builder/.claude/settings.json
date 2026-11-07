@@ -90,7 +90,15 @@
       "Read(~/.ferri/builder.env)",
       "Read(~/.ferri/builder/.ferri/listings.json)",
       "Bash(npx playwright:*)",
-      "Bash(playwright:*)"
+      "Bash(playwright:*)",
+      "Bash(pip install playwright:*)",
+      "Bash(pip3 install playwright:*)",
+      "Bash(python -m pip install playwright:*)",
+      "Bash(python3 -m pip install playwright:*)",
+      "Bash(py -m pip install playwright:*)",
+      "Bash(python -m playwright:*)",
+      "Bash(python3 -m playwright:*)",
+      "Bash(py -m playwright:*)"
     ]
   }
 }

@@ -1,0 +1,4 @@
+{
+  "note": "The kit's own look. scripts/poster-look.mjs replaces this file with the look of the event's posters (accent, fonts, hero art, link preview); run it again rather than editing this file.",
+  "from": null
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Broken example</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; }
+  .banner { width: 600px; padding: 16px; background: #fde68a; color: #1d1b16; }
+  .spin { width: 24px; height: 24px; margin: 16px; background: #0e7c7b; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <!-- Every problem here is planted on purpose; scripts/check.mjs expects the page check to find each one. -->
+  <div class="banner">This banner is 600 px wide, so a phone scrolls sideways.</div>
+  <p>Venue: [venue address]</p>
+  <img src="missing.png" alt="A photo that is not there">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23f5a524'/%3E%3C/svg%3E">
+  <div class="spin"></div>
+  <script>
+    console.error("planted console error");
+    setTimeout(() => { throw new Error("planted exception"); }, 0);
+  </script>
+</body>
+</html>

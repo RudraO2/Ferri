@@ -11,13 +11,15 @@
  *   5. Addressing: the owner, the owner's agents (Ferri) and the people in the crew room.
  *   6. The Builder's own budget in Switch.
  *
- * Model: FERRI_BUILDER_MODEL (default claude-haiku-5-5) at FERRI_BUILDER_EFFORT (default low).
+ * Model: FERRI_BUILDER_MODEL (default claude-opus-5-5) at FERRI_BUILDER_EFFORT (default high), for
+ * real use. Tests set claude-haiku-5-5 at low in .env (docs/testing.md).
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createDb, crewMembers } from "@ferri/db";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { GatewayClient, GatewayError, SwitchAgent, gatewayFromEnv } from "@ferri/switch";
 import { builderPaths, controllerCli, ensureController, readEnvFile } from "./builder-paths.ts";
 
@@ -25,8 +27,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const env = { ...readEnvFile(path.join(root, ".env")), ...process.env } as Record<string, string | undefined>;
 const switchUrl = env.SWITCH_URL ?? "http://localhost:8000";
 const name = env.FERRI_BUILDER_NAME ?? "builder";
-const model = env.FERRI_BUILDER_MODEL ?? "claude-haiku-5-5";
-const effort = env.FERRI_BUILDER_EFFORT ?? "low";
+// Real use runs the Builder on Opus at high effort; tests set Haiku at low in .env. An empty value means the default.
+const model = env.FERRI_BUILDER_MODEL?.trim() || "claude-opus-5-5";
+const effort = env.FERRI_BUILDER_EFFORT?.trim() || "high";
 const budgetOutput = Number(env.FERRI_BUILDER_BUDGET_OUTPUT ?? 400_000);
 const budgetTurns = Number(env.FERRI_BUILDER_BUDGET_TURNS ?? 60);
 const machineName = env.FERRI_BUILDER_MACHINE ?? "ferri-laptop";
@@ -55,6 +58,26 @@ const crewRoomId = need("FERRI_CREW_ROOM_ID");
 function cli(args: string[]): { status: number | null; out: string } {
   const r = spawnSync(process.execPath, ["--no-warnings", controllerCli(root, env), ...args], { encoding: "utf8" });
   return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+}
+
+/** Every package a kit's lockfile pins is in its node_modules at that version (npm's own record of the install). */
+function kitInstalled(kit: string): boolean {
+  type Lock = { packages?: Record<string, { version?: string; optional?: boolean; dev?: boolean }> };
+  try {
+    const want = (JSON.parse(fs.readFileSync(path.join(kit, "package-lock.json"), "utf8")) as Lock).packages ?? {};
+    const have = (JSON.parse(fs.readFileSync(path.join(kit, "node_modules", ".package-lock.json"), "utf8")) as Lock).packages ?? {};
+    return Object.entries(want).every(([at, p]) => !at || p.optional || p.dev || have[at]?.version === p.version);
+  } catch {
+    return false;
+  }
+}
+
+/** A kit's packages, installed here once rather than in every job, and again when the kit's lockfile changed. */
+function installKit(kit: string): void {
+  if (!fs.existsSync(path.join(kit, "package-lock.json")) || kitInstalled(kit)) return;
+  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: kit, encoding: "utf8", shell: process.platform === "win32" });
+  if (npm.status !== 0) throw new Error(`npm ci in ${kit} failed:\n${npm.stderr || npm.stdout}`);
+  console.log(`Installed the ${path.basename(kit)} kit's packages.`);
 }
 
 // ── 1. The machine ───────────────────────────────────────────────────────
@@ -129,11 +152,7 @@ const studio = {
 fs.writeFileSync(path.join(paths.dir, ".ferri", "studio.json"), JSON.stringify(studio, null, 2));
 const assets = path.join(root, "seed", "assets");
 if (fs.existsSync(assets)) fs.cpSync(assets, path.join(paths.dir, "assets", "community"), { recursive: true, force: true });
-const posterKit = path.join(paths.dir, "kits", "posters");
-if (fs.existsSync(path.join(posterKit, "package-lock.json")) && !fs.existsSync(path.join(posterKit, "node_modules", "satori"))) {
-  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: posterKit, encoding: "utf8", shell: process.platform === "win32" });
-  if (npm.status !== 0) throw new Error(`npm ci in ${posterKit} failed:\n${npm.stderr || npm.stdout}`);
-}
+installKit(path.join(paths.dir, "kits", "posters"));
 // Listings (spec 14): the Builder's own browser (a Chrome profile of its own, where a
 // person logs in to each platform), and Luma's API key when the calendar has Luma Plus.
 const listings: Record<string, unknown> = {
@@ -145,11 +164,15 @@ const listings: Record<string, unknown> = {
 };
 fs.writeFileSync(path.join(paths.dir, ".ferri", "listings.json"), JSON.stringify(listings, null, 2), { mode: 0o600 });
 const listingKit = path.join(paths.dir, "kits", "listings");
-if (fs.existsSync(path.join(listingKit, "package-lock.json")) && !fs.existsSync(path.join(listingKit, "node_modules", "playwright-core"))) {
-  const npm = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--no-audit", "--no-fund"], { cwd: listingKit, encoding: "utf8", shell: process.platform === "win32" });
-  if (npm.status !== 0) throw new Error(`npm ci in ${listingKit} failed:\n${npm.stderr || npm.stdout}`);
-}
+installKit(listingKit);
 console.log(`Listings: the Builder's browser on 127.0.0.1:${listings.port as number} (profile ${path.basename(String(listings.profile))}), Luma ${env.LUMA_API_KEY ? "API key set" : "through the browser (no API key; Luma's API needs Luma Plus)"}.`);
+// The page check (spec 25): the Builder screenshots its own pages (desktop and phone, light and dark)
+// and reads their console errors before it asks to publish, in a headless run of the installed browser.
+installKit(path.join(paths.dir, "kits", "page-check"));
+{
+  const exe = env.FERRI_BROWSER_EXE ?? (await import(pathToFileURL(path.join(listingKit, "scripts", "lib.mjs")).href).then((m: { findBrowser?: () => string | null }) => m.findBrowser?.() ?? null, () => null));
+  console.log(exe ? `Page check: screenshots with ${exe}.` : "Page check: no Chrome or Edge found, so the Builder cannot screenshot its pages. Install Chrome and run pnpm builder:setup again.");
+}
 
 if (!env.OPENAI_API_KEY) console.warn("OPENAI_API_KEY is not set: posters use the kit's own background instead of generated art.");
 console.log(`Posters: ${studio.model} (${studio.quality}, at most ${studio.maxCallsPerJob} image calls per job), image key ${env.OPENAI_API_KEY ? "set" : "missing"}.`);
