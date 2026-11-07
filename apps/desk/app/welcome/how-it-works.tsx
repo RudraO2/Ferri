@@ -229,7 +229,7 @@ export function HowItWorks() {
       <div className="relative grid gap-4 rounded-[28px] border border-zinc-200 bg-white/70 p-3 sm:p-5 lg:grid-cols-[1fr_200px_1fr] lg:gap-6">
         {/* The community, on five apps */}
         <div className="space-y-2.5">
-          <div className="px-1 text-[11px] font-semibold tracking-[0.1em] text-zinc-400 uppercase">The community, on five apps</div>
+          <div className="px-1 text-[11px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">The community, on five apps</div>
           {APPS.map((a) => {
             const msgs = f.rows[a.key] ?? [];
             return (
@@ -266,7 +266,7 @@ export function HowItWorks() {
 
         {/* The crew, inside */}
         <div className="flex flex-col">
-          <div className="px-1 text-[11px] font-semibold tracking-[0.1em] text-zinc-400 uppercase">The crew, inside</div>
+          <div className="px-1 text-[11px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">The crew, inside</div>
           <div className="mt-2.5 flex-1 rounded-[20px] border border-zinc-200 bg-zinc-50 p-3">
             <div className="mb-2 flex items-center gap-2 text-[12px] text-zinc-500">
               <PlatformLogo platform="mattermost" size={13} />

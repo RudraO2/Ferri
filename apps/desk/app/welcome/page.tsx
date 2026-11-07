@@ -100,7 +100,7 @@ export default function Welcome() {
 
         {/* Platforms */}
         <section className="mx-auto max-w-[1000px] px-5 pb-20 sm:px-8" aria-label="Where Ferri works">
-          <p className="mb-5 text-center text-[13px] font-semibold tracking-[0.1em] text-zinc-400 uppercase">Lives where your community already is</p>
+          <p className="mb-5 text-center text-[13px] font-semibold tracking-[0.1em] text-zinc-500 uppercase">Lives where your community already is</p>
           <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-4">
             {["discord", "telegram", "slack", "whatsapp", "mattermost"].map((p) => (
               <li key={p} className="flex items-center gap-2 text-[17px] font-semibold text-zinc-700">
