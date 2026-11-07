@@ -77,6 +77,10 @@ const answers: AnswerCase[] = [
   { q: "is there a hotel discount for participants?", kind: "unknown" },
   { q: "who won last year's hackathon?", kind: "unknown" },
   { q: "hi ferri, thanks for the help earlier!", kind: "chat" },
+  { q: "what time is it right now?", kind: "chat" },
+  { q: "what's the AQI in Delhi today?", kind: "chat" },
+  { q: "can you search the web and tell me who won the IPL?", kind: "chat" },
+  { q: "who is aryantechie?", kind: "chat" },
 ];
 
 const room: RoomCase[] = [
