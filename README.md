@@ -4,6 +4,8 @@
 
 **Ferri is an AI teammate for people who host community events**, like hackathons, meetups and festival nights. It takes on the work a volunteer crew does from the first idea to the thank-you post. It keeps the plan from the crew's own chat. It builds the event website with registration and a real database, and deploys it. It designs the posters, lists the event on Luma, and finds sponsors and partner communities, then emails them and tracks every reply. And it keeps the whole community up to date in every group on every app. Every step that reaches the public waits for one OK from a person.
 
+**Why "Ferri".** The name comes from a ferry, a boat that runs between two shores and carries people across. Every event has two shores: the crew, who plan and decide, and the community, who ask and wait. Ferri carries messages, decisions, updates and help across, both ways, so nobody is left on the other side. Its mascot is a sea otter, because otters hold hands so nobody drifts apart.
+
 Two agents do the work, and both run on [Switch](https://github.com/sandbox-quantum/switch). Ferri runs the event, inside with the crew and outside with the community. Ferri Builder is Claude Code, run by Switch, and builds and ships what the event needs.
 
 ## Two sides of every event
