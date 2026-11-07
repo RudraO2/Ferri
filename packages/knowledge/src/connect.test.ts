@@ -100,6 +100,7 @@ describe("connectPlatform", () => {
       bridge_type: "telegram",
       display_name: "Ferri Telegram",
       connection_config: { bot_token: TG, bot_username: "ferri_test_bot" },
+      channel_creation_enabled: false,
     });
     const text = r.lines.join("\n");
     expect(text).toContain("Turn Group Privacy off in BotFather");

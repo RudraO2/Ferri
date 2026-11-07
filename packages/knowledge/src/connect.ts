@@ -252,7 +252,9 @@ export async function connectPlatform(
 
   let created: BridgeInfo;
   try {
-    created = await deps.gateway.call<BridgeInfo>("POST", "/gateway/collaborations", { bridge_type: cmd.platform, display_name: cmd.name, connection_config: config });
+    // Telegram cannot create chats from Switch, and Switch refuses a connection that asks to.
+    const body = { bridge_type: cmd.platform, display_name: cmd.name, connection_config: config, ...(cmd.platform === "telegram" ? { channel_creation_enabled: false } : {}) };
+    created = await deps.gateway.call<BridgeInfo>("POST", "/gateway/collaborations", body);
   } catch (e) {
     throw new Error(`Switch did not add the connection: ${gatewayDetail(e)}`);
   }
