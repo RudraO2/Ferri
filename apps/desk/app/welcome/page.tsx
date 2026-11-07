@@ -205,7 +205,7 @@ export default function Welcome() {
             <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
               <div>
                 <h2 className="display text-[clamp(36px,5vw,64px)]">Ask Ferri something.</h2>
-                <p className="mt-4 max-w-[560px] text-[17px] leading-relaxed text-white/85">
+                <p className="mt-4 max-w-[560px] text-[17px] leading-relaxed text-white">
                   It runs live for Lantern Build Night, a made-up event. Try “@ferri when does hacking start?”, then ask something it can&apos;t know and watch it ask the crew.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">

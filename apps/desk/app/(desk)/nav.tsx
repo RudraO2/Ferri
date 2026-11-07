@@ -130,7 +130,7 @@ export function Nav({ counts, community, footer }: { counts: Record<string, numb
     <>
       {/* Phone and tablet: top bar */}
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/90 px-4 py-2.5 backdrop-blur lg:hidden">
-        <Link href="/" aria-label="Overview">
+        <Link href="/">
           <FerriLogo size={30} label="Ferri Desk" sub={community} />
         </Link>
         <div className="flex items-center gap-1">
@@ -168,7 +168,7 @@ export function Nav({ counts, community, footer }: { counts: Record<string, numb
       {/* Desktop: sidebar */}
       <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col overflow-y-auto border-r border-zinc-200 bg-zinc-50 lg:flex">
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <Link href="/" aria-label="Overview">
+          <Link href="/">
             <FerriLogo size={32} label="Ferri Desk" sub={community} />
           </Link>
           <ThemeToggle />

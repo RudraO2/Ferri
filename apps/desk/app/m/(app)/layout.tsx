@@ -17,7 +17,7 @@ export default async function PocketApp({ children }: { children: React.ReactNod
       {c.paused ? (
         <div className="bg-red-50 px-5 py-2 text-[13px] text-red-700">Ferri is paused: nothing is posted anywhere. Answers go out when it resumes.</div>
       ) : null}
-      {children}
+      <main>{children}</main>
       <Tabs needsYou={counts.needsYou + builderAsks.length} stuck={counts.stuck} />
     </>
   );
